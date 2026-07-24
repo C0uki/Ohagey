@@ -1,0 +1,45 @@
+# ── Zenzai モデルの重み (CC-BY-SA 4.0) は絶対にコミットしない ──
+# 決定 0008 / 0009 / 0016。モデルはインストール時にのみダウンロードする。
+# CI の no-committed-model ジョブでも二重にガードしている。
+*.gguf
+*.bin
+*.safetensors
+models/
+
+# ── Swift (engine/) ──
+.build/
+.swiftpm/
+# Package.resolved は再現性のため意図的に追跡対象(ignore しない)。
+
+# ── C++ / MSBuild (tsf/) ──
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+.vs/
+*.user
+*.suo
+*.aps
+*.pdb
+*.ilk
+*.exp
+
+# ── ビルド生成バイナリ ──
+*.dll
+*.exe
+*.lib
+
+# ── Inno Setup (installer/) ──
+Output/
+*.iss.bak
+
+# ── SampleIME の一時 sparse clone (tsf/README.md の手順) ──
+_tmp-wcs/
+
+# ── エディタ / OS ──
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

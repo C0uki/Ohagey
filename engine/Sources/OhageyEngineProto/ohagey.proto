@@ -1,0 +1,137 @@
+// Ohagey IPC schema (decision 0007).
+//
+// Protocol between the C++ TSF client (tsf/) and the Swift conversion server
+// (engine/), spoken over a session-scoped named pipe (decision 0006).
+//
+// FRAMING: a named pipe is a byte stream and Protobuf is not self-delimiting,
+// so every message is length-prefixed: a 4-byte little-endian uint32 giving
+// the serialized payload length, followed by that many bytes of a serialized
+// `Request` (client -> server) or `Response` (server -> client).
+//
+// STATUS: this is the initial v1 draft. Field details may be refined during
+// implementation (see docs/decisions/README.md "実装フェーズで詰める残課題").
+
+syntax = "proto3";
+
+package ohagey.ipc.v1;
+
+// ── Envelope ────────────────────────────────────────────────────────────────
+
+// A single client request. `request_id` correlates with `Response.request_id`
+// so the client can pipeline requests on one connection.
+message Request {
+  uint32 request_id = 1;
+  oneof kind {
+    ConvertRequest convert = 2;
+    CommitRequest commit = 3;
+    RegisterWordRequest register_word = 4;
+    PingRequest ping = 5;
+  }
+}
+
+// The server reply for the `Request` with the matching `request_id`.
+message Response {
+  uint32 request_id = 1;
+  Status status = 2;
+  oneof kind {
+    ConvertResponse convert = 3;
+    CommitResponse commit = 4;
+    RegisterWordResponse register_word = 5;
+    PingResponse ping = 6;
+  }
+}
+
+message Status {
+  enum Code {
+    CODE_OK = 0;
+    CODE_INVALID_ARGUMENT = 1;
+    CODE_INTERNAL = 2;
+    CODE_MODEL_UNAVAILABLE = 3;
+  }
+  Code code = 1;
+  string message = 2;
+}
+
+// ── Convert: reading (yomi) -> candidate list ───────────────────────────────
+
+message ConvertRequest {
+  // Composition string to convert, as hiragana yomi.
+  string reading = 1;
+  // Max candidates requested; 0 means "engine default".
+  uint32 n_best = 2;
+  ConversionContext context = 3;
+}
+
+message ConversionContext {
+  // Already-committed left context, to inform Zenzai's neural prediction.
+  string preceding_text = 1;
+}
+
+message ConvertResponse {
+  repeated Candidate candidates = 1;
+  // false => dictionary-only fallback because the Zenzai model is unavailable
+  // (decision 0008). The UI may surface this state.
+  bool zenzai_used = 2;
+}
+
+message Candidate {
+  // Surface form shown to the user.
+  string text = 1;
+  // Yomi for the surface form (used for partial commit / relearning).
+  string reading = 2;
+  // Engine rank hint; higher is better. Optional (0 if unset).
+  int32 score = 3;
+  // Bunsetsu-level sub-segments, when the engine provides them, so the client
+  // can support per-segment reconversion.
+  repeated Segment segments = 4;
+}
+
+message Segment {
+  string text = 1;
+  string reading = 2;
+}
+
+// ── Commit: confirm a candidate, feed learning data ─────────────────────────
+// Learning storage lives under %LOCALAPPDATA%\Ohagey\ (decision 0024) and is
+// enabled by default (decision 0025).
+
+message CommitRequest {
+  string reading = 1;
+  string text = 2;
+  // Honor the per-user learning toggle at the caller: when false the commit
+  // must not update the learning store (decision 0025).
+  bool update_learning = 3;
+}
+
+message CommitResponse {}
+
+// ── Register: explicit user-dictionary entry (decision 0026) ────────────────
+
+message RegisterWordRequest {
+  string reading = 1;   // yomi
+  string surface = 2;   // registered word
+  string part_of_speech = 3;  // optional POS hint
+}
+
+message RegisterWordResponse {}
+
+// ── Ping: liveness / capability probe (on-demand lifecycle, decision 0015) ──
+
+message PingRequest {}
+
+message PingResponse {
+  string engine_version = 1;
+  bool model_loaded = 2;
+  Backend backend = 3;
+}
+
+enum Backend {
+  BACKEND_UNSPECIFIED = 0;
+  BACKEND_CPU = 1;      // decision 0010
+  BACKEND_CUDA = 2;
+  BACKEND_VULKAN = 3;
+}
+
+// NOTE: settings changes are delivered via registry/file watching, not IPC
+// (decision 0014), so there is intentionally no SettingsChanged message here.
+// Add one only if file-watching proves insufficient during implementation.
