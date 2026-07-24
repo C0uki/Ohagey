@@ -1,22 +1,22 @@
-# 0008: Model distribution
+# 0008: モデル配布方式
 
-## Decision
-The Zenzai model (`zenz-v3.1-small-gguf`) is downloaded directly from Hugging Face
-(`https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf`) by the Inno Setup installer
-at install time, not bundled inside the installer.
+## 決定事項
+Zenzaiモデル(`zenz-v3.1-small-gguf`)は、Inno Setupのインストーラーがインストール時に
+Hugging Face(`https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf`)から直接ダウンロード
+します。インストーラー自体には同梱しません。
 
-If the download fails (offline install, blocked network — common on school/managed
-PCs), installation still succeeds. Ohagey falls back to AzooKeyKanaKanjiConverter's
-non-neural dictionary-based conversion (`zenzaiMode: .off`-equivalent) until a model
-becomes available. The model can be retried from the settings app at any time.
+ダウンロードに失敗した場合(オフラインインストール、ネットワーク制限のある環境 — 学校PC・
+管理されたPCでよくあるケース)でも、インストール自体は成功させます。おはぎーは、モデルが
+用意できるまでAzooKeyKanaKanjiConverterの非ニューラル・辞書ベース変換(`zenzaiMode: .off`
+相当)にフォールバックします。モデルは設定アプリからいつでも再取得を試せます。
 
-## Why
-- Keeps the installer small and fast to (re)build during development
-- Matches prior art (`unok/myime` does the same: downloads `ggml-model-Q5_K_M.gguf`
-  from the same Hugging Face repo at install time, continuing on failure)
-- Avoids the "installed but can't type at all" failure mode on restricted networks
+## 理由
+- 開発中に頻繁に再ビルド・再配布するインストーラーを軽量・高速に保てる
+- 先行事例と一致する(`unok/myime`も同じHugging Faceリポジトリから`ggml-model-Q5_K_M.gguf`を
+  インストール時にダウンロードし、失敗しても続行する設計)
+- 「インストールはできたが一切入力できない」という最悪の失敗モードを避けられる
 
-## Storage location
-`%ProgramFiles%\Ohagey\models\ggml-model-Q5_K_M.gguf` (machine-wide, shared across
-all users of the PC — the model itself contains no per-user data, unlike learning
-data which lives under `%LOCALAPPDATA%`, see decision 0024).
+## 保存場所
+`%ProgramFiles%\Ohagey\models\ggml-model-Q5_K_M.gguf`(マシン全体で共有、全ユーザー共通)。
+モデル自体にはユーザー固有のデータは含まれないため、`%LOCALAPPDATA%`配下に置く学習データ
+(決定0024を参照)とは異なる扱いにしています。

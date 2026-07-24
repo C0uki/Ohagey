@@ -1,35 +1,34 @@
-# Third-Party Notices
+# サードパーティ表記(NOTICE)
 
-Ohagey (this repository) is MIT licensed. It depends on, vendors, or downloads the
-following third-party components:
+おはぎー(本リポジトリ)はMITライセンスです。以下のサードパーティ資産に依存・vendoring・
+ダウンロードしています。
 
 ## Microsoft SampleIME
-- Source: https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/IME
-- License: MIT (repository-level; see upstream LICENSE)
-- Usage: Vendored into `tsf/SampleIME/` as the base TSF (Text Services Framework)
-  implementation, heavily modified.
+- リポジトリ: https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/IME
+- ライセンス: MIT(リポジトリ全体のライセンス表記に基づく。上流のLICENSEファイルを参照)
+- 用途: `tsf/SampleIME/`にvendoringし、TSF(Text Services Framework)実装のベースとして
+  大幅に改造して使用しています。
 
 ## AzooKeyKanaKanjiConverter
-- Source: https://github.com/azooKey/AzooKeyKanaKanjiConverter
-- License: MIT
-- Usage: Swift Package dependency of `engine/`. Provides kana-kanji conversion and
-  Zenzai integration.
+- リポジトリ: https://github.com/azooKey/AzooKeyKanaKanjiConverter
+- ライセンス: MIT
+- 用途: `engine/`のSwift Package依存として、かな漢字変換とZenzai連携を提供します。
 
 ## azooKey
-- Source: https://github.com/azooKey/azooKey
-- License: MIT
-- Usage: Ohagey is an unofficial, independent Windows port inspired by azooKey. Not
-  affiliated with or endorsed by the azooKey project.
+- リポジトリ: https://github.com/azooKey/azooKey
+- ライセンス: MIT
+- 用途: おはぎーはazooKeyに着想を得た非公式・独立のWindows版です。azooKey本家との
+  提携・公認関係はありません。
 
-## Zenzai model weights (zenz-v3.1-small)
-- Source: https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf
-- Author: Keita Miwa (三輪)
-- License: **CC-BY-SA 4.0** (distinct from the MIT-licensed code above)
-- Usage: NOT bundled in this repository or installer. Downloaded directly from
-  Hugging Face at first run (see `docs/decisions/0008-model-distribution.md`).
-  Attribution is displayed in the settings app's "About" screen.
+## Zenzaiモデルの重み(zenz-v3.1-small)
+- 配布元: https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf
+- 作者: Miwa Keita(三輪)氏
+- ライセンス: **CC-BY-SA 4.0**(上記のMIT系コードとは別のライセンスです)
+- 用途: 本リポジトリやインストーラーには同梱していません。初回起動時にHugging Faceから
+  直接ダウンロードします(詳細は`docs/decisions/0008-model-distribution.md`を参照)。
+  設定アプリの「このソフトウェアについて」画面に帰属表示を掲載します。
 
-## Prior art referenced during design (no code reused)
-- [azooKey-Windows](https://github.com/fkunn1326/azooKey-Windows) by fkunn1326 — MIT
-- [myime](https://github.com/unok/myime) by unok — reference for the Mozc-style
-  shared-server architecture and model distribution approach
+## 設計時に参考にした先行プロジェクト(コードの流用なし)
+- [azooKey-Windows](https://github.com/fkunn1326/azooKey-Windows)(fkunn1326版) — MIT
+- [myime](https://github.com/unok/myime)(unok版) — Mozc型の共有サーバーアーキテクチャ、
+  モデル配布方式の参考にしました

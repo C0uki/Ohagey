@@ -1,40 +1,39 @@
-# Architecture Decision Log
+# アーキテクチャ決定ログ
 
-This is a running log of the major architectural decisions made for Ohagey, in the
-order they were decided. Each row links to a short rationale document where one exists;
-otherwise the summary here is the full record.
+おはぎーで決めてきた主要なアーキテクチャ決定を、決定した順に記録しています。理由の詳細を
+別ファイルにまとめたものはリンクしています。それ以外はここでの要約が全記録です。
 
-| # | Decision | Outcome |
+| # | 決定事項 | 結論 |
 |---|---|---|
-| 0001 | Base approach | Reuse only the Zenzai conversion engine (AzooKeyKanaKanjiConverter); rebuild TSF, UI, packaging from scratch |
-| 0002 | TSF base | Microsoft SampleIME (Windows-classic-samples), vendored and heavily modified |
-| 0003 | TSF implementation language | C++ (not Swift — Swift's COM support is proven for *consuming* COM/WinRT, not for *implementing* many server-side TSF interfaces) |
-| 0004 | Engine process model | Single shared server process (Mozc-style), not in-proc DLL — required once Zenzai's memory/GPU footprint was accounted for |
-| 0005 | Engine implementation language | Swift, entire server process (no C++/Swift FFI boundary — eliminated once the engine moved to its own process) |
-| 0006 | IPC transport | Named pipe, session-ID-scoped name, explicit ACL for AppContainer/elevated processes |
-| 0007 | IPC message format | Protocol Buffers (matches Mozc's proven approach) |
-| 0008 | [Model distribution](0008-model-distribution.md) | Downloaded from Hugging Face by the Inno Setup installer at install time; install still succeeds if the download fails, with a dictionary-only fallback |
-| 0009 | [Model license](0009-model-license.md) | zenz-v3.1-small is CC-BY-SA 4.0, kept as a separately-downloaded asset, distinct from Ohagey's MIT code, with mandatory attribution |
-| 0010 | Inference backend | CPU / CUDA / Vulkan, user-selectable in settings |
-| 0011 | Candidate window rendering | Native Win32 + DirectWrite/DirectComposition (not WebView2) — latency priority |
-| 0012 | Candidate window visual style | Windows 11 Fluent Design (Mica, accent color, light/dark follow OS) |
-| 0013 | Settings app | WinUI 3 |
-| 0014 | Settings propagation | Registry/settings file + change notification (`RegNotifyChangeKeyValue` / `ReadDirectoryChangesW`), not active IPC broadcast |
-| 0015 | Server lifecycle | On-demand start (first client triggers launch-if-not-running), idle-timeout shutdown |
-| 0016 | [Privacy](0016-privacy.md) | Fully offline after model download; no telemetry, no external transmission of input |
-| 0017 | TSF crash resilience | SEH (`__try`/`__except`) around all TSF DLL code paths |
-| 0018 | Supported platforms | x64 only (Windows 10/11); ARM64 deferred |
-| 0019 | Installer | Inno Setup |
-| 0020 | Build orchestration | MSBuild with a custom target invoking `swift build` for the engine |
-| 0021 | Dependency vendoring | SampleIME vendored (copy, heavily modified); AzooKeyKanaKanjiConverter via Swift Package Manager |
-| 0022 | Project license | MIT (matches all MIT-licensed dependencies) |
-| 0023 | Project name | **Ohagey (おはぎー)** — pun on azooKey → ohagi (a red-bean sweet), avoiding trademarked names like Imuraya's "あずきバー" |
-| 0024 | Learning/memory data location | `%LOCALAPPDATA%\Ohagey\`, passed to AzooKeyKanaKanjiConverter as `memoryDirectoryURL` |
-| 0025 | Learning enabled by default | Yes, with one-click disable/reset in settings (handles shared/school PCs) |
-| 0026 | Explicit user dictionary | In initial scope (separate file under `%LOCALAPPDATA%\Ohagey\`) |
-| 0027 | Dictionary import from other IMEs | Deferred to a future release |
+| 0001 | 基本方針 | Zenzai変換エンジン(AzooKeyKanaKanjiConverter)のみ流用し、TSF・UI・パッケージングは一から作り直す |
+| 0002 | TSFのベース | Microsoft SampleIME(Windows-classic-samples)をvendoringし、大幅に改造 |
+| 0003 | TSF実装言語 | C++(Swiftではない — SwiftのCOM対応は「消費する」側では実績があるが、TSFのような多数のサーバー側COMインターフェースを「実装する」側では前例が少ないため) |
+| 0004 | エンジンのプロセス構成 | in-proc DLLではなく、単一の共有サーバープロセス(Mozc型) — Zenzaiのメモリ/GPU使用量を考慮した結果、必須と判断 |
+| 0005 | エンジン実装言語 | Swift単体でサーバープロセス全体を実装(C++/SwiftのFFI境界は、エンジンを別プロセス化した時点で不要になったため撤廃) |
+| 0006 | IPCの通信方式 | 名前付きパイプ。セッションID込みの命名、AppContainer/管理者権限プロセス向けの明示的なACL設定 |
+| 0007 | IPCのメッセージ形式 | Protocol Buffers(Mozcの実績ある方式に準拠) |
+| 0008 | [モデル配布方式](0008-model-distribution.md) | インストーラー(Inno Setup)がインストール時にHugging Faceから直接ダウンロード。失敗してもインストールは成功させ、辞書ベース変換にフォールバック |
+| 0009 | [モデルのライセンス対応](0009-model-license.md) | zenz-v3.1-smallはCC-BY-SA 4.0。別ファイルとしてダウンロードし、おはぎー本体のMITコードとは分離。帰属表示を必須化 |
+| 0010 | 推論バックエンド | CPU / CUDA / Vulkanを設定でユーザーが選択可能 |
+| 0011 | 候補ウィンドウの描画方式 | ネイティブWin32 + DirectWrite/DirectComposition(WebView2は不採用) — レイテンシ優先 |
+| 0012 | 候補ウィンドウの見た目 | Windows 11のFluent Design(Mica、アクセントカラー追従、ライト/ダークモード自動追従) |
+| 0013 | 設定アプリ | WinUI 3 |
+| 0014 | 設定変更の反映方法 | レジストリ/設定ファイル + 変更通知(`RegNotifyChangeKeyValue` / `ReadDirectoryChangesW`)。能動的なIPCブロードキャストは不採用 |
+| 0015 | サーバーのライフサイクル | オンデマンド起動(最初のクライアントが未起動なら起動)、アイドルタイムアウトで自動終了 |
+| 0016 | [プライバシー](0016-privacy.md) | モデルダウンロード以外は完全オフライン。テレメトリなし、入力内容の外部送信なし |
+| 0017 | TSFのクラッシュ耐性 | TSF DLLの全コードパスをSEH(`__try`/`__except`)で防御 |
+| 0018 | 対応環境 | x64のみ(Windows 10/11)。ARM64は対象外として見送り |
+| 0019 | インストーラー | Inno Setup |
+| 0020 | ビルドの自動化 | MSBuildに`swift build`を呼び出すカスタムターゲットを組み込む |
+| 0021 | 依存コードの取り込み方 | SampleIMEはvendoring(コピー、大幅改造)。AzooKeyKanaKanjiConverterはSwift Package Manager経由 |
+| 0022 | プロジェクトのライセンス | MIT(依存関係のライセンス系統と統一) |
+| 0023 | プロジェクト名 | **おはぎー(Ohagey)** — azooKey→おはぎ(小豆の和菓子)の語呂合わせ。井村屋の登録商標「あずきバー」等は回避 |
+| 0024 | 学習データの保存場所 | `%LOCALAPPDATA%\Ohagey\`。AzooKeyKanaKanjiConverterの`memoryDirectoryURL`として渡す |
+| 0025 | 学習機能のデフォルト | 有効。設定アプリからワンクリックで無効化・消去可能(学校PC等の共有端末に対応) |
+| 0026 | 明示的なユーザー辞書登録 | 初期スコープに含める(`%LOCALAPPDATA%\Ohagey\`配下に別ファイルとして保存) |
+| 0027 | 他IMEからの辞書インポート | 今回は見送り、将来の拡張機能とする |
 
-## Open items for implementation phase
-- Exact user dictionary file format (JSON vs. other) — left for implementation
-- Exact registry schema for settings (Decision 0014)
-- Protobuf schema definitions for the IPC protocol (Decision 0007)
+## 実装フェーズで詰める残課題
+- ユーザー辞書ファイルの具体的なフォーマット(JSON等) — 実装時に決定
+- 設定用のレジストリスキーマの詳細(決定0014関連)
+- IPC用のProtobufスキーマ定義(決定0007関連)

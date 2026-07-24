@@ -1,26 +1,26 @@
-# 0009: Model license (CC-BY-SA 4.0)
+# 0009: モデルのライセンス(CC-BY-SA 4.0)への対応
 
-## Fact
-`zenz-v3.1-small-gguf` (Miwa Keita / 三輪) is licensed **CC-BY-SA 4.0**, a copyleft
-license — distinct from the MIT license used by AzooKeyKanaKanjiConverter, azooKey,
-SampleIME, and Ohagey's own code.
+## 事実確認
+`zenz-v3.1-small-gguf`(Miwa Keita/三輪氏)は**CC-BY-SA 4.0**というライセンスです。これは
+AzooKeyKanaKanjiConverter・azooKey・SampleIME・おはぎー自身のコードが採用しているMIT
+ライセンスとは異なる、継承ライセンス(コピーレフト)です。
 
-## Decision
-Treat the model as a separately-licensed asset, not part of Ohagey's own codebase:
-- Never committed to this repository
-- Downloaded as a standalone file at install time (decision 0008)
-- Attribution (author name, license name, link to the model page) shown in the
-  settings app's "About" screen
-- Ohagey's own source code remains MIT; only the model file itself carries
-  CC-BY-SA 4.0 obligations
+## 決定事項
+モデルを、おはぎー自体のコードベースとは切り離された「別ライセンスの資産」として扱います。
 
-## Rationale
-This mirrors how `unok/myime` and the Android app "Sumire" both treat the model as
-an external, separately-licensed asset rather than folding it into their own
-code license. Because the model is fetched at runtime rather than statically linked
-or embedded, this separation is both technically and legally clean.
+- 本リポジトリには一切コミットしない
+- インストール時に単体ファイルとしてダウンロードする(決定0008を参照)
+- 設定アプリの「このソフトウェアについて」画面に、作者名・ライセンス名・モデルページへの
+  リンクを帰属表示として掲載する
+- おはぎー自体のソースコードはMITのまま。CC-BY-SA 4.0の義務が及ぶのはモデルファイル自体
+  のみ
 
-## Required attribution text (settings app "About" screen)
-> This app uses the "zenz-v3.1-small" neural conversion model by Keita Miwa,
-> licensed under CC-BY-SA 4.0.
+## 判断の根拠
+`unok/myime`やAndroidアプリ「Sumire」も、モデルを自分たちのコードライセンスに組み込まず、
+外部の別ライセンス資産として扱っています。モデルを静的リンク・同梱するのではなく実行時に
+取得する設計(決定0008)であることも、この切り分けを技術的にも法的にもクリーンにしています。
+
+## 帰属表示の文言(設定アプリ「このソフトウェアについて」画面)
+> 本アプリは、Miwa Keita氏によるニューラル変換モデル「zenz-v3.1-small」
+> (CC-BY-SA 4.0ライセンス)を使用しています。
 > https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf

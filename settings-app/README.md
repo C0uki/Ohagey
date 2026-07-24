@@ -1,17 +1,17 @@
-# settings-app/ — WinUI 3 settings application (decision 0013)
+# settings-app/ — WinUI 3設定アプリ(決定0013)
 
-Planned screens:
-- **Backend**: CPU / CUDA / Vulkan selection (decision 0010), model status
-  (downloaded / missing / re-download button, decisions 0008/0009)
-- **Learning**: enable/disable toggle + "clear learning data" button
-  (decision 0025), targeting `%LOCALAPPDATA%\Ohagey\` (decision 0024)
-- **User dictionary**: add/edit/remove entries (decision 0026)
-- **About**: version info, licenses, Zenzai model attribution
-  (see `docs/decisions/0009-model-license.md`)
+予定している画面:
 
-Settings are written to the registry / a settings file that `tsf/` and `engine/`
-watch for changes and hot-reload (decision 0014) — this app does not talk to the
-running engine process directly.
+- **バックエンド**: CPU / CUDA / Vulkanの選択(決定0010)、モデルの状態表示
+  (ダウンロード済み/未取得/再ダウンロードボタン、決定0008/0009)
+- **学習**: 有効/無効の切り替え、「学習データを消去」ボタン(決定0025)。対象は
+  `%LOCALAPPDATA%\Ohagey\`(決定0024)
+- **ユーザー辞書**: 単語の追加・編集・削除(決定0026)
+- **このソフトウェアについて**: バージョン情報、ライセンス一覧、Zenzaiモデルの帰属表示
+  (`docs/decisions/0009-model-license.md`を参照)
 
-🚧 Not yet scaffolded as a WinUI 3 project. Will be added with `dotnet new winui3`
-(or equivalent template) once implementation begins.
+設定はレジストリ/設定ファイルに書き込み、`tsf/`と`engine/`側がそれを監視して自動反映
+します(決定0014)。このアプリ自体が起動中のエンジンプロセスと直接通信することはありません。
+
+🚧 まだWinUI 3プロジェクトとして雛形化していません。実装開始時に`dotnet new winui3`
+(または同等のテンプレート)で追加予定です。

@@ -1,26 +1,25 @@
-# 0016: Privacy
+# 0016: プライバシー
 
-## Decision
-Ohagey performs no network communication except:
-1. The one-time model/dictionary download at install time (decision 0008)
-2. Optional, user-initiated re-download/retry from the settings app
+## 決定事項
+おはぎーは、以下を除き一切のネットワーク通信を行いません。
 
-All conversion (including Zenzai neural inference) happens locally on the user's
-CPU/GPU (decision 0010). No keystrokes, conversion candidates, learning data, or
-usage statistics are ever transmitted externally. There is no telemetry and no
-crash reporting service.
+1. インストール時の一回限りのモデル・辞書ダウンロード(決定0008)
+2. 設定アプリからユーザーが手動で行う再ダウンロード・再試行
 
-## Why
-- IMEs see every character a user types — trust here is not optional
-- Matches azooKey's own stated privacy stance ("完全オフラインで動作し、入力内容は
-  外部に送信されません")
-- The architecture (decisions 0004–0007: local shared-memory-adjacent server process,
-  named-pipe IPC, offline Zenzai inference) already makes offline-only operation the
-  natural, low-effort outcome — adding telemetry would be the thing requiring extra
-  work, not the other way around
-- Particularly important for the anticipated school-PC deployment scenario
+すべての変換処理(Zenzaiによるニューラル推論を含む)は、ユーザーのローカルCPU/GPU上で
+完結します(決定0010)。キー入力、変換候補、学習データ、利用統計などが外部に送信される
+ことは一切ありません。テレメトリやクラッシュレポート機能も持ちません。
 
-## What this means for future contributors
-Any future feature that would add network calls beyond the model-download path
-(e.g. crash reporting, usage analytics, cloud dictionary sync) requires revisiting
-this decision explicitly — it is not a default to add opportunistically.
+## 理由
+- IMEはユーザーが打つすべての文字を経由するソフトウェアであり、信頼性の担保は必須
+- azooKey本家自身が掲げる「完全オフラインで動作し、入力内容は外部に送信されません」という
+  方針と一致させている
+- アーキテクチャ(決定0004〜0007: ローカルの共有サーバープロセス、名前付きパイプIPC、
+  オフラインでのZenzai推論)自体がすでにオフライン専用動作を自然な帰結としており、
+  むしろテレメトリを追加する方が余計な実装コストになる
+- 想定している学校PCでの配布シーンを踏まえても、特に重要な方針
+
+## 今後の開発者への注意
+モデルダウンロード以外のネットワーク通信を追加する機能(例: クラッシュレポート、利用状況の
+分析、クラウド辞書同期など)を将来追加する場合は、必ずこの決定を明示的に見直すこと。
+安易に追加してよいデフォルトの挙動ではありません。
