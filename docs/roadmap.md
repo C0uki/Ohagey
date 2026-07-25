@@ -49,11 +49,14 @@ OS 非依存で完結し、後続実装の土台になるもの。
 
 ### フェーズ1 で判明した未解決の設計課題
 
-1. **決定 0010(CPU/CUDA/Vulkan のユーザー選択)と upstream の実装方式が食い違う。**
-   AzooKeyKanaKanjiConverter はバックエンドを **package trait**(`"Zenzai"` = GPU /
-   `"ZenzaiCPU"` = CPU 専用)で選ぶ。これは**ビルド時**の選択であり、設定アプリからの
-   **実行時**切り替えという決定 0010 の前提が成り立たない。要再検討(別バイナリ同梱、
-   upstream への機能追加、決定 0010 の見直し等)。
+1. ~~**決定 0010 と upstream の実装方式が食い違う。**~~ → **決定 0028 で解決済み。**
+   調査の結果、`ZenzaiMode` にバックエンド設定フィールドは無く、Windows では
+   `llama.cpp` が `.systemLibrary`(= DLL はこちらが用意する)だった。
+   バックエンド別の llama.cpp DLL を同梱し、エンジン起動時に DLL 検索パスで選択する
+   方式に確定(切り替えはエンジン再起動を伴う)。詳細は
+   [`decisions/0028-inference-backend-selection.md`](decisions/0028-inference-backend-selection.md)。
+   なお当初「package trait がバックエンドを選ぶ」と記録していたが**これは誤り**で、
+   `Zenzai` / `ZenzaiCPU` の2 trait は Package.swift 上で同一の扱いだった。
 2. **依存バージョンの乖離**: 本フェーズのコードは upstream `main` の API を参照して
    書かれているが、`Package.swift` は `0.8.0` 系にピン留めしている。pre-1.0 で API が
    動くため、`ConvertRequestOptions` の必須引数(`textReplacer`、
@@ -72,9 +75,24 @@ OS 非依存で完結し、後続実装の土台になるもの。
 
 ## フェーズ3 — 設定アプリ / インストーラ
 
-- [ ] `settings-app/`: WinUI 3 プロジェクト生成(決定 0013)。バックエンド選択(0010)/学習データ管理(0025)/ユーザー辞書(0026)/About(帰属表示 0009)。
+- [ ] `settings-app/`: WinUI 3 プロジェクト生成(決定 0013)。バックエンド選択(0010/0028、**変更時はエンジン再起動が要る旨を UI に明示**)/学習データ管理(0025)/ユーザー辞書(0026)/About(帰属表示 0009)。
 - [ ] レジストリ/設定ファイルスキーマ確定 + 変更通知連携(決定 0014)。
-- [ ] `installer/ohagey.iss`: `[Files]`/`[Run]` 実装、モデルダウンロードステップ(失敗してもインストール続行、決定 0008)、CI で `iscc` パッケージング有効化。
+- [ ] `installer/ohagey.iss`: `[Files]`/`[Run]` 実装、モデルダウンロードステップ(失敗してもインストール続行、決定 0008)、`backends\{cpu,cuda,vulkan}\` の同梱(決定 0028)、CI で `iscc` パッケージング有効化。
+
+### llama.cpp の用意(決定 0028、フェーズ2〜3 と並行)
+
+Windows では upstream が `llama.cpp` を `.systemLibrary` として宣言しているため、
+**おはぎー側で llama.cpp をビルドして用意する必要がある**。エンジンのビルドを通す
+前提条件でもあるので、フェーズ1の `swift build` 到達時に必要になる。
+
+- [ ] llama.cpp を CPU / CUDA / Vulkan の各構成でビルド(バージョン・ビルドフラグを記録)。
+      手順は [`local-setup.md`](local-setup.md) の「llama.cpp の用意」を参照。
+      **まず CPU 版だけ用意して `swift build` を通すのが最短経路。**
+- [x] ~~`systemLibrary` 用の module map とヘッダ配置を用意~~ → **upstream が同梱済み**
+      (`Sources/llama.cpp/module.modulemap` + 各ヘッダ)。`link "llama"` 指定があるため、
+      こちらが用意するのは `llama.lib` / `llama.dll` と、リンカへの `-Xlinker -L` 指定のみ。
+- [ ] エンジン起動時の DLL 検索パス切り替え(`SetDllDirectory` / 遅延ロード)を実装。
+- [ ] 選択したバックエンドの初期化失敗時に CPU へフォールバックし、状態を設定アプリに表示。
 
 ## 実装時に確定する残課題(決定ログより)
 
