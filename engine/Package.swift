@@ -17,8 +17,8 @@ let package = Package(
             .upToNextMinor(from: "0.8.0"),
             traits: ["Zenzai"]
         ),
-        // TODO: swift-protobuf dependency (decision 0007)
-        // .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.28.0"),
+        // Runtime for the types generated from ohagey.proto (decision 0007).
+        .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.28.0"),
     ],
     targets: [
         .executableTarget(
@@ -26,14 +26,18 @@ let package = Package(
             dependencies: [
                 .product(name: "KanaKanjiConverterModuleWithDefaultDictionary", package: "AzooKeyKanaKanjiConverter"),
                 "OhageyEngineProto",
-                // .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             path: "Sources/OhageyEngine"
         ),
         .target(
             name: "OhageyEngineProto",
+            dependencies: [
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ],
             path: "Sources/OhageyEngineProto"
-            // Generated Protobuf message types (decision 0007) will live here.
+            // Holds ohagey.proto and the ohagey.pb.swift generated from it by
+            // Scripts/generate-proto.sh. The generated file is committed, so a
+            // plain `swift build` does not need protoc.
         ),
     ]
 )
