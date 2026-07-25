@@ -7,16 +7,33 @@
 
 | 対象 | ツール | 備考 |
 |---|---|---|
+| **最初に入れる** | **Visual Studio 2022(「C++ によるデスクトップ開発」ワークロード)** | **TSF ヘッダ(`msctf.h` 等)に加え、cmake と MSVC コンパイラが同梱される。llama.cpp のビルドにも必要**(決定 0002/0003) |
 | `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | 6.0 系。`swift build` に使用 |
 | `engine/`(proto 生成) | `protoc` + `protoc-gen-swift` | 下記「Protobuf の生成」参照 |
-| `tsf/` | Visual Studio 2022(C++ によるデスクトップ開発 + Windows SDK) | TSF ヘッダ(`msctf.h` 等)を含む |
 | `settings-app/` | .NET SDK + Windows App SDK(WinUI 3) | 決定 0013 |
 | `installer/` | [Inno Setup](https://jrsoftware.org/isinfo.php) | `iscc` でコンパイル |
 | 共通 | Git | — |
 
 Zenzai の GPU バックエンドを試す場合のみ追加で:
-CUDA なら NVIDIA ドライバ + CUDA Toolkit、Vulkan なら Vulkan SDK(決定 0010)。
+CUDA なら NVIDIA ドライバ + CUDA Toolkit、Vulkan なら Vulkan SDK(決定 0010/0028)。
 **まずは CPU で動かすので必須ではない。**
+
+### ⚠️ 「x64 Native Tools Command Prompt for VS 2022」を使うこと
+
+通常のコマンドプロンプトや PowerShell では `cmake` に PATH が通っておらず、
+`'cmake' は、内部コマンドまたは外部コマンド…として認識されていません` になる。
+
+スタートメニューで「**x64 Native Tools Command Prompt for VS 2022**」を検索して
+起動すること。cmake と MSVC に PATH が通った状態で開く。
+**x64 版**を選ぶこと(おはぎーは x64 のみ対応・決定 0018)。
+
+cmake だけなら `winget install Kitware.CMake` でも入るが、**C++ コンパイラは別途必要**
+なので結局 Visual Studio が要る。
+
+### 表記について
+
+以下のコマンド例で `C:\path\to\...` と書いてある箇所は**自分の環境の実際のパスに
+置き換える**。そのまま入力しても動かない。
 
 ## llama.cpp の用意(`swift build` の前提条件・決定 0028)
 
@@ -48,19 +65,36 @@ module llama [system] {
 
 ### 手順(CPU 版・最初の一歩)
 
-```powershell
+**「x64 Native Tools Command Prompt for VS 2022」で実行すること**(上記参照)。
+
+```bat
+cd C:\src
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
 cmake -B build -DBUILD_SHARED_LIBS=ON
 cmake --build build --config Release
 ```
 
-生成された `llama.lib` / `llama.dll` の場所を控えておき、ビルド時にリンカへ渡す:
+ビルドが終わったら `llama.lib` の場所を確認する(cmake の設定により出力先が変わるため、
+決め打ちにせず探すのが確実):
 
-```powershell
-cd engine
-swift build -Xlinker -L<llama.lib のあるディレクトリ>
+```bat
+dir /s /b build\*.lib
+dir /s /b build\*.dll
 ```
+
+`llama.lib` があるディレクトリを控えて、エンジンのビルド時にリンカへ渡す。
+おはぎー本体もローカルに clone されている必要がある:
+
+```bat
+cd C:\src
+git clone https://github.com/C0uki/Ohagey.git
+cd Ohagey\engine
+swift build -Xlinker -LC:\src\llama.cpp\build\bin\Release
+```
+
+最後の `-L` に続くパスは、上の `dir` で見つけた `llama.lib` の実際の場所に置き換える
+(`C:\src\...` は例)。実行時には `llama.dll` にも PATH が通っている必要がある。
 
 CUDA / Vulkan 版は `-DGGML_CUDA=ON` / `-DGGML_VULKAN=ON` を付けて別ディレクトリに
 ビルドし、決定 0028 の `backends\{cpu,cuda,vulkan}\` へ配置する。
