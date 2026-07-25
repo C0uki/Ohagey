@@ -86,7 +86,11 @@ Windows では upstream が `llama.cpp` を `.systemLibrary` として宣言し�
 前提条件でもあるので、フェーズ1の `swift build` 到達時に必要になる。
 
 - [ ] llama.cpp を CPU / CUDA / Vulkan の各構成でビルド(バージョン・ビルドフラグを記録)。
-- [ ] `systemLibrary` 用の module map とヘッダ配置を用意。
+      手順は [`local-setup.md`](local-setup.md) の「llama.cpp の用意」を参照。
+      **まず CPU 版だけ用意して `swift build` を通すのが最短経路。**
+- [x] ~~`systemLibrary` 用の module map とヘッダ配置を用意~~ → **upstream が同梱済み**
+      (`Sources/llama.cpp/module.modulemap` + 各ヘッダ)。`link "llama"` 指定があるため、
+      こちらが用意するのは `llama.lib` / `llama.dll` と、リンカへの `-Xlinker -L` 指定のみ。
 - [ ] エンジン起動時の DLL 検索パス切り替え(`SetDllDirectory` / 遅延ロード)を実装。
 - [ ] 選択したバックエンドの初期化失敗時に CPU へフォールバックし、状態を設定アプリに表示。
 
