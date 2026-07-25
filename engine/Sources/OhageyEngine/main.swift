@@ -1,26 +1,76 @@
 // OhageyEngine
 //
-// Single shared conversion server process (decision 0004/0005).
+// Single shared conversion server process (decisions 0004 / 0005).
 // Launched on-demand by a TSF client (decision 0015); listens on a
-// session-ID-scoped named pipe (decision 0006) speaking Protobuf (decision 0007);
-// wraps AzooKeyKanaKanjiConverter + Zenzai for the actual conversion (decision 0001).
+// session-ID-scoped named pipe (decision 0006) speaking length-prefixed
+// Protobuf (decision 0007); wraps AzooKeyKanaKanjiConverter + Zenzai for the
+// actual conversion (decision 0001).
 //
-// TODO (implementation phase):
-// 1. Determine current Windows session ID -> derive pipe name
-//    (\\.\pipe\ohagey_session_<SessionId>)
-// 2. Create the named pipe with an explicit security descriptor that allows
-//    connections from AppContainer / low-integrity / elevated processes
-//    (decision 0006 — see docs/decisions/README.md row 0006)
-// 3. Load ConvertRequestOptions:
-//    - memoryDirectoryURL / sharedContainerURL -> %LOCALAPPDATA%\Ohagey\
-//      (decision 0024)
-//    - learningType -> read from settings (decision 0025 default: enabled)
-//    - zenzaiMode -> .on(weight: <model path>, ...) if model present,
-//      else .off fallback (decision 0008)
-// 4. Watch settings (registry/file) for backend changes (CPU/CUDA/Vulkan,
-//    decision 0010) and hot-reload without dropping active connections
-//    (decision 0014)
-// 5. Idle-timeout self-termination when zero clients are connected
-//    (decision 0015)
+// STATUS: scaffold. Startup is wired up to the point where the pipe would be
+// created; the accept loop and request routing are still TODO, and none of
+// this has been compiled (no Swift toolchain in the authoring environment —
+// see docs/local-setup.md).
 
-print("OhageyEngine: scaffold only, not yet implemented.")
+import Foundation
+
+// NOTE: this file is `main.swift`, so it is top-level code and must not carry
+// the `@main` attribute — Swift rejects the two together. The entry point is
+// the `OhageyEngineMain.main()` call at the bottom of the file.
+enum OhageyEngineMain {
+    static func main() {
+        do {
+            try EnginePaths.ensureUserDataDirectoryExists()
+        } catch {
+            // Without this directory learning and the user dictionary cannot be
+            // persisted, but conversion itself still works — keep going.
+            log("could not create \(EnginePaths.userDataDirectory.path): \(error)")
+        }
+
+        let settings = EngineSettings.load()
+        log("settings loaded (learning=\(settings.learningEnabled), backend=\(settings.backend.rawValue))")
+        log(EnginePaths.isModelAvailable
+            ? "Zenzai model found at \(EnginePaths.modelURL.path)"
+            // Not an error: the install is allowed to complete without the
+            // model, and conversion degrades to the dictionary path (0008).
+            : "Zenzai model missing — falling back to dictionary-only conversion")
+
+        #if os(Windows)
+        do {
+            let sessionId = try PipeServer.currentSessionId()
+            let name = PipeServer.pipeName(sessionId: sessionId)
+            log("pipe name: \(name)")
+            // TODO: create the first instance, then run the accept loop:
+            //   let handle = try PipeServer.createPipeInstance(name: name)
+            //   ... ConnectNamedPipe / per-connection read loop / idle timeout.
+            log("accept loop not implemented yet — exiting.")
+        } catch {
+            log("fatal: \(error)")
+            exit(1)
+        }
+        #else
+        // The engine only ever ships on Windows x64 (decision 0018). Building
+        // on another platform is useful for type-checking the portable pieces
+        // (Framing, settings, conversion mapping), so fail soft rather than
+        // refusing to build.
+        log("not a Windows host — pipe server unavailable; scaffold exits.")
+        #endif
+    }
+
+    private static func log(_ message: String) {
+        // Console logging only. No telemetry, no crash reporting, nothing
+        // leaves the machine (decision 0016).
+        print("OhageyEngine: \(message)")
+    }
+}
+
+OhageyEngineMain.main()
+
+// TODO (implementation phase, tracked in docs/roadmap.md):
+//  1. Generate the Protobuf types (Scripts/generate-proto.sh) and enable the
+//     swift-protobuf dependency in Package.swift.
+//  2. RequestRouter: decode Request -> dispatch to ConversionService -> encode
+//     Response, preserving request_id so clients can pipeline.
+//  3. Accept loop in PipeServer, one pipe instance per client.
+//  4. Idle-timeout self-termination once the connection count has been zero for
+//     `settings.idleTimeoutSeconds` (decision 0015).
+//  5. Settings hot-reload via file/registry watching (decision 0014).

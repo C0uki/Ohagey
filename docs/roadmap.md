@@ -28,14 +28,39 @@ OS 非依存で完結し、後続実装の土台になるもの。
 - [x] `engine/Sources/OhageyEngineProto/ohagey.proto` — IPC スキーマ初版(決定 0007)。
 - [x] `docs/roadmap.md` — 本ドキュメント。
 
-## フェーズ1 — エンジン骨格(Swift / OS 非依存部分を先行)
+## フェーズ1 — エンジン骨格(Swift)
 
-- [ ] `ohagey.proto` から Swift 型を生成(`protoc` + `swift-protobuf`)。`Package.swift` の `swift-protobuf` 依存を有効化。
-- [ ] 長さプレフィックス framing のエンコード/デコード実装。
-- [ ] `main.swift`: 名前付きパイプサーバーの骨格(決定 0006 の ACL 込み命名。Windows API 依存部分は当面スタブ + 設計コメント)。
-- [ ] `ConvertRequestOptions` のロード: `memoryDirectoryURL` → `%LOCALAPPDATA%\Ohagey\`(決定 0024)、`learningType`(決定 0025)、`zenzaiMode` のモデル有無による分岐(決定 0008)。
+> ⚠️ **未コンパイル**: このフェーズのコードは Swift ツールチェーンの無い環境で書かれている。
+> `download.swift.org` が egress ポリシーで遮断されており導入できなかったため、
+> **一行もビルド検証されていない**。ローカル Windows(`docs/local-setup.md`)での
+> 最初のビルドで型エラーが出る前提で扱うこと。
+
+- [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存で単体テスト可能。
+- [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
+- [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
+- [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
+- [x] Protobuf 生成の配線: `Scripts/generate-proto.sh` + `Package.swift` の `swift-protobuf` 依存有効化。
+- [ ] **`Scripts/generate-proto.sh` の実行**(protoc-gen-swift が必要 → Swift 環境必須)。生成物 `ohagey.pb.swift` はコミットする方針。
+- [ ] `RequestRouter`: `Request` デコード → 振り分け → `Response` エンコード(`request_id` を保持)。
+- [ ] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` の TODO)。
 - [ ] アイドルタイムアウト自己終了(決定 0015)。
-- [ ] `swift build` を CI(windows-latest)で有効化。
+- [ ] 設定のホットリロード(決定 0014)。
+- [ ] `swift build` を通す → CI(windows-latest)で有効化。
+
+### フェーズ1 で判明した未解決の設計課題
+
+1. **決定 0010(CPU/CUDA/Vulkan のユーザー選択)と upstream の実装方式が食い違う。**
+   AzooKeyKanaKanjiConverter はバックエンドを **package trait**(`"Zenzai"` = GPU /
+   `"ZenzaiCPU"` = CPU 専用)で選ぶ。これは**ビルド時**の選択であり、設定アプリからの
+   **実行時**切り替えという決定 0010 の前提が成り立たない。要再検討(別バイナリ同梱、
+   upstream への機能追加、決定 0010 の見直し等)。
+2. **依存バージョンの乖離**: 本フェーズのコードは upstream `main` の API を参照して
+   書かれているが、`Package.swift` は `0.8.0` 系にピン留めしている。pre-1.0 で API が
+   動くため、`ConvertRequestOptions` の必須引数(`textReplacer`、
+   `specialCandidateProviders` 等)は実ビルド時に要確認。
+3. **パイプ ACL のセキュリティレビュー**: `PipeServer.securityDescriptorSDDL` は
+   AppContainer / 低整合性クライアントを通す必要から広めの許可になっている。
+   IME のパイプは全入力が通るため、出荷前に Mozc 等と比較して最小権限に絞ること。
 
 ## フェーズ2 — TSF(C++ / Windows 実機必須)
 
