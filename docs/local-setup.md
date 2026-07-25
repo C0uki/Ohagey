@@ -18,6 +18,18 @@ Zenzai の GPU バックエンドを試す場合のみ追加で:
 CUDA なら NVIDIA ドライバ + CUDA Toolkit、Vulkan なら Vulkan SDK(決定 0010/0028)。
 **まずは CPU で動かすので必須ではない。**
 
+### Visual Studio のどれを入れるか
+
+- **Visual Studio Professional 2022**(または Enterprise)— 推奨。フェーズ2で TSF DLL を
+  ホストアプリのプロセス内でデバッグするため、IDE のデバッガがあると楽。
+- **Build Tools for Visual Studio 2022** — IDE 無しでコンパイラ・cmake・Windows SDK だけ。
+  軽量で、`engine/` のビルドはこれでも通る。
+- 以下は**別物なので選ばない**: Visual C++ Redistributable(実行時ランタイム)、
+  Agents、Remote Tools、Intellitrace、Visual Studio for Mac。
+
+エディションよりも重要なのは、インストーラーで「**C++ によるデスクトップ開発**」
+ワークロードにチェックを入れること。これを忘れると cmake も MSVC も入らない。
+
 ### ⚠️ 「x64 Native Tools Command Prompt for VS 2022」を使うこと
 
 通常のコマンドプロンプトや PowerShell では `cmake` に PATH が通っておらず、
