@@ -83,11 +83,13 @@ actor ConversionService {
             inferenceLimit: settings.zenzaiInferenceLimit,
             personalizationMode: nil
         )
-        // ⚠️ decision 0010 (user-selectable CPU / CUDA / Vulkan) is NOT wired up
-        // here. Upstream selects the compute backend with a *package trait*
-        // ("Zenzai" for GPU, "ZenzaiCPU" for CPU-only) — a build-time choice,
-        // not a runtime one — so `settings.backend` currently has no effect.
-        // Reconciling this needs a decision; see docs/roadmap.md.
+        // NOTE: `settings.backend` is deliberately not consulted here.
+        // `ZenzaiMode` exposes no backend/GPU-offload field, so the compute
+        // backend cannot be chosen through this API at all. It is determined by
+        // which llama.cpp build the process has loaded: on Windows upstream
+        // declares llama.cpp as a `.systemLibrary`, so we supply the DLL.
+        // Backend selection therefore happens at engine startup via the DLL
+        // search path, not per request — see decision 0028.
     }
 }
 
