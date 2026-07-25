@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+# 雛形段階の CI（docs/roadmap.md 参照）。
+# tsf/・engine/・settings-app/ のビルド成果物がまだ存在しないため、現時点で
+# 実際に走るのは no-committed-model ジョブのみ。Windows 上の実ビルドジョブは
+# 定義だけ用意し、各コンポーネントがビルド可能になった時点で有効化する。
+
+permissions:
+  contents: read
+
+jobs:
+  # 決定 0008 / 0009 / 0016 の担保:
+  # Zenzai モデル (CC-BY-SA 4.0) を含むあらゆるモデル重みをリポジトリに
+  # コミットしていないことを CI で保証する。
+  no-committed-model:
+    name: Guard — no model weights committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if model weights are tracked
+        run: |
+          set -euo pipefail
+          hits="$(git ls-files -- '*.gguf' '*.safetensors' '*.bin' 'models/**' || true)"
+          if [ -n "$hits" ]; then
+            echo "::error::Model weight file(s) committed — forbidden by decisions 0008/0009/0016:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "OK: no model weight files tracked."
+
+  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
+  #
+  # engine (Swift, 決定 0005 / 0020):
+  #   runs-on: windows-latest。engine/ で `swift build`。
+  #   AzooKeyKanaKanjiConverter + Zenzai に対してコンパイルが通るようになったら有効化。
+  #
+  # tsf (C++ / MSBuild, 決定 0002 / 0003 / 0020):
+  #   runs-on: windows-latest。vendoring & 改造した SampleIME を x64 で MSBuild。
+  #   tsf/SampleIME/ を取り込み .sln がビルドできるようになったら有効化。
+  #
+  # installer (Inno Setup, 決定 0019):
+  #   runs-on: windows-latest。`iscc installer/ohagey.iss`。
+  #   tsf/engine/settings-app が実ビルド成果物を出すようになったら有効化。
