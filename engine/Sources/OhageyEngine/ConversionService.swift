@@ -9,9 +9,17 @@
 import Foundation
 import KanaKanjiConverterModuleWithDefaultDictionary
 
-/// Serializes access to the converter, which is not documented as thread-safe,
-/// while pipe connections are handled concurrently.
-actor ConversionService {
+/// Serializes access to the converter while pipe connections are handled
+/// concurrently.
+///
+/// This is `@MainActor` rather than an `actor` because upstream declares
+/// `KanaKanjiConverter` as `@MainActor` — a separate actor cannot own it. The
+/// serialization this type exists to provide still holds; it is just the main
+/// actor doing it. Consequence for the pipe server: accept and read loops may
+/// run anywhere, but every conversion call has to hop to the main actor, so the
+/// process needs a live main-actor executor for the engine to make progress.
+@MainActor
+final class ConversionService {
     private let converter = KanaKanjiConverter()
     private var settings: EngineSettings
 

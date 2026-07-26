@@ -174,6 +174,12 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | `module 'KanaKanjiConverterModule' was built with C++ interoperability enabled, but current compilation does not enable C++ interoperability` | Zenzai trait 有効時、upstream は llama.cpp をラップするため C++ interop 付きでビルドされる。読み込む側も同じ設定が要る | `Package.swift` の `OhageyEngine` に `.interoperabilityMode(.Cxx)` を追加 |
 | `'KanaKanjiConverter' has no member 'withDefaultDictionary'` / `cannot find type 'ZenzaiMode'` / `missing argument for parameter 'dictionaryResourceURL'` / `type 'Bool' has no member 'auto'` | コードを upstream `main` の API に対して書いていたが、pin により解決されるのは **0.8.5** で API が異なる | 0.8.5 に合わせて修正(下記) |
 
+| `call to main actor-isolated initializer 'init()' in a synchronous actor-isolated context` | upstream の `KanaKanjiConverter` は `@MainActor` 隔離されたクラスで、別の `actor` からは所有できない | `ConversionService` を `actor` から `@MainActor final class` に変更 |
+
+> **設計上の含意**: 変換器が main actor に固定されているため、**エンジンは main actor
+> 実行環境を持ち続ける必要がある**。パイプの accept ループや読み取りは別スレッドで
+> よいが、変換呼び出しは必ず main actor にホップする。実装時にこの前提を崩さないこと。
+
 #### 0.8.5 と `main` の API 差分(実装時の注意)
 
 解決されるのは **0.8.5**。`main` のドキュメントや README をそのまま参考にすると食い違う。
