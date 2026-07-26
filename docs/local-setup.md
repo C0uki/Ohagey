@@ -8,7 +8,7 @@
 | 対象 | ツール | 備考 |
 |---|---|---|
 | **最初に入れる** | **Visual Studio 2022(「C++ によるデスクトップ開発」ワークロード)** | **TSF ヘッダ(`msctf.h` 等)に加え、cmake と MSVC コンパイラが同梱される。llama.cpp のビルドにも必要**(決定 0002/0003) |
-| `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | 6.0 系。`swift build` に使用 |
+| `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | **6.1 以上が必須**(`Package.swift` が package traits を使うため)。6.3.3 で動作確認 |
 | `engine/`(proto 生成) | `protoc` + `protoc-gen-swift` | 下記「Protobuf の生成」参照 |
 | `settings-app/` | .NET SDK + Windows App SDK(WinUI 3) | 決定 0013 |
 | `installer/` | [Inno Setup](https://jrsoftware.org/isinfo.php) | `iscc` でコンパイル |
@@ -163,6 +163,18 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
   コードは upstream `main` の API を参照しているが、`Package.swift` は 0.8.0 系にピン留め。
 - `PipeServer.swift` の WinSDK 呼び出し(型・オプショナル性)。
 - 生成前の `ohagey.pb.swift` を参照する箇所(先に proto 生成が必要)。
+
+### 実機で遭遇した問題と対処(記録)
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| `'package(url:_:traits:)' is unavailable` / `'Trait' is unavailable` | `Package.swift` の `swift-tools-version` が 5.10 で、`traits:` は PackageDescription 6.1 以降の API | tools-version を **6.1** に引き上げ済み。Swift 6.1 以上のツールチェーンが必要 |
+| `'cmake' は…認識されていません` | 通常のコマンドプロンプトでは PATH が通らない | 「x64 Native Tools Command Prompt for VS 2022」を使う |
+
+tools-version を 6.x にすると既定の言語モードが Swift 6(strict concurrency)になり、
+まだ一度も動かしていないコードに大量の Sendable エラーが出るため、当面は
+`.swiftLanguageMode(.v5)` を指定している。**エンジンが動くようになったら `.v6` への
+移行を検討すること**(`Package.swift` に TODO として記載)。
 
 ### 推奨する着手順(手戻りを減らす順序)
 

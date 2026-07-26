@@ -1,4 +1,6 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.1
+// 6.1 is required for package traits (`traits:` below), which upstream uses to
+// gate the Zenzai/llama.cpp dependency. 5.10 rejects that API.
 import PackageDescription
 
 let package = Package(
@@ -27,17 +29,30 @@ let package = Package(
                 .product(name: "KanaKanjiConverterModuleWithDefaultDictionary", package: "AzooKeyKanaKanjiConverter"),
                 "OhageyEngineProto",
             ],
-            path: "Sources/OhageyEngine"
+            path: "Sources/OhageyEngine",
+            swiftSettings: [
+                // Tools version 6.x would otherwise default to the Swift 6
+                // language mode, whose strict concurrency checking turns a pile
+                // of Sendable diagnostics into hard errors before any of this
+                // code has run once. Staying on v5 keeps the tools-version bump
+                // (needed purely for `traits:`) from dragging a concurrency
+                // migration along with it.
+                // TODO: migrate to .v6 once the engine actually builds and runs.
+                .swiftLanguageMode(.v5)
+            ]
         ),
         .target(
             name: "OhageyEngineProto",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
-            path: "Sources/OhageyEngineProto"
+            path: "Sources/OhageyEngineProto",
             // Holds ohagey.proto and the ohagey.pb.swift generated from it by
             // Scripts/generate-proto.sh. The generated file is committed, so a
             // plain `swift build` does not need protoc.
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
         ),
     ]
 )
