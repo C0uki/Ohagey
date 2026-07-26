@@ -170,6 +170,12 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 |---|---|---|
 | `'package(url:_:traits:)' is unavailable` / `'Trait' is unavailable` | `Package.swift` の `swift-tools-version` が 5.10 で、`traits:` は PackageDescription 6.1 以降の API | tools-version を **6.1** に引き上げ済み。Swift 6.1 以上のツールチェーンが必要 |
 | `'cmake' は…認識されていません` | 通常のコマンドプロンプトでは PATH が通らない | 「x64 Native Tools Command Prompt for VS 2022」を使う |
+| `supported platforms can't be empty` | `Package.swift` の `platforms:` が空配列だった | `platforms:` の宣言ごと削除(省略可能。Apple 向けのデプロイターゲット記述用で Windows には不要) |
+
+llama.cpp のビルド成果物の位置(cmake 既定):
+
+- `llama.lib`(リンク時)→ `build\src\Release\`
+- `llama.dll`(実行時)→ `build\bin\Release\` ※ `ggml.dll` 等の依存 DLL も同じ場所
 
 tools-version を 6.x にすると既定の言語モードが Swift 6(strict concurrency)になり、
 まだ一度も動かしていないコードに大量の Sendable エラーが出るため、当面は

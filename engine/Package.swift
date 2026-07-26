@@ -3,11 +3,12 @@
 // gate the Zenzai/llama.cpp dependency. 5.10 rejects that API.
 import PackageDescription
 
+// No `platforms:` declaration: SPM's platform list only describes Apple
+// deployment targets, and an empty array is rejected outright
+// ("supported platforms can't be empty"). Ohagey targets Windows x64 only
+// (decision 0018), which SPM expresses through the toolchain, not this field.
 let package = Package(
     name: "OhageyEngine",
-    platforms: [
-        // Windows toolchain target; platform list here is informational for SPM tooling.
-    ],
     products: [
         .executable(name: "OhageyEngine", targets: ["OhageyEngine"])
     ],
