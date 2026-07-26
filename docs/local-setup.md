@@ -186,14 +186,33 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | AzooKeyKanaKanjiConverter | 0.8.5(`.upToNextMinor(from: "0.8.0")` が解決) |
 | llama.cpp | **`b4846`**、`-DBUILD_SHARED_LIBS=ON`、CPU バックエンド(AVX512) |
 
-### 実行時
+### ビルドと実行(環境変数を使う方法・おすすめ)
 
-`llama.dll` と `ggml*.dll` に PATH が通っている必要がある。
+`-Xlinker -L...` は**コマンドごとの指定で保存されない**ため、`swift build` と `swift run`
+の両方に毎回渡す必要がある(`swift run` も再リンクするので、忘れると
+`lld-link: error: could not open 'llama.lib'` になる)。
+
+lld-link は MSVC 互換で `LIB` 環境変数を参照するので、**セッション先頭で 2 つ設定して
+おけばフラグ無しで済む**:
 
 ```bat
+rem リンク時: llama.lib の場所
+set LIB=C:\path\to\llama.cpp\build-b4846\src\Release;%LIB%
+rem 実行時: llama.dll / ggml*.dll の場所
 set PATH=C:\path\to\llama.cpp\build-b4846\bin\Release;%PATH%
+
+swift build
 swift run
 ```
+
+フラグで明示したい場合は、**両方のコマンドに**付ける:
+
+```bat
+swift build -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
+swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
+```
+
+`LIB` はリンク時、`PATH` は実行時と役割が違うので、**どちらか一方では足りない**。
 
 > Windows で開発者モードが無効だと `unable to create symbolic link at .build\debug` という
 > 警告が出るが無害。実体は `.build\x86_64-unknown-windows-msvc\debug\OhageyEngine.exe`。
@@ -237,6 +256,7 @@ swift run
 | `ZenzaiMode.on` の `personalizationMode` | 既定値なし。明示的に渡す必要がある | 同左 |
 
 | `found 2 file(s) which are unhandled`(`ohagey.proto` / `README.md`) | ビルド入力でないファイルがターゲット配下にある | `Package.swift` の `OhageyEngineProto` に `exclude:` を追加 |
+| `lld-link: error: could not open 'llama.lib': no such file or directory`(`swift build` は通ったのに `swift run` で出る) | `-Xlinker -L...` はコマンドごとの指定。`swift run` も再リンクするため、フラグを渡さないと `llama.lib` を見失う | 両方のコマンドにフラグを渡すか、`LIB` 環境変数を設定する(上記「ビルドと実行」参照) |
 
 llama.cpp のビルド成果物の位置(cmake 既定):
 
