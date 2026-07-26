@@ -1,11 +1,14 @@
-// swift-tools-version:5.10
+// swift-tools-version:6.1
+// 6.1 is required for package traits (`traits:` below), which upstream uses to
+// gate the Zenzai/llama.cpp dependency. 5.10 rejects that API.
 import PackageDescription
 
+// No `platforms:` declaration: SPM's platform list only describes Apple
+// deployment targets, and an empty array is rejected outright
+// ("supported platforms can't be empty"). Ohagey targets Windows x64 only
+// (decision 0018), which SPM expresses through the toolchain, not this field.
 let package = Package(
     name: "OhageyEngine",
-    platforms: [
-        // Windows toolchain target; platform list here is informational for SPM tooling.
-    ],
     products: [
         .executable(name: "OhageyEngine", targets: ["OhageyEngine"])
     ],
@@ -27,17 +30,42 @@ let package = Package(
                 .product(name: "KanaKanjiConverterModuleWithDefaultDictionary", package: "AzooKeyKanaKanjiConverter"),
                 "OhageyEngineProto",
             ],
-            path: "Sources/OhageyEngine"
+            path: "Sources/OhageyEngine",
+            swiftSettings: [
+                // Tools version 6.x would otherwise default to the Swift 6
+                // language mode, whose strict concurrency checking turns a pile
+                // of Sendable diagnostics into hard errors before any of this
+                // code has run once. Staying on v5 keeps the tools-version bump
+                // (needed purely for `traits:`) from dragging a concurrency
+                // migration along with it.
+                // TODO: migrate to .v6 once the engine actually builds and runs.
+                .swiftLanguageMode(.v5),
+                // The Zenzai trait builds KanaKanjiConverterModule and friends
+                // with C++ interop (they wrap llama.cpp), and Swift refuses to
+                // import such a module from a compilation that does not enable
+                // it too. This must match upstream or every import fails.
+                .interoperabilityMode(.Cxx)
+            ]
         ),
         .target(
             name: "OhageyEngineProto",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
-            path: "Sources/OhageyEngineProto"
+            path: "Sources/OhageyEngineProto",
+            // The schema and its docs live beside the generated code but are not
+            // themselves build inputs; without this SPM warns about "unhandled"
+            // files on every build.
+            exclude: [
+                "ohagey.proto",
+                "README.md",
+            ],
             // Holds ohagey.proto and the ohagey.pb.swift generated from it by
             // Scripts/generate-proto.sh. The generated file is committed, so a
             // plain `swift build` does not need protoc.
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
         ),
     ]
 )

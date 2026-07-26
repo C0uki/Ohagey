@@ -1,19 +1,26 @@
 // Wraps AzooKeyKanaKanjiConverter + Zenzai (decisions 0001 / 0008 / 0010 / 0024 / 0025).
 //
-// ⚠️ API-DRIFT WARNING: the call shapes below were written against the
-// AzooKeyKanaKanjiConverter sources on `main`, while Package.swift pins
-// `.upToNextMinor(from: "0.8.0")`. Upstream is pre-1.0 and its API moves, so
-// every signature here must be checked against the pinned version on the first
-// real build. Parameters that could not be confirmed are marked TODO rather
-// than guessed.
+// API NOTE: written against AzooKeyKanaKanjiConverter 0.8.5, the version SPM
+// resolves from the `.upToNextMinor(from: "0.8.0")` pin. Upstream is pre-1.0
+// and `main` has already moved on (there, prediction flags are enums and
+// ZenzaiMode is top-level), so check these signatures again whenever the pin
+// is raised.
 
 import Foundation
 import KanaKanjiConverterModuleWithDefaultDictionary
 
-/// Serializes access to the converter, which is not documented as thread-safe,
-/// while pipe connections are handled concurrently.
-actor ConversionService {
-    private let converter = KanaKanjiConverter.withDefaultDictionary()
+/// Serializes access to the converter while pipe connections are handled
+/// concurrently.
+///
+/// This is `@MainActor` rather than an `actor` because upstream declares
+/// `KanaKanjiConverter` as `@MainActor` — a separate actor cannot own it. The
+/// serialization this type exists to provide still holds; it is just the main
+/// actor doing it. Consequence for the pipe server: accept and read loops may
+/// run anywhere, but every conversion call has to hop to the main actor, so the
+/// process needs a live main-actor executor for the engine to make progress.
+@MainActor
+final class ConversionService {
+    private let converter = KanaKanjiConverter()
     private var settings: EngineSettings
 
     init(settings: EngineSettings) {
@@ -54,10 +61,17 @@ actor ConversionService {
     }
 
     private func makeOptions(nBest: Int) -> ConvertRequestOptions {
-        ConvertRequestOptions(
+        // `withDefaultDictionary` rather than the plain initializer: it fills in
+        // `dictionaryResourceURL` (bundled dictionary) and `textReplacer`
+        // (emoji dictionary), both of which are required and have no sensible
+        // value we could supply ourselves.
+        .withDefaultDictionary(
             N_best: nBest,
-            requireJapanesePrediction: .auto,
-            requireEnglishPrediction: .disabled,
+            // Bool, not an enum, in 0.8.5. Prediction is off for now: the TSF
+            // layer asks for conversion of a completed reading.
+            // TODO: revisit once the candidate window supports predictions.
+            requireJapanesePrediction: false,
+            requireEnglishPrediction: false,
             keyboardLanguage: .ja_JP,
             // Learning is on by default and switchable from the settings app
             // (decision 0025).
@@ -65,9 +79,6 @@ actor ConversionService {
             // Both point at %LOCALAPPDATA%\Ohagey\ (decision 0024).
             memoryDirectoryURL: EnginePaths.userDataDirectory,
             sharedContainerURL: EnginePaths.userDataDirectory,
-            // TODO: confirm the required `textReplacer` and
-            // `specialCandidateProviders` arguments for the pinned version —
-            // they have no defaults in the upstream initializer.
             zenzaiMode: makeZenzaiMode(),
             metadata: .init(versionString: OhageyEngineVersion.string)
         )
@@ -76,11 +87,14 @@ actor ConversionService {
     /// Zenzai is enabled only when the weights are actually present; otherwise
     /// the engine degrades to dictionary-based conversion instead of failing
     /// (decision 0008).
-    private func makeZenzaiMode() -> ZenzaiMode {
+    // ZenzaiMode is nested inside ConvertRequestOptions in 0.8.5, so it cannot
+    // be named unqualified.
+    private func makeZenzaiMode() -> ConvertRequestOptions.ZenzaiMode {
         guard EnginePaths.isModelAvailable else { return .off }
         return .on(
             weight: EnginePaths.modelURL,
             inferenceLimit: settings.zenzaiInferenceLimit,
+            // No default upstream, so it has to be passed explicitly.
             personalizationMode: nil
         )
         // NOTE: `settings.backend` is deliberately not consulted here.

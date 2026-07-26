@@ -30,16 +30,23 @@ OS 非依存で完結し、後続実装の土台になるもの。
 
 ## フェーズ1 — エンジン骨格(Swift)
 
-> ⚠️ **未コンパイル**: このフェーズのコードは Swift ツールチェーンの無い環境で書かれている。
-> `download.swift.org` が egress ポリシーで遮断されており導入できなかったため、
-> **一行もビルド検証されていない**。ローカル Windows(`docs/local-setup.md`)での
-> 最初のビルドで型エラーが出る前提で扱うこと。
+> ✅ **Windows でビルドが通ることを実機で確認済み**(`Build complete!` / `OhageyEngine.exe` 生成)。
+> upstream が Windows を動作確認対象に挙げていない中で、
+> AzooKeyKanaKanjiConverter + Zenzai + llama.cpp が Windows でビルドできることを実証した。
+> **フェーズ1で最大の未知数だった部分は解消**。
+> 到達までに踏んだエラーと対処は [`local-setup.md`](local-setup.md) に記録している。
+>
+> ただし**動作確認はこれから**。ビルドが通ったことと、変換が正しく動くことは別。
 
 - [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存で単体テスト可能。
 - [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
 - [x] Protobuf 生成の配線: `Scripts/generate-proto.sh` + `Package.swift` の `swift-protobuf` 依存有効化。
+- [x] **Windows で `swift build` を通す**(最大の関門)。llama.cpp `b4846` を CPU 構成でビルドし、
+      `-Xlinker -L<llama.lib のディレクトリ>` を渡すことで `OhageyEngine.exe` の生成に成功。
+- [ ] 生成された `OhageyEngine.exe` を実行し、起動シーケンス(設定読込 → モデル判定 →
+      パイプ名決定)が想定どおり動くことを確認する。
 - [ ] **`Scripts/generate-proto.sh` の実行**(protoc-gen-swift が必要 → Swift 環境必須)。生成物 `ohagey.pb.swift` はコミットする方針。
 - [ ] `RequestRouter`: `Request` デコード → 振り分け → `Response` エンコード(`request_id` を保持)。
 - [ ] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` の TODO)。

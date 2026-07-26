@@ -8,7 +8,7 @@
 | 対象 | ツール | 備考 |
 |---|---|---|
 | **最初に入れる** | **Visual Studio 2022(「C++ によるデスクトップ開発」ワークロード)** | **TSF ヘッダ(`msctf.h` 等)に加え、cmake と MSVC コンパイラが同梱される。llama.cpp のビルドにも必要**(決定 0002/0003) |
-| `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | 6.0 系。`swift build` に使用 |
+| `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | **6.1 以上が必須**(`Package.swift` が package traits を使うため)。6.3.3 で動作確認 |
 | `engine/`(proto 生成) | `protoc` + `protoc-gen-swift` | 下記「Protobuf の生成」参照 |
 | `settings-app/` | .NET SDK + Windows App SDK(WinUI 3) | 決定 0013 |
 | `installer/` | [Inno Setup](https://jrsoftware.org/isinfo.php) | `iscc` でコンパイル |
@@ -75,6 +75,24 @@ module llama [system] {
 1. `llama.lib`(インポートライブラリ、リンク時)
 2. `llama.dll`(実行時)
 
+### ⚠️ llama.cpp のバージョンは `b4846` に固定すること
+
+**最新の master を使ってはいけない。** AzooKeyKanaKanjiConverter 0.8.5 は
+llama.cpp のビルド **`b4846`** を前提にしている(upstream の `Package.swift` が
+Apple 向けに参照している xcframework が
+`azooKey/llama.cpp` の `b4846` リリース)。
+
+これより新しい llama.cpp では KV キャッシュ API がリネームされて旧名が削除されており、
+リンク時に次のエラーになる:
+
+```
+lld-link: error: undefined symbol: llama_kv_cache_seq_rm
+lld-link: error: undefined symbol: llama_kv_cache_seq_pos_max
+```
+
+**AzooKeyKanaKanjiConverter の pin を上げるときは、llama.cpp 側の対応バージョンも
+必ず確認し直すこと**(決定 0028 の「ビルド構成を記録する」に該当)。
+
 ### 手順(CPU 版・最初の一歩)
 
 **「x64 Native Tools Command Prompt for VS 2022」で実行すること**(上記参照)。
@@ -83,9 +101,13 @@ module llama [system] {
 cd C:\src
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
-cmake -B build -DBUILD_SHARED_LIBS=ON
-cmake --build build --config Release
+git checkout b4846
+cmake -B build-b4846 -DBUILD_SHARED_LIBS=ON
+cmake --build build-b4846 --config Release
 ```
+
+ビルドディレクトリにバージョンを含めておくと、複数バージョンを試すときに
+CMake キャッシュの衝突を避けられる。
 
 ビルドが終わったら `llama.lib` の場所を確認する(cmake の設定により出力先が変わるため、
 決め打ちにせず探すのが確実):
@@ -152,17 +174,79 @@ swift build -Xlinker -L<llama.lib のあるディレクトリ>
 
 TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限**が必要。
 
-## 現状の注意
+## ✅ 動作確認済みの構成
 
-`engine/Sources/OhageyEngine/` 配下のフェーズ1コードは、Swift ツールチェーンを導入できない
-環境(Linux コンテナ、`download.swift.org` が egress ポリシーで遮断)で書かれており、
-**一度もコンパイルされていない**。ローカルでの最初の `swift build` では、特に以下で
-エラーが出る前提で臨むこと。
+以下の組み合わせで `swift build` の成功(`OhageyEngine.exe` の生成)を確認済み。
 
-- `ConvertRequestOptions` の必須引数(`textReplacer`、`specialCandidateProviders`)。
-  コードは upstream `main` の API を参照しているが、`Package.swift` は 0.8.0 系にピン留め。
-- `PipeServer.swift` の WinSDK 呼び出し(型・オプショナル性)。
-- 生成前の `ohagey.pb.swift` を参照する箇所(先に proto 生成が必要)。
+| 項目 | バージョン |
+|---|---|
+| Windows SDK | 10.0.26100.0 |
+| Visual Studio | 2022 Professional 17.14(MSVC 19.44) |
+| Swift for Windows | 6.3.3 |
+| AzooKeyKanaKanjiConverter | 0.8.5(`.upToNextMinor(from: "0.8.0")` が解決) |
+| llama.cpp | **`b4846`**、`-DBUILD_SHARED_LIBS=ON`、CPU バックエンド(AVX512) |
+
+### 実行時
+
+`llama.dll` と `ggml*.dll` に PATH が通っている必要がある。
+
+```bat
+set PATH=C:\path\to\llama.cpp\build-b4846\bin\Release;%PATH%
+swift run
+```
+
+> Windows で開発者モードが無効だと `unable to create symbolic link at .build\debug` という
+> 警告が出るが無害。実体は `.build\x86_64-unknown-windows-msvc\debug\OhageyEngine.exe`。
+
+## 残っている注意点
+
+**ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。
+
+- **`PipeServer.swift` の WinSDK 呼び出し**は、まだどこからも呼ばれていないため、
+  コンパイルは通っても**実行時の挙動は未検証**。accept ループ実装時に確認が必要。
+- **パイプ ACL(SDDL)** は出荷前にセキュリティレビューが必要(`docs/roadmap.md` 参照)。
+- `ohagey.pb.swift` は未生成。`RequestRouter` もまだ無い。
+
+### 実機で遭遇した問題と対処(記録)
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| `'package(url:_:traits:)' is unavailable` / `'Trait' is unavailable` | `Package.swift` の `swift-tools-version` が 5.10 で、`traits:` は PackageDescription 6.1 以降の API | tools-version を **6.1** に引き上げ済み。Swift 6.1 以上のツールチェーンが必要 |
+| `'cmake' は…認識されていません` | 通常のコマンドプロンプトでは PATH が通らない | 「x64 Native Tools Command Prompt for VS 2022」を使う |
+| `supported platforms can't be empty` | `Package.swift` の `platforms:` が空配列だった | `platforms:` の宣言ごと削除(省略可能。Apple 向けのデプロイターゲット記述用で Windows には不要) |
+| `module 'KanaKanjiConverterModule' was built with C++ interoperability enabled, but current compilation does not enable C++ interoperability` | Zenzai trait 有効時、upstream は llama.cpp をラップするため C++ interop 付きでビルドされる。読み込む側も同じ設定が要る | `Package.swift` の `OhageyEngine` に `.interoperabilityMode(.Cxx)` を追加 |
+| `'KanaKanjiConverter' has no member 'withDefaultDictionary'` / `cannot find type 'ZenzaiMode'` / `missing argument for parameter 'dictionaryResourceURL'` / `type 'Bool' has no member 'auto'` | コードを upstream `main` の API に対して書いていたが、pin により解決されるのは **0.8.5** で API が異なる | 0.8.5 に合わせて修正(下記) |
+
+| `call to main actor-isolated initializer 'init()' in a synchronous actor-isolated context` | upstream の `KanaKanjiConverter` は `@MainActor` 隔離されたクラスで、別の `actor` からは所有できない | `ConversionService` を `actor` から `@MainActor final class` に変更 |
+| `lld-link: error: undefined symbol: llama_kv_cache_seq_rm` / `llama_kv_cache_seq_pos_max` | llama.cpp が新しすぎる。KV キャッシュ API がリネームされ旧名が削除された | llama.cpp を **`b4846`** に checkout して再ビルド(上記「バージョンは `b4846` に固定」参照) |
+
+> **設計上の含意**: 変換器が main actor に固定されているため、**エンジンは main actor
+> 実行環境を持ち続ける必要がある**。パイプの accept ループや読み取りは別スレッドで
+> よいが、変換呼び出しは必ず main actor にホップする。実装時にこの前提を崩さないこと。
+
+#### 0.8.5 と `main` の API 差分(実装時の注意)
+
+解決されるのは **0.8.5**。`main` のドキュメントや README をそのまま参考にすると食い違う。
+
+| 項目 | 0.8.5 | `main` |
+|---|---|---|
+| `ZenzaiMode` | **`ConvertRequestOptions` のネスト型** | トップレベル |
+| `requireJapanesePrediction` / `requireEnglishPrediction` | **`Bool`** | `PredictionMode` 列挙型 |
+| 変換器の生成 | `KanaKanjiConverter()` | `KanaKanjiConverter.withDefaultDictionary()` |
+| `dictionaryResourceURL` / `textReplacer` | 必須引数。`ConvertRequestOptions.withDefaultDictionary(...)` を使えば自動供給される | 同様 |
+| `ZenzaiMode.on` の `personalizationMode` | 既定値なし。明示的に渡す必要がある | 同左 |
+
+| `found 2 file(s) which are unhandled`(`ohagey.proto` / `README.md`) | ビルド入力でないファイルがターゲット配下にある | `Package.swift` の `OhageyEngineProto` に `exclude:` を追加 |
+
+llama.cpp のビルド成果物の位置(cmake 既定):
+
+- `llama.lib`(リンク時)→ `build-b4846\src\Release\`
+- `llama.dll`(実行時)→ `build-b4846\bin\Release\` ※ `ggml*.dll` 等の依存 DLL も同じ場所
+
+tools-version を 6.x にすると既定の言語モードが Swift 6(strict concurrency)になり、
+まだ一度も動かしていないコードに大量の Sendable エラーが出るため、当面は
+`.swiftLanguageMode(.v5)` を指定している。**エンジンが動くようになったら `.v6` への
+移行を検討すること**(`Package.swift` に TODO として記載)。
 
 ### 推奨する着手順(手戻りを減らす順序)
 
