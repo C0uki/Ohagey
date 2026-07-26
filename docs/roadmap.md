@@ -38,15 +38,23 @@ OS 非依存で完結し、後続実装の土台になるもの。
 >
 > ただし**動作確認はこれから**。ビルドが通ったことと、変換が正しく動くことは別。
 
-- [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存で単体テスト可能。
+- [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存。
+- [x] `OhageyEngineCore` ライブラリへの分離と単体テスト追加(`swift test`)。
+      SwiftPM は実行可能ターゲットに対するテストを安定して扱えないため、移植可能な部分
+      (framing・設定)をライブラリターゲットに切り出した。C++ interop を持たないので
+      テストのビルドは軽く、llama.cpp のリンクも不要。
 - [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
 - [x] Protobuf 生成の配線: `Scripts/generate-proto.sh` + `Package.swift` の `swift-protobuf` 依存有効化。
 - [x] **Windows で `swift build` を通す**(最大の関門)。llama.cpp `b4846` を CPU 構成でビルドし、
       `-Xlinker -L<llama.lib のディレクトリ>` を渡すことで `OhageyEngine.exe` の生成に成功。
-- [ ] 生成された `OhageyEngine.exe` を実行し、起動シーケンス(設定読込 → モデル判定 →
-      パイプ名決定)が想定どおり動くことを確認する。
+- [x] 生成された `OhageyEngine.exe` を実行し、起動シーケンスが想定どおり動くことを確認。
+      **実行時に検証できたこと**:
+      - `ProcessIdToSessionId` が動作しセッションID からパイプ名を導出できた
+        (`\\.\pipe\ohagey_session_1`)— WinSDK 呼び出しのうち最初の1つが実証された(決定 0006)
+      - モデル非在時に辞書変換へフォールバックする判定が正しく効いた(決定 0008)
+      - `settings.json` 不在でも既定値で継続(決定 0025)
 - [ ] **`Scripts/generate-proto.sh` の実行**(protoc-gen-swift が必要 → Swift 環境必須)。生成物 `ohagey.pb.swift` はコミットする方針。
 - [ ] `RequestRouter`: `Request` デコード → 振り分け → `Response` エンコード(`request_id` を保持)。
 - [ ] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` の TODO)。

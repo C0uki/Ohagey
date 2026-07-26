@@ -24,10 +24,31 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-protobuf.git", from: "1.28.0"),
     ],
     targets: [
+        // Portable pieces with no Windows, Protobuf or converter dependencies:
+        // framing and settings. Split out of the executable so they can be unit
+        // tested — SwiftPM cannot reliably host tests against an executable
+        // target, and keeping this free of C++ interop makes the test build
+        // cheap and platform-independent.
+        .target(
+            name: "OhageyEngineCore",
+            path: "Sources/OhageyEngineCore",
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
+        ),
+        .testTarget(
+            name: "OhageyEngineCoreTests",
+            dependencies: ["OhageyEngineCore"],
+            path: "Tests/OhageyEngineCoreTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
+        ),
         .executableTarget(
             name: "OhageyEngine",
             dependencies: [
                 .product(name: "KanaKanjiConverterModuleWithDefaultDictionary", package: "AzooKeyKanaKanjiConverter"),
+                "OhageyEngineCore",
                 "OhageyEngineProto",
             ],
             path: "Sources/OhageyEngine",

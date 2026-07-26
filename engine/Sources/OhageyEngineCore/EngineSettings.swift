@@ -7,33 +7,35 @@
 import Foundation
 
 /// Inference backend for Zenzai (decision 0010).
-enum Backend: String, Codable {
+public enum Backend: String, Codable {
     case cpu
     case cuda
     case vulkan
 }
 
 /// Everything the engine needs to build `ConvertRequestOptions`.
-struct EngineSettings: Codable {
+public struct EngineSettings: Codable {
     /// Learning is on by default; the settings app can disable and erase it
     /// for shared machines such as school PCs (decision 0025).
-    var learningEnabled: Bool = true
-    var backend: Backend = .cpu
+    public var learningEnabled: Bool = true
+    public var backend: Backend = .cpu
     /// Upper bound on Zenzai inference steps per request. Surfaced here so the
     /// latency/quality tradeoff is tunable without a rebuild.
-    var zenzaiInferenceLimit: Int = 10
+    public var zenzaiInferenceLimit: Int = 10
     /// Idle seconds before the server exits when no client is connected
     /// (decision 0015).
-    var idleTimeoutSeconds: Int = 300
+    public var idleTimeoutSeconds: Int = 300
 
-    static let `default` = EngineSettings()
+    public init() {}
+
+    public static let `default` = EngineSettings()
 }
 
 /// Filesystem locations the engine uses.
-enum EnginePaths {
+public enum EnginePaths {
     /// Per-user learning data and user dictionary (decision 0024).
     /// Passed to the converter as `memoryDirectoryURL` / `sharedContainerURL`.
-    static var userDataDirectory: URL {
+    public static var userDataDirectory: URL {
         let base = ProcessInfo.processInfo.environment["LOCALAPPDATA"]
             .map { URL(fileURLWithPath: $0) }
             ?? FileManager.default.homeDirectoryForCurrentUser
@@ -43,7 +45,7 @@ enum EnginePaths {
     /// Machine-wide model location (decision 0008). The weights contain no
     /// user-specific data, so unlike learning data they live under Program
     /// Files and are shared by every user on the machine.
-    static var modelURL: URL {
+    public static var modelURL: URL {
         let base = ProcessInfo.processInfo.environment["ProgramFiles"]
             .map { URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: #"C:\Program Files"#)
@@ -54,18 +56,18 @@ enum EnginePaths {
     }
 
     /// Settings file, written by the settings app (decision 0014).
-    static var settingsURL: URL {
+    public static var settingsURL: URL {
         userDataDirectory.appendingPathComponent("settings.json")
     }
 
     /// The model download is allowed to fail at install time (decision 0008);
     /// when it is missing the engine falls back to dictionary-only conversion
     /// rather than refusing to start.
-    static var isModelAvailable: Bool {
+    public static var isModelAvailable: Bool {
         FileManager.default.fileExists(atPath: modelURL.path)
     }
 
-    static func ensureUserDataDirectoryExists() throws {
+    public static func ensureUserDataDirectoryExists() throws {
         try FileManager.default.createDirectory(
             at: userDataDirectory,
             withIntermediateDirectories: true
@@ -77,7 +79,7 @@ extension EngineSettings {
     /// Loads settings, falling back to defaults when the file is absent or
     /// unreadable. A malformed settings file must never stop the IME from
     /// working — the user would be left unable to type.
-    static func load(from url: URL = EnginePaths.settingsURL) -> EngineSettings {
+    public static func load(from url: URL = EnginePaths.settingsURL) -> EngineSettings {
         guard let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode(EngineSettings.self, from: data)
         else {

@@ -12,6 +12,7 @@
 // see docs/local-setup.md).
 
 import Foundation
+import OhageyEngineCore
 
 // NOTE: this file is `main.swift`, so it is top-level code and must not carry
 // the `@main` attribute — Swift rejects the two together. The entry point is

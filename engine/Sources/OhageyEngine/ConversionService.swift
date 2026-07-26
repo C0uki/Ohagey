@@ -8,6 +8,7 @@
 
 import Foundation
 import KanaKanjiConverterModuleWithDefaultDictionary
+import OhageyEngineCore
 
 /// Serializes access to the converter while pipe connections are handled
 /// concurrently.
