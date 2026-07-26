@@ -1,5 +1,65 @@
 # ローカル開発環境の構築(Windows)
 
+## Claude Code をローカルで使う
+
+このリポジトリはクラウド環境(Claude Code on the web)から開発を始めたが、ローカルの
+Windows 実機へ移行できる。TSF・WinUI 3・インストーラーはどのみち実機でしか扱えないため、
+フェーズ2以降はローカルが前提になる。
+
+### 導入
+
+PowerShell:
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+コマンドプロンプト(CMD):
+
+```bat
+curl -fsSL https://claude.ai/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
+winget でも入る(ただし自動更新されないので `winget upgrade Anthropic.ClaudeCode` が要る):
+
+```powershell
+winget install Anthropic.ClaudeCode
+```
+
+確認とログイン:
+
+```bat
+claude --version
+claude
+```
+
+初回起動時にブラウザで認証する。**Git for Windows を入れておくこと** — 無い場合
+Claude Code は Bash ではなく PowerShell をシェルとして使う。
+
+### 起動
+
+```bat
+cd C:\src\Ohagey
+claude
+```
+
+`CLAUDE.md` は起動時に自動で読み込まれるので、プロジェクトの規約・現在地・
+バージョン固定の注意は改めて説明しなくてよい。会話履歴はクラウド側のセッションから
+引き継がれないが、**設計判断は `docs/decisions/`、進捗と残タスクは `docs/roadmap.md`、
+ビルドの知見は本ファイルに記録してある**ので、そこから再開できる。
+
+### 移行時の注意
+
+- **リポジトリの場所**: llama.cpp の中に clone している場合は独立した場所
+  (`C:\src\Ohagey` など)へ移すと扱いやすい。llama.cpp とは別物なので入れ子にする
+  必然性はない。
+- **ビルド成果物は引き継がない**: `.build/` は環境依存なので、移動後は再ビルドになる。
+- **`LIB` と `PATH` の設定はセッションごと**。恒久化したい場合はユーザー環境変数に
+  登録するか、起動用の `.bat` を用意する。
+
+---
+
+
 おはぎーは Windows x64 専用(決定 0018)。TSF・WinUI 3・インストーラーは
 **Windows 実機でしかビルド・検証できない**。エンジン(Swift)も最終ターゲットは Windows。
 
