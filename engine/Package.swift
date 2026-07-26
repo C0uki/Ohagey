@@ -39,7 +39,12 @@ let package = Package(
                 // (needed purely for `traits:`) from dragging a concurrency
                 // migration along with it.
                 // TODO: migrate to .v6 once the engine actually builds and runs.
-                .swiftLanguageMode(.v5)
+                .swiftLanguageMode(.v5),
+                // The Zenzai trait builds KanaKanjiConverterModule and friends
+                // with C++ interop (they wrap llama.cpp), and Swift refuses to
+                // import such a module from a compilation that does not enable
+                // it too. This must match upstream or every import fails.
+                .interoperabilityMode(.Cxx)
             ]
         ),
         .target(

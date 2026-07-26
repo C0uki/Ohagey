@@ -171,6 +171,20 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | `'package(url:_:traits:)' is unavailable` / `'Trait' is unavailable` | `Package.swift` の `swift-tools-version` が 5.10 で、`traits:` は PackageDescription 6.1 以降の API | tools-version を **6.1** に引き上げ済み。Swift 6.1 以上のツールチェーンが必要 |
 | `'cmake' は…認識されていません` | 通常のコマンドプロンプトでは PATH が通らない | 「x64 Native Tools Command Prompt for VS 2022」を使う |
 | `supported platforms can't be empty` | `Package.swift` の `platforms:` が空配列だった | `platforms:` の宣言ごと削除(省略可能。Apple 向けのデプロイターゲット記述用で Windows には不要) |
+| `module 'KanaKanjiConverterModule' was built with C++ interoperability enabled, but current compilation does not enable C++ interoperability` | Zenzai trait 有効時、upstream は llama.cpp をラップするため C++ interop 付きでビルドされる。読み込む側も同じ設定が要る | `Package.swift` の `OhageyEngine` に `.interoperabilityMode(.Cxx)` を追加 |
+| `'KanaKanjiConverter' has no member 'withDefaultDictionary'` / `cannot find type 'ZenzaiMode'` / `missing argument for parameter 'dictionaryResourceURL'` / `type 'Bool' has no member 'auto'` | コードを upstream `main` の API に対して書いていたが、pin により解決されるのは **0.8.5** で API が異なる | 0.8.5 に合わせて修正(下記) |
+
+#### 0.8.5 と `main` の API 差分(実装時の注意)
+
+解決されるのは **0.8.5**。`main` のドキュメントや README をそのまま参考にすると食い違う。
+
+| 項目 | 0.8.5 | `main` |
+|---|---|---|
+| `ZenzaiMode` | **`ConvertRequestOptions` のネスト型** | トップレベル |
+| `requireJapanesePrediction` / `requireEnglishPrediction` | **`Bool`** | `PredictionMode` 列挙型 |
+| 変換器の生成 | `KanaKanjiConverter()` | `KanaKanjiConverter.withDefaultDictionary()` |
+| `dictionaryResourceURL` / `textReplacer` | 必須引数。`ConvertRequestOptions.withDefaultDictionary(...)` を使えば自動供給される | 同様 |
+| `ZenzaiMode.on` の `personalizationMode` | 既定値なし。明示的に渡す必要がある | 同左 |
 
 llama.cpp のビルド成果物の位置(cmake 既定):
 
