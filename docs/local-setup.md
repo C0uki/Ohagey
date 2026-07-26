@@ -174,17 +174,38 @@ swift build -Xlinker -L<llama.lib のあるディレクトリ>
 
 TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限**が必要。
 
-## 現状の注意
+## ✅ 動作確認済みの構成
 
-`engine/Sources/OhageyEngine/` 配下のフェーズ1コードは、Swift ツールチェーンを導入できない
-環境(Linux コンテナ、`download.swift.org` が egress ポリシーで遮断)で書かれており、
-**一度もコンパイルされていない**。ローカルでの最初の `swift build` では、特に以下で
-エラーが出る前提で臨むこと。
+以下の組み合わせで `swift build` の成功(`OhageyEngine.exe` の生成)を確認済み。
 
-- `ConvertRequestOptions` の必須引数(`textReplacer`、`specialCandidateProviders`)。
-  コードは upstream `main` の API を参照しているが、`Package.swift` は 0.8.0 系にピン留め。
-- `PipeServer.swift` の WinSDK 呼び出し(型・オプショナル性)。
-- 生成前の `ohagey.pb.swift` を参照する箇所(先に proto 生成が必要)。
+| 項目 | バージョン |
+|---|---|
+| Windows SDK | 10.0.26100.0 |
+| Visual Studio | 2022 Professional 17.14(MSVC 19.44) |
+| Swift for Windows | 6.3.3 |
+| AzooKeyKanaKanjiConverter | 0.8.5(`.upToNextMinor(from: "0.8.0")` が解決) |
+| llama.cpp | **`b4846`**、`-DBUILD_SHARED_LIBS=ON`、CPU バックエンド(AVX512) |
+
+### 実行時
+
+`llama.dll` と `ggml*.dll` に PATH が通っている必要がある。
+
+```bat
+set PATH=C:\path\to\llama.cpp\build-b4846\bin\Release;%PATH%
+swift run
+```
+
+> Windows で開発者モードが無効だと `unable to create symbolic link at .build\debug` という
+> 警告が出るが無害。実体は `.build\x86_64-unknown-windows-msvc\debug\OhageyEngine.exe`。
+
+## 残っている注意点
+
+**ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。
+
+- **`PipeServer.swift` の WinSDK 呼び出し**は、まだどこからも呼ばれていないため、
+  コンパイルは通っても**実行時の挙動は未検証**。accept ループ実装時に確認が必要。
+- **パイプ ACL(SDDL)** は出荷前にセキュリティレビューが必要(`docs/roadmap.md` 参照)。
+- `ohagey.pb.swift` は未生成。`RequestRouter` もまだ無い。
 
 ### 実機で遭遇した問題と対処(記録)
 
@@ -215,10 +236,12 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | `dictionaryResourceURL` / `textReplacer` | 必須引数。`ConvertRequestOptions.withDefaultDictionary(...)` を使えば自動供給される | 同様 |
 | `ZenzaiMode.on` の `personalizationMode` | 既定値なし。明示的に渡す必要がある | 同左 |
 
+| `found 2 file(s) which are unhandled`(`ohagey.proto` / `README.md`) | ビルド入力でないファイルがターゲット配下にある | `Package.swift` の `OhageyEngineProto` に `exclude:` を追加 |
+
 llama.cpp のビルド成果物の位置(cmake 既定):
 
-- `llama.lib`(リンク時)→ `build\src\Release\`
-- `llama.dll`(実行時)→ `build\bin\Release\` ※ `ggml.dll` 等の依存 DLL も同じ場所
+- `llama.lib`(リンク時)→ `build-b4846\src\Release\`
+- `llama.dll`(実行時)→ `build-b4846\bin\Release\` ※ `ggml*.dll` 等の依存 DLL も同じ場所
 
 tools-version を 6.x にすると既定の言語モードが Swift 6(strict concurrency)になり、
 まだ一度も動かしていないコードに大量の Sendable エラーが出るため、当面は

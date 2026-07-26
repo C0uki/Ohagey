@@ -53,6 +53,13 @@ let package = Package(
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
             ],
             path: "Sources/OhageyEngineProto",
+            // The schema and its docs live beside the generated code but are not
+            // themselves build inputs; without this SPM warns about "unhandled"
+            // files on every build.
+            exclude: [
+                "ohagey.proto",
+                "README.md",
+            ],
             // Holds ohagey.proto and the ohagey.pb.swift generated from it by
             // Scripts/generate-proto.sh. The generated file is committed, so a
             // plain `swift build` does not need protoc.
