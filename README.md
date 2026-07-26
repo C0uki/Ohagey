@@ -7,8 +7,7 @@ TSF(Text Services Framework)まわりはMicrosoft公式の
 ゼロから作り直した、非公式のWindows向け日本語IMEです。
 
 > 🍡 プロジェクト名は「アズキー(azooKey)」→「おはぎ(小豆を使った和菓子)」+「ー」という語呂合わせです。
-> 「あずきー」という元の呼び方の小豆つながりを引き継ぎつつ、井村屋の登録商標である「あずきバー」など
-> 特定企業の商標は避けています。
+> 「あずきー」という元の呼び方の小豆つながりを引き継ぎました。
 
 このプロジェクトはazooKey本家、Microsoft、既存の
 [azooKey-Windows](https://github.com/fkunn1326/azooKey-Windows)(fkunn1326版)、
