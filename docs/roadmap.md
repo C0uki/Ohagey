@@ -41,8 +41,9 @@ OS 非依存で完結し、後続実装の土台になるもの。
 - [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存。
 - [x] `OhageyEngineCore` ライブラリへの分離と単体テスト追加(`swift test`)。
       SwiftPM は実行可能ターゲットに対するテストを安定して扱えないため、移植可能な部分
-      (framing・設定)をライブラリターゲットに切り出した。C++ interop を持たないので
-      テストのビルドは軽く、llama.cpp のリンクも不要。
+      (framing・設定・ルーティング)をライブラリターゲットに切り出した。C++ interop を
+      持たないのでテストのビルドは軽く、llama.cpp のリンクも不要。
+      **実機で全テストパスを確認済み**(framing 12件)。
 - [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
@@ -55,8 +56,17 @@ OS 非依存で完結し、後続実装の土台になるもの。
         (`\\.\pipe\ohagey_session_1`)— WinSDK 呼び出しのうち最初の1つが実証された(決定 0006)
       - モデル非在時に辞書変換へフォールバックする判定が正しく効いた(決定 0008)
       - `settings.json` 不在でも既定値で継続(決定 0025)
+- [x] エンジン側のリクエスト/レスポンスモデル(`EngineProtocol.swift`)と
+      `RequestRouter` を実装。**proto 生成を待たずに書ける部分**として、生成型ではなく
+      素の Swift 型で定義した。理由は2つ:
+      ルーティングを protoc 抜きでテストできること、
+      生成型は wire 形状(optional だらけ、oneof が不在になり得る)なので、
+      端で一度変換すれば以降は不正な状態を取り得ない値を扱えること。
+      **テスト済み**(request_id の保持、ハンドラの例外を `failure` に畳んで接続を維持)。
 - [ ] **`Scripts/generate-proto.sh` の実行**(protoc-gen-swift が必要 → Swift 環境必須)。生成物 `ohagey.pb.swift` はコミットする方針。
-- [ ] `RequestRouter`: `Request` デコード → 振り分け → `Response` エンコード(`request_id` を保持)。
+- [ ] proto ↔ `EngineRequest`/`EngineResponse` のマッピング層(`OhageyEngine` 側、
+      wire 形式を話すパイプサーバーの隣に置く)。
+- [ ] `ConversionService` を `EngineRequestHandling` に適合させる。
 - [ ] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` の TODO)。
 - [ ] アイドルタイムアウト自己終了(決定 0015)。
 - [ ] 設定のホットリロード(決定 0014)。
