@@ -7,14 +7,21 @@
 import Foundation
 
 /// Inference backend for Zenzai (decision 0010).
-public enum Backend: String, Codable {
+///
+/// `Sendable` because it travels inside `EngineResponse.ping`, which crosses
+/// isolation boundaries: conversion runs on the main actor while connections
+/// are served off it.
+public enum Backend: String, Codable, Sendable {
     case cpu
     case cuda
     case vulkan
 }
 
 /// Everything the engine needs to build `ConvertRequestOptions`.
-public struct EngineSettings: Codable {
+///
+/// `Sendable` for the same reason as `Backend`: settings are read on one actor
+/// and applied on another when a hot-reload lands (decision 0014).
+public struct EngineSettings: Codable, Sendable {
     /// Learning is on by default; the settings app can disable and erase it
     /// for shared machines such as school PCs (decision 0025).
     public var learningEnabled: Bool = true
