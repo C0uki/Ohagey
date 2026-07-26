@@ -38,7 +38,11 @@ OS 非依存で完結し、後続実装の土台になるもの。
 >
 > ただし**動作確認はこれから**。ビルドが通ったことと、変換が正しく動くことは別。
 
-- [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存で単体テスト可能。
+- [x] 長さプレフィックス framing の実装(`Framing.swift`)— Windows/Protobuf 非依存。
+- [x] `OhageyEngineCore` ライブラリへの分離と単体テスト追加(`swift test`)。
+      SwiftPM は実行可能ターゲットに対するテストを安定して扱えないため、移植可能な部分
+      (framing・設定)をライブラリターゲットに切り出した。C++ interop を持たないので
+      テストのビルドは軽く、llama.cpp のリンクも不要。
 - [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。

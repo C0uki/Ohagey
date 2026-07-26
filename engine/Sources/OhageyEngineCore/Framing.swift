@@ -10,7 +10,7 @@
 
 import Foundation
 
-enum FramingError: Error, Equatable {
+public enum FramingError: Error, Equatable {
     /// Peer announced a frame larger than `Framing.maxPayloadLength`. The
     /// connection must be dropped: we can no longer find the next boundary.
     case frameTooLarge(announced: UInt32, limit: UInt32)
@@ -18,17 +18,17 @@ enum FramingError: Error, Equatable {
     case truncated
 }
 
-enum Framing {
+public enum Framing {
     /// Header is a fixed 4-byte little-endian length.
-    static let headerLength = 4
+    public static let headerLength = 4
 
     /// Upper bound on a single payload. Guards against a corrupt or hostile
     /// length prefix causing an unbounded allocation. Conversion requests are
     /// small (a reading plus context); 8 MiB is far above any legitimate frame.
-    static let maxPayloadLength: UInt32 = 8 * 1024 * 1024
+    public static let maxPayloadLength: UInt32 = 8 * 1024 * 1024
 
     /// Prefixes `payload` with its little-endian length.
-    static func encode(_ payload: [UInt8]) throws -> [UInt8] {
+    public static func encode(_ payload: [UInt8]) throws -> [UInt8] {
         let count = UInt32(payload.count)
         guard count <= maxPayloadLength else {
             throw FramingError.frameTooLarge(announced: count, limit: maxPayloadLength)
@@ -45,7 +45,7 @@ enum Framing {
 
     /// Reads a 4-byte little-endian length from the start of `header`.
     /// `header` must contain at least `headerLength` bytes.
-    static func decodeLength<C: Collection>(_ header: C) -> UInt32
+    public static func decodeLength<C: Collection>(_ header: C) -> UInt32
     where C.Element == UInt8 {
         var iterator = header.makeIterator()
         var value: UInt32 = 0
@@ -62,12 +62,12 @@ enum Framing {
 /// A single `ReadFile` on a pipe may return a partial frame, or several frames
 /// at once. Feed every chunk read from the pipe into `append(_:)` and drain
 /// whole payloads with `nextPayload()` until it returns nil.
-struct FrameDecoder {
+public struct FrameDecoder {
     private var buffer: [UInt8] = []
 
-    init() {}
+    public init() {}
 
-    mutating func append<C: Sequence>(_ bytes: C) where C.Element == UInt8 {
+    public mutating func append<C: Sequence>(_ bytes: C) where C.Element == UInt8 {
         buffer.append(contentsOf: bytes)
     }
 
@@ -75,7 +75,7 @@ struct FrameDecoder {
     /// Throws `FramingError.frameTooLarge` when the announced length exceeds
     /// the limit — the caller must then close the connection rather than retry,
     /// because the stream can no longer be resynchronized.
-    mutating func nextPayload() throws -> [UInt8]? {
+    public mutating func nextPayload() throws -> [UInt8]? {
         guard buffer.count >= Framing.headerLength else { return nil }
         let length = Framing.decodeLength(buffer.prefix(Framing.headerLength))
         guard length <= Framing.maxPayloadLength else {
@@ -90,5 +90,5 @@ struct FrameDecoder {
 
     /// True when no partial frame is pending. Used to distinguish a clean
     /// client disconnect from one that cut a frame in half.
-    var isAtFrameBoundary: Bool { buffer.isEmpty }
+    public var isAtFrameBoundary: Bool { buffer.isEmpty }
 }

@@ -205,6 +205,17 @@ swift build
 swift run
 ```
 
+### テスト
+
+```bat
+swift test
+```
+
+`OhageyEngineCore`(framing と設定)は Windows・Protobuf・変換器のいずれにも依存しない
+ため、**テストは llama.cpp のリンクを必要としない**。`LIB` の設定なしでも通るはずだが、
+`swift test` はパッケージ全体をビルドするため、実際には上記の環境変数を設定した
+状態で実行するのが確実。
+
 フラグで明示したい場合は、**両方のコマンドに**付ける:
 
 ```bat
