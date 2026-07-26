@@ -4,7 +4,7 @@
 ([AzooKeyKanaKanjiConverter](https://github.com/azooKey/AzooKeyKanaKanjiConverter) + **Zenzai**)を流用しつつ、
 TSF(Text Services Framework)まわりはMicrosoft公式の
 [SampleIME](https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/IME)をベースに
-ゼロから作り直した、非公式のWindows向け日本語IMEです。
+ゼロから作り直した、Windows向け日本語IMEです。
 
 > 🍡 プロジェクト名は「アズキー(azooKey)」→「おはぎ(小豆を使った和菓子)」+「ー」という語呂合わせです。
 > 「あずきー」という元の呼び方の小豆つながりを引き継ぎました。
