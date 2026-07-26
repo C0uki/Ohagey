@@ -75,6 +75,24 @@ module llama [system] {
 1. `llama.lib`(インポートライブラリ、リンク時)
 2. `llama.dll`(実行時)
 
+### ⚠️ llama.cpp のバージョンは `b4846` に固定すること
+
+**最新の master を使ってはいけない。** AzooKeyKanaKanjiConverter 0.8.5 は
+llama.cpp のビルド **`b4846`** を前提にしている(upstream の `Package.swift` が
+Apple 向けに参照している xcframework が
+`azooKey/llama.cpp` の `b4846` リリース)。
+
+これより新しい llama.cpp では KV キャッシュ API がリネームされて旧名が削除されており、
+リンク時に次のエラーになる:
+
+```
+lld-link: error: undefined symbol: llama_kv_cache_seq_rm
+lld-link: error: undefined symbol: llama_kv_cache_seq_pos_max
+```
+
+**AzooKeyKanaKanjiConverter の pin を上げるときは、llama.cpp 側の対応バージョンも
+必ず確認し直すこと**(決定 0028 の「ビルド構成を記録する」に該当)。
+
 ### 手順(CPU 版・最初の一歩)
 
 **「x64 Native Tools Command Prompt for VS 2022」で実行すること**(上記参照)。
@@ -83,9 +101,13 @@ module llama [system] {
 cd C:\src
 git clone https://github.com/ggml-org/llama.cpp.git
 cd llama.cpp
-cmake -B build -DBUILD_SHARED_LIBS=ON
-cmake --build build --config Release
+git checkout b4846
+cmake -B build-b4846 -DBUILD_SHARED_LIBS=ON
+cmake --build build-b4846 --config Release
 ```
+
+ビルドディレクトリにバージョンを含めておくと、複数バージョンを試すときに
+CMake キャッシュの衝突を避けられる。
 
 ビルドが終わったら `llama.lib` の場所を確認する(cmake の設定により出力先が変わるため、
 決め打ちにせず探すのが確実):
@@ -175,6 +197,7 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | `'KanaKanjiConverter' has no member 'withDefaultDictionary'` / `cannot find type 'ZenzaiMode'` / `missing argument for parameter 'dictionaryResourceURL'` / `type 'Bool' has no member 'auto'` | コードを upstream `main` の API に対して書いていたが、pin により解決されるのは **0.8.5** で API が異なる | 0.8.5 に合わせて修正(下記) |
 
 | `call to main actor-isolated initializer 'init()' in a synchronous actor-isolated context` | upstream の `KanaKanjiConverter` は `@MainActor` 隔離されたクラスで、別の `actor` からは所有できない | `ConversionService` を `actor` から `@MainActor final class` に変更 |
+| `lld-link: error: undefined symbol: llama_kv_cache_seq_rm` / `llama_kv_cache_seq_pos_max` | llama.cpp が新しすぎる。KV キャッシュ API がリネームされ旧名が削除された | llama.cpp を **`b4846`** に checkout して再ビルド(上記「バージョンは `b4846` に固定」参照) |
 
 > **設計上の含意**: 変換器が main actor に固定されているため、**エンジンは main actor
 > 実行環境を持ち続ける必要がある**。パイプの accept ループや読み取りは別スレッドで

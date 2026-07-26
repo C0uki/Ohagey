@@ -70,3 +70,21 @@ CPU / CUDA / Vulkan それぞれでビルドした llama.cpp を**バックエ�
   表示すること。無音で変換不能になる事態を避ける(決定 0008 と同じ思想)。
 - llama.cpp のビルド構成(バージョン、ビルドフラグ、`systemLibrary` 用の module map)は
   再現性のため記録すること。
+
+## llama.cpp のバージョン依存(実機ビルドで確定)
+
+**AzooKeyKanaKanjiConverter 0.8.5 ↔ llama.cpp `b4846`。**
+
+upstream の `Package.swift` が Apple 向けに参照している xcframework が
+`azooKey/llama.cpp` の `b4846` リリースであり、これが前提バージョン。
+最新の master を使うと KV キャッシュ API のリネーム(旧 `llama_kv_cache_*` の削除)により
+リンクが通らない:
+
+```
+lld-link: error: undefined symbol: llama_kv_cache_seq_rm
+lld-link: error: undefined symbol: llama_kv_cache_seq_pos_max
+```
+
+**AzooKeyKanaKanjiConverter の pin を上げる際は、llama.cpp 側の対応バージョンを必ず
+確認し直すこと。** この2つは独立に更新できない。
+手順は [`../local-setup.md`](../local-setup.md) を参照。
