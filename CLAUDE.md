@@ -1,8 +1,13 @@
 # CLAUDE.md — Ohagey (おはぎー)
 
 Windows向け日本語IME。azooKeyの変換エンジン(AzooKeyKanaKanjiConverter + Zenzai)を
-流用し、TSF層・UI・配布まわりは新規実装。設計の全経緯は `docs/decisions/README.md`
-に決定事項一覧がある。実装前に必ず目を通すこと。
+流用し、TSF層・UI・配布まわりは新規実装。
+
+**作業を始める前に必ず読むこと:**
+- `docs/decisions/README.md` — 設計判断の全一覧(なぜそう決めたか)
+- `docs/roadmap.md` — フェーズ別の進捗と残タスク、未解決の設計課題
+- `docs/local-setup.md` — ビルド手順、**動作確認済みのバージョン組み合わせ**、
+  実機で踏んだエラーと対処の記録
 
 ## アーキテクチャ概要
 
@@ -10,7 +15,7 @@ Windows向け日本語IME。azooKeyの変換エンジン(AzooKeyKanaKanjiConvert
 tsf/ (C++, 各アプリのプロセス内)  ──名前付きパイプ(Protobuf)──  engine/ (Swift, 単一の共有サーバープロセス)
      │                                                                  │
      │ SEHでクラッシュを握りつぶす                          AzooKeyKanaKanjiConverter + Zenzai
-     │ DirectWrite/DirectCompositionでFluent Design描画        CPU/CUDA/Vulkanをユーザーが選択可
+     │ DirectWrite/DirectCompositionでFluent Design描画        バックエンドはDLL差し替えで選択
      │                                                          オンデマンド起動・アイドルタイムアウト終了
      ▼
 %LOCALAPPDATA%\Ohagey\ (学習データ・ユーザー辞書、ユーザーごと)
@@ -26,22 +31,67 @@ settings-app/ (WinUI 3) ──registry/設定ファイル(変更通知で自動�
 - **Zenzaiモデル(CC-BY-SA 4.0)はリポジトリにコミットしない**。実行時ダウンロードのみ(decision 0008/0009)
 - 名前付きパイプは**セッションID込みの命名**、**AppContainer/管理者権限プロセスからの接続を許可するACL**を必ず設定する(decision 0006)
 
+## バージョンの固定(重要)
+
+**AzooKeyKanaKanjiConverter 0.8.5 ↔ llama.cpp `b4846` は独立に更新できない。**
+片方だけ上げるとリンクエラーになる(decision 0028)。pin を変更するときは必ず両方を
+確認し、理由を決定ログに記録すること。
+
+また、upstream の `main` と 0.8.5 は API が異なる。README や `main` のソースを参考に
+すると食い違うので、**必ず `.build/checkouts/` の実物か 0.8.5 のタグを見ること**。
+差分表は `docs/local-setup.md` にある。
+
 ## ディレクトリと役割
 
 | パス | 言語/技術 | 役割 |
 |---|---|---|
+| `engine/Sources/OhageyEngineCore/` | Swift | **移植可能でテスト可能な中核**。framing・設定・リクエストモデル・ルーティング。Windows/Protobuf/変換器に依存しない |
+| `engine/Sources/OhageyEngine/` | Swift | 実行可能ターゲット。パイプサーバー(WinSDK)、変換器ラッパー(C++ interop) |
+| `engine/Sources/OhageyEngineProto/` | Swift | `ohagey.proto` と、そこから生成する型 |
+| `engine/Tests/` | Swift (XCTest) | `OhageyEngineCore` の単体テスト |
 | `tsf/` | C++ (MSBuild) | TSF実装(SampleIMEをvendoring・改造)、候補ウィンドウ描画 |
-| `engine/` | Swift (SPM) | 変換エンジン本体、名前付きパイプサーバー |
 | `settings-app/` | WinUI 3 (.NET) | バックエンド切替、学習データ管理、ユーザー辞書UI |
 | `installer/` | Inno Setup | インストーラー、モデルダウンロード呼び出し |
-| `docs/decisions/` | Markdown | 設計判断ログ(なぜそう決めたかの記録) |
+| `docs/decisions/` | Markdown | 設計判断ログ |
 
 ## 現在のステータス
 
-🚧 雛形のみ。`tsf/SampleIME/`は未取り込み(手順は`tsf/README.md`参照)。実装はまだ始まっていない。
+**フェーズ1(エンジン)が進行中。** `tsf/` `settings-app/` はまだ雛形のみ。
 
-## 次にやること候補
+### 実機で検証済み
+- Windows で `swift build` が通り `OhageyEngine.exe` が生成される
+- 起動シーケンス(設定読込 → モデル有無判定 → セッションIDからパイプ名導出)
+- `swift test` 17件パス(framing 12・ルーティング 5)
 
-1. `tsf/README.md`の手順に従い、SampleIMEをvendoring
-2. `engine/`のIPC用Protobufスキーマ(`.proto`)を定義(decision 0007)
-3. `engine/Sources/OhageyEngine/main.swift`の`TODO`から実装開始
+### コンパイルは通るが未検証
+- `PipeServer` の WinSDK 呼び出し(`CreateNamedPipeW` 等)— **まだどこからも呼ばれていない**
+- `ConversionService` の実変換 — 呼び出し経路がまだ無い
+
+### 未着手
+- `ohagey.pb.swift` の生成(protoc-gen-swift が必要)
+- proto ↔ `EngineRequest`/`EngineResponse` のマッピング層
+- パイプの accept ループ、アイドルタイムアウト(decision 0015)
+- `tsf/` の SampleIME vendoring(手順は `tsf/README.md`)
+
+## ビルドとテスト
+
+「x64 Native Tools Command Prompt for VS 2022」で、以下を設定してから実行する:
+
+```bat
+set LIB=<llama.cpp>\build-b4846\src\Release;%LIB%
+set PATH=<llama.cpp>\build-b4846\bin\Release;%PATH%
+
+cd engine
+swift build
+swift test
+```
+
+`LIB` はリンク時(`llama.lib`)、`PATH` は実行時(`llama.dll`)。**どちらか一方では足りない。**
+詳細は `docs/local-setup.md`。
+
+## 未解決の課題(着手前に確認)
+
+- **パイプ ACL(SDDL)のセキュリティレビューが未実施。** IME は全入力が通るため、
+  出荷前に最小権限へ絞ること(`PipeServer.securityDescriptorSDDL`)
+- **Swift 6 言語モードへの移行が保留中。** 現在 `.v5` を明示している(`Package.swift` の TODO)
+- ユーザー辞書のファイルフォーマット(decision 0026)、設定のレジストリスキーマ(decision 0014)が未確定

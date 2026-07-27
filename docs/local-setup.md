@@ -1,5 +1,66 @@
 # ローカル開発環境の構築(Windows)
 
+## Claude Code をローカルで使う
+
+このリポジトリはクラウド環境(Claude Code on the web)から開発を始めたが、ローカルの
+Windows 実機へ移行できる。TSF・WinUI 3・インストーラーはどのみち実機でしか扱えないため、
+フェーズ2以降はローカルが前提になる。
+
+### 導入(デスクトップアプリ)
+
+Windows x64 版インストーラーを
+[こちら](https://claude.ai/api/desktop/win32/x64/setup/latest/redirect)から入手して
+インストールする。インストール後、Claude を起動してサインインし、**Code タブ**を開く。
+
+> ⚠️ **Windows で Code タブを初めて開くときは
+> [Git for Windows](https://git-scm.com/downloads/win) が必要。**
+> 入れていない場合はインストール後にアプリを再起動すること。
+
+CLI 版を使いたい場合は PowerShell で `irm https://claude.ai/install.ps1 | iex`、
+または `winget install Anthropic.ClaudeCode`。設定ファイルは CLI と共通なので、
+どちらを使っても `.claude/settings.json` の内容は効く。
+
+### 使い方
+
+Code タブでは会話ひとつが**セッション**で、それぞれ独自のチャット履歴・
+プロジェクトフォルダ・変更を持つ。セッション作成時に**プロジェクトフォルダとして
+`C:\src\Ohagey`(clone した場所)を選ぶ**。
+
+`CLAUDE.md` は自動で読み込まれるので、プロジェクトの規約・現在地・バージョン固定の
+注意を改めて説明する必要はない。会話履歴はクラウド側のセッションから引き継がれないが、
+**設計判断は `docs/decisions/`、進捗と残タスクは `docs/roadmap.md`、ビルドの知見は
+本ファイルに記録してある**ので、そこから再開できる。
+
+> **並列セッションと worktree**: 新しいセッション(Ctrl+N)を作ると、Git リポジトリでは
+> **セッションごとに Git worktree で隔離されたコピー**が作られる。コミットするまで
+> 他のセッションに影響しない。
+> ただし `.build/` は `.gitignore` 済みなので **worktree にはコピーされず、
+> セッションごとにフルビルドが走る**(llama.cpp のリンクを含めて数分)。
+> エンジンをビルドする作業は1つのセッションに集約した方が速い。
+
+### 移行時の注意
+
+- **リポジトリの場所**: llama.cpp の中に clone している場合は独立した場所
+  (`C:\src\Ohagey` など)へ移すと扱いやすい。llama.cpp とは別物なので入れ子にする
+  必然性はない。
+- **ビルド成果物は引き継がない**: `.build/` は環境依存なので、移動後は再ビルドになる。
+- **`LIB` と `PATH` はユーザー環境変数に登録することを推奨**。デスクトップアプリの
+  セッションは「x64 Native Tools Command Prompt」から起動するわけではないため、
+  `set` で都度指定する方式は使いにくい。以下をユーザー環境変数に入れておくと、
+  アプリから実行するビルドでも効く。
+
+  | 変数 | 追加する値 |
+  |---|---|
+  | `LIB` | `C:\path\to\llama.cpp\build-b4846\src\Release` |
+  | `PATH` | `C:\path\to\llama.cpp\build-b4846\bin\Release` |
+
+  ただし MSVC 自体のパス(`cl.exe` や Windows SDK)は Native Tools プロンプトが
+  設定するものなので、**リンクエラーが出る場合は Native Tools プロンプトで
+  `swift build` を実行して切り分けること**。
+
+---
+
+
 おはぎーは Windows x64 専用(決定 0018)。TSF・WinUI 3・インストーラーは
 **Windows 実機でしかビルド・検証できない**。エンジン(Swift)も最終ターゲットは Windows。
 
