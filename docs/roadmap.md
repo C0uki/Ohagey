@@ -44,7 +44,8 @@ OS 非依存で完結し、後続実装の土台になるもの。
       (framing・設定・ルーティング)をライブラリターゲットに切り出した。C++ interop を
       持たないのでテストのビルドは軽く、llama.cpp のリンクも不要。
       **実機で全テストパスを確認済み**(framing 12件)。
-- [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
+- [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。
+      **ACL はセキュリティレビュー完了**(決定 0031)。`PipeSecurity.swift` に切り出してテスト済み 12 件。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
 - [x] Protobuf 生成の配線: `Scripts/generate-proto.sh` + `Package.swift` の `swift-protobuf` 依存有効化。
@@ -114,9 +115,12 @@ PowerShell の名前付きパイプクライアントから実際にフレーム
    書かれているが、`Package.swift` は `0.8.0` 系にピン留めしている。pre-1.0 で API が
    動くため、`ConvertRequestOptions` の必須引数(`textReplacer`、
    `specialCandidateProviders` 等)は実ビルド時に要確認。
-3. **パイプ ACL のセキュリティレビュー**: `PipeServer.securityDescriptorSDDL` は
-   AppContainer / 低整合性クライアントを通す必要から広めの許可になっている。
-   IME のパイプは全入力が通るため、出荷前に Mozc 等と比較して最小権限に絞ること。
+3. ~~**パイプ ACL のセキュリティレビュー**~~ → **決定 0031 で解決済み。**
+   `WD`(Everyone)を現在のユーザー SID + `SY` + `BA` + `AC` に置換し、`GRGW` を
+   明示的な `FILE_*` 権限に、`PIPE_REJECT_REMOTE_CLIENTS` と(初回のみ)
+   `FILE_FLAG_FIRST_PIPE_INSTANCE` を追加した。
+   **同一ユーザーのプロセス間は DACL で区別できない**ため境界にできない点も明記してある。
+   詳細は [`decisions/0031-pipe-acl.md`](decisions/0031-pipe-acl.md)。
 
 ## フェーズ2 — TSF(C++ / Windows 実機必須)
 

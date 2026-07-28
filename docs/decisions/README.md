@@ -35,6 +35,7 @@
 | 0028 | [推論バックエンドの選択方式](0028-inference-backend-selection.md) | 決定0010の改訂。バックエンド別のllama.cpp DLLを同梱し、エンジン起動時にDLL検索パスで選択。切り替えはエンジン再起動を伴う |
 | 0029 | wire ↔ エンジンモデルのマッピング層の置き場所 | `OhageyEngine`(実行可能ターゲット)ではなく **`OhageyEngineProto`**。SwiftPMは実行可能ターゲットにテストを持てず、oneof不在・sentinel値・敵対的入力を扱うこの層こそテストが要るため。C++ interopを持たないのでテストビルドも軽い。代償としてターゲット名が「生成物置き場」の実態と合わなくなっている(気になれば`OhageyEngineWire`を切って分離する) |
 | 0030 | [壊れたリクエスト受信時に接続を切るか](0030-connection-drop-policy.md) | **unservable(`request_id`が取れる)は`failure`を返して接続維持。malformed / framing errorは接続を切る。** 接続はホストアプリ1本につき1本で、切ると合成中の文字列が失われるため |
+| 0031 | [パイプ ACL の確定](0031-pipe-acl.md) | 決定0006の改訂・**セキュリティレビュー完了**。`WD`(Everyone)を現在のユーザーSID + `SY` + `BA` + `AC` に置換。`GRGW`をやめ明示的な`FILE_*`権限に。`PIPE_REJECT_REMOTE_CLIENTS` と(初回のみ)`FILE_FLAG_FIRST_PIPE_INSTANCE`を付与。同一ユーザーのプロセス間は**DACLでは区別できない**ため境界にできない旨も明記 |
 
 ## 実装フェーズで詰める残課題
 - ユーザー辞書ファイルの具体的なフォーマット(JSON等) — 実装時に決定

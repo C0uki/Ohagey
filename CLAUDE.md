@@ -94,7 +94,10 @@ swift test
 
 ## 未解決の課題(着手前に確認)
 
-- **パイプ ACL(SDDL)のセキュリティレビューが未実施。** IME は全入力が通るため、
-  出荷前に最小権限へ絞ること(`PipeServer.securityDescriptorSDDL`)
+- ~~パイプ ACL(SDDL)のセキュリティレビュー~~ → **完了(decision 0031)**。
+  ただし**フェーズ2の TSF クライアントには制約がある**: `CreateFileW` を
+  `GENERIC_READ | GENERIC_WRITE` で呼ぶと AppContainer から接続できない。
+  `FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE`
+  を明示すること
 - **Swift 6 言語モードへの移行が保留中。** 現在 `.v5` を明示している(`Package.swift` の TODO)
 - ユーザー辞書のファイルフォーマット(decision 0026)、設定のレジストリスキーマ(decision 0014)が未確定
