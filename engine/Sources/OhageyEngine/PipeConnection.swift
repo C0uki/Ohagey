@@ -141,9 +141,18 @@ final class PipeConnection {
 /// runtime, and blocks until it completes.
 ///
 /// This is the seam between the blocking connection threads and the
-/// `@MainActor`-isolated converter. It must never be called from the main
-/// thread: it would block the executor it is waiting on and deadlock.
+/// `@MainActor`-isolated converter.
 func runBlocking<T: Sendable>(_ operation: @escaping @Sendable () async -> T) -> T {
+    // Calling this on the main thread blocks the executor that has to run
+    // `operation`, so the wait can never end. `precondition` rather than
+    // `assert` because the deadlock is just as fatal in a release build, and
+    // failing loudly beats the alternative: an IME that silently stops
+    // responding while the user is mid-composition, with no clue why.
+    precondition(
+        !Thread.isMainThread,
+        "runBlocking would deadlock on the main thread — call it from a connection thread"
+    )
+
     let semaphore = DispatchSemaphore(value: 0)
     let box = MutableBox<T?>(nil)
     Task {
