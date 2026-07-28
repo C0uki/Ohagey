@@ -6,10 +6,8 @@
 // Protobuf (decision 0007); wraps AzooKeyKanaKanjiConverter + Zenzai for the
 // actual conversion (decision 0001).
 //
-// STATUS: scaffold. Startup is wired up to the point where the pipe would be
-// created; the accept loop and request routing are still TODO, and none of
-// this has been compiled (no Swift toolchain in the authoring environment —
-// see docs/local-setup.md).
+// STATUS: startup, the accept loop and request routing are wired together, but
+// nothing has been exercised against a real TSF client yet.
 
 import Foundation
 import OhageyEngineCore
@@ -18,6 +16,10 @@ import OhageyEngineCore
 // the `@main` attribute — Swift rejects the two together. The entry point is
 // the `OhageyEngineMain.main()` call at the bottom of the file.
 enum OhageyEngineMain {
+    // `@MainActor` because it builds the ConversionService, which upstream pins
+    // to the main actor. Top-level code is already main-actor isolated, so the
+    // call at the bottom of the file needs no await.
+    @MainActor
     static func main() {
         do {
             try EnginePaths.ensureUserDataDirectoryExists()
@@ -40,10 +42,44 @@ enum OhageyEngineMain {
             let sessionId = try PipeServer.currentSessionId()
             let name = PipeServer.pipeName(sessionId: sessionId)
             log("pipe name: \(name)")
-            // TODO: create the first instance, then run the accept loop:
-            //   let handle = try PipeServer.createPipeInstance(name: name)
-            //   ... ConnectNamedPipe / per-connection read loop / idle timeout.
-            log("accept loop not implemented yet — exiting.")
+
+            let router = RequestRouter(handler: ConversionService(settings: settings))
+
+            let idleTimeout = settings.idleTimeoutSeconds
+            let watchdog = IdleWatchdog(timeout: TimeInterval(idleTimeout)) {
+                log("idle for \(idleTimeout)s with no client — exiting (decision 0015)")
+                exit(0)
+            }
+            // Armed before the pipe exists: a client that launched us and then
+            // died would otherwise leave this process resident forever.
+            watchdog.start()
+
+            // The accept loop blocks in ConnectNamedPipe, so it cannot share
+            // the main thread with the converter's executor.
+            let acceptThread = Thread {
+                do {
+                    try PipeServer.runAcceptLoop(
+                        name: name,
+                        router: router,
+                        watchdog: watchdog,
+                        log: log
+                    )
+                } catch {
+                    // Reaching here means we could not create a pipe instance
+                    // at all — no client will ever connect, so staying up would
+                    // just look like a hung IME.
+                    log("fatal: accept loop stopped: \(error)")
+                    exit(1)
+                }
+            }
+            acceptThread.name = "ohagey-accept"
+            acceptThread.start()
+
+            log("listening")
+            // Hands the main thread to the main-actor executor and never
+            // returns. Conversion is main-actor isolated, so without this the
+            // connection threads would wait on work that nothing runs.
+            dispatchMain()
         } catch {
             log("fatal: \(error)")
             exit(1)
@@ -57,21 +93,24 @@ enum OhageyEngineMain {
         #endif
     }
 
-    private static func log(_ message: String) {
+    // `@Sendable` and a stored closure rather than a plain method: the accept
+    // loop and every connection thread log, so this crosses threads.
+    private static let log: @Sendable (String) -> Void = { message in
         // Console logging only. No telemetry, no crash reporting, nothing
         // leaves the machine (decision 0016).
         print("OhageyEngine: \(message)")
     }
 }
 
-OhageyEngineMain.main()
+// Top-level code runs on the main thread but is not main-actor *isolated* in
+// the Swift 5 language mode, so the compiler will not let it call a
+// `@MainActor` method directly. `assumeIsolated` states what is already true
+// here rather than hopping. (Once Package.swift moves to `.v6`, top-level code
+// becomes main-actor isolated and this can go back to a plain call.)
+MainActor.assumeIsolated { OhageyEngineMain.main() }
 
 // TODO (implementation phase, tracked in docs/roadmap.md):
-//  1. Generate the Protobuf types (Scripts/generate-proto.sh) and enable the
-//     swift-protobuf dependency in Package.swift.
-//  2. RequestRouter: decode Request -> dispatch to ConversionService -> encode
-//     Response, preserving request_id so clients can pipeline.
-//  3. Accept loop in PipeServer, one pipe instance per client.
-//  4. Idle-timeout self-termination once the connection count has been zero for
-//     `settings.idleTimeoutSeconds` (decision 0015).
-//  5. Settings hot-reload via file/registry watching (decision 0014).
+//  1. Settings hot-reload via file/registry watching (decision 0014).
+//  2. User-dictionary storage, so registerWord stops returning an error
+//     (decision 0026).
+//  3. Backend selection via the DLL search path at startup (decision 0028).

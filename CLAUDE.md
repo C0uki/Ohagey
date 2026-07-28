@@ -60,17 +60,20 @@ settings-app/ (WinUI 3) ──registry/設定ファイル(変更通知で自動�
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- 起動シーケンス(設定読込 → モデル有無判定 → セッションIDからパイプ名導出)
-- `swift test` 17件パス(framing 12・ルーティング 5)
+- `swift test` **49件パス**(framing 12・ルーティング 5・wire マッピング 23・アイドル 9)
+- **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
+  `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
+- 不正リクエストは同じ `request_id` で `INVALID_ARGUMENT` を返し、**接続は維持される**
+- アイドルタイムアウト自己終了(decision 0015)— 5秒設定で実測
 
 ### コンパイルは通るが未検証
-- `PipeServer` の WinSDK 呼び出し(`CreateNamedPipeW` 等)— **まだどこからも呼ばれていない**
-- `ConversionService` の実変換 — 呼び出し経路がまだ無い
+- 複数クライアントの同時接続(1接続ずつしか試していない)
+- Zenzai 経路(モデル未インストールのため辞書変換にフォールバックした状態でのみ検証)
 
 ### 未着手
-- `ohagey.pb.swift` の生成(protoc-gen-swift が必要)
-- proto ↔ `EngineRequest`/`EngineResponse` のマッピング層
-- パイプの accept ループ、アイドルタイムアウト(decision 0015)
+- 設定のホットリロード(decision 0014)
+- ユーザー辞書の保存(decision 0026)— `registerWord` は現在エラーを返す
+- バックエンド選択の DLL 検索パス切り替え(decision 0028)
 - `tsf/` の SampleIME vendoring(手順は `tsf/README.md`)
 
 ## ビルドとテスト

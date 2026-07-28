@@ -293,10 +293,45 @@ swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
 
 **ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。
 
-- **`PipeServer.swift` の WinSDK 呼び出し**は、まだどこからも呼ばれていないため、
-  コンパイルは通っても**実行時の挙動は未検証**。accept ループ実装時に確認が必要。
 - **パイプ ACL(SDDL)** は出荷前にセキュリティレビューが必要(`docs/roadmap.md` 参照)。
-- `ohagey.pb.swift` は未生成。`RequestRouter` もまだ無い。
+- **複数クライアントの同時接続は未検証。** 1接続ずつの往復しか試していない。
+- **Zenzai 経路は未検証。** モデル未インストール時の辞書変換フォールバックでのみ確認した。
+
+> `PipeServer` の WinSDK 呼び出しと実変換は**実クライアントとの往復で検証済み**に
+> なった。何をどこまで確認したかは `docs/roadmap.md` の表を参照。
+
+### protoc-gen-swift の用意(`Scripts/generate-proto.sh` の前提)
+
+`protoc` 本体は `winget install protobuf` で入るが、`protoc-gen-swift` は別途ビルドが要る。
+**依存として既に解決済みの swift-protobuf をそのまま使うのが確実**(pin と同じ 1.38.1 に
+なるので、生成コードとランタイムのバージョン不一致が起きない):
+
+```bat
+xcopy /E /I <scratch>\checkouts\swift-protobuf C:\swb\pgs
+cd C:\swb\pgs
+swift build -c release --product protoc-gen-swift
+```
+
+生成された `.build\x86_64-unknown-windows-msvc\release\protoc-gen-swift.exe` を PATH に
+通してから `bash engine/Scripts/generate-proto.sh` を実行する。
+生成物 `ohagey.pb.swift` はコミットするので、通常の `swift build` に protoc は要らない。
+
+### パスが長すぎてビルドできない場合(git worktree など)
+
+`engine\.build\checkouts\AzooKeyKanaKanjiConverter\...` 配下のサブモジュールは
+パスが深く、リポジトリを深い場所に置くと Windows の 260 文字制限に当たる:
+
+```
+fatal: cannot write keep file '...azooKey_dictionary_storage/objects/pack/pack-....keep': Filename too long
+```
+
+`git config core.longpaths true` だけでは回避できない。**`--scratch-path` で `.build` の
+出力先を短いパスへ逃がすのが最も副作用が少ない**(システム設定もリポジトリ配置も変えない):
+
+```bat
+swift build --scratch-path C:\swb\<短い名前>
+swift test  --scratch-path C:\swb\<短い名前>
+```
 
 ### 実機で遭遇した問題と対処(記録)
 

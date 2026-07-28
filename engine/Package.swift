@@ -72,6 +72,8 @@ let package = Package(
             name: "OhageyEngineProto",
             dependencies: [
                 .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+                // For the wire <-> engine model mapping in WireMapping.swift.
+                "OhageyEngineCore",
             ],
             path: "Sources/OhageyEngineProto",
             // The schema and its docs live beside the generated code but are not
@@ -84,6 +86,18 @@ let package = Package(
             // Holds ohagey.proto and the ohagey.pb.swift generated from it by
             // Scripts/generate-proto.sh. The generated file is committed, so a
             // plain `swift build` does not need protoc.
+            swiftSettings: [
+                .swiftLanguageMode(.v5)
+            ]
+        ),
+        // The mapping in OhageyEngineProto is where wire-shaped values become
+        // engine values, so it is where absent oneofs and out-of-range counts
+        // have to be handled. Worth testing directly; it needs SwiftProtobuf
+        // but no C++ interop, so the test build stays cheap.
+        .testTarget(
+            name: "OhageyEngineProtoTests",
+            dependencies: ["OhageyEngineProto"],
+            path: "Tests/OhageyEngineProtoTests",
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ]

@@ -37,15 +37,23 @@ final class ConversionService {
     var isZenzaiActive: Bool { EnginePaths.isModelAvailable }
 
     /// Converts a hiragana reading into ranked candidates.
-    func convert(reading: String, nBest: Int, precedingText: String) -> [ConvertedCandidate] {
+    func convert(reading: String, nBest: Int, precedingText: String) -> [EngineCandidate] {
         var composing = ComposingText()
         // `.direct` — the TSF layer has already resolved romaji to kana, so the
         // engine receives the reading as-is.
         composing.insertAtCursorPosition(reading, inputStyle: .direct)
 
         let results = converter.requestCandidates(composing, options: makeOptions(nBest: nBest))
-        return results.mainResults.map {
-            ConvertedCandidate(text: $0.text, reading: reading)
+        // `N_best` steers upstream's lattice search; it does not cap
+        // `mainResults`, which also carries the special candidates (katakana,
+        // romaji and single-character forms) appended after the ranked ones.
+        // Verified against 0.8.5: a request for 5 came back with ~60. The
+        // schema promises `n_best` is a maximum, so the cap is applied here.
+        return results.mainResults.prefix(nBest).map {
+            // `score` is left at its default: upstream ranks `mainResults`
+            // already, and its own value is not on a scale the client could
+            // interpret. Order carries the ranking.
+            EngineCandidate(text: $0.text, reading: reading)
         }
         // TODO: map per-bunsetsu segments so the client can support segment-wise
         // reconversion (`Candidate.segments` in ohagey.proto). Requires checking
@@ -108,13 +116,45 @@ final class ConversionService {
     }
 }
 
-/// Engine-side candidate, independent of both the converter's types and the
-/// generated Protobuf types so the mapping stays in one place.
-struct ConvertedCandidate {
-    var text: String
-    var reading: String
-}
-
 enum OhageyEngineVersion {
     static let string = "0.0.1"
+}
+
+// MARK: - Request handling
+
+/// Turns routed requests into converter calls.
+///
+/// The switch is exhaustive on purpose: adding a case to `EngineRequest` should
+/// stop compiling here rather than silently reaching a client as an error.
+extension ConversionService: EngineRequestHandling {
+    func handle(_ request: EngineRequest) async throws -> EngineResponse {
+        switch request {
+        case .convert(let reading, let nBest, let precedingText):
+            return .convert(
+                candidates: convert(reading: reading, nBest: nBest, precedingText: precedingText),
+                zenzaiUsed: isZenzaiActive
+            )
+
+        case .commit(let reading, let text, let updateLearning):
+            commit(reading: reading, text: text, updateLearning: updateLearning)
+            return .commit
+
+        case .registerWord:
+            // The user-dictionary file format is still undecided (decision
+            // 0026), so there is nowhere to put the entry. Report it instead of
+            // answering `.registerWord`, which would tell the settings app the
+            // word was saved when it was not.
+            throw EngineError(
+                code: .internalError,
+                message: "user dictionary is not implemented yet (decision 0026)"
+            )
+
+        case .ping:
+            return .ping(
+                engineVersion: OhageyEngineVersion.string,
+                modelLoaded: isZenzaiActive,
+                backend: settings.backend
+            )
+        }
+    }
 }

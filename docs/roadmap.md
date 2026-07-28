@@ -63,14 +63,42 @@ OS 非依存で完結し、後続実装の土台になるもの。
       生成型は wire 形状(optional だらけ、oneof が不在になり得る)なので、
       端で一度変換すれば以降は不正な状態を取り得ない値を扱えること。
       **テスト済み**(request_id の保持、ハンドラの例外を `failure` に畳んで接続を維持)。
-- [ ] **`Scripts/generate-proto.sh` の実行**(protoc-gen-swift が必要 → Swift 環境必須)。生成物 `ohagey.pb.swift` はコミットする方針。
-- [ ] proto ↔ `EngineRequest`/`EngineResponse` のマッピング層(`OhageyEngine` 側、
-      wire 形式を話すパイプサーバーの隣に置く)。
-- [ ] `ConversionService` を `EngineRequestHandling` に適合させる。
-- [ ] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` の TODO)。
-- [ ] アイドルタイムアウト自己終了(決定 0015)。
+- [x] **`Scripts/generate-proto.sh` の実行**。`protoc` 35.1 + `protoc-gen-swift`
+      (swift-protobuf 1.38.1 を `swift build -c release --product protoc-gen-swift`
+      でビルド)。生成物 `ohagey.pb.swift` はコミット済み。
+- [x] proto ↔ `EngineRequest`/`EngineResponse` のマッピング層(`WireMapping.swift`)。
+      **当初の想定と置き場所を変えた**: `OhageyEngine`(実行可能ターゲット)ではなく
+      `OhageyEngineProto` に置いた。SwiftPM は実行可能ターゲットにテストを持てず、
+      マッピング層こそ(oneof 不在・sentinel 値・敵対的な入力で)テストが要る場所だから。
+      **テスト済み 23 件。**
+- [x] `ConversionService` を `EngineRequestHandling` に適合させる。
+      `registerWord` は決定 0026 未確定のため `internalError` を返す(保存できていないのに
+      成功を返さない)。
+- [x] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` / `PipeConnection.swift`)。
+- [x] アイドルタイムアウト自己終了(`IdleWatchdog.swift`、決定 0015)。**テスト済み 9 件**
+      (スケジューラを注入して実時間を待たずに検証)。
 - [ ] 設定のホットリロード(決定 0014)。
-- [ ] `swift build` を通す → CI(windows-latest)で有効化。
+- [x] `swift build` を通す。
+- [ ] CI(windows-latest)で有効化。
+
+#### 実機で検証済み(実クライアントを繋いでの往復)
+
+PowerShell の名前付きパイプクライアントから実際にフレームを流し、以下を確認した。
+
+| 検証項目 | 結果 |
+|---|---|
+| `Ping` 往復 | `request_id` 保持、`status=OK`、`engine_version="0.0.1"`、`backend=CPU` |
+| `Convert("へんかん")` | 変換 / 返還 / 編間 … を返す。**辞書の実ロードと変換が動く** |
+| `n_best` の遵守 | 当初 5 を要求して約60件返る不具合を発見 → `ConversionService` 側で切り詰めて修正 |
+| 不正リクエスト(oneof 未設定) | `INVALID_ARGUMENT` + メッセージを**同じ request_id で**返し、**接続は維持**。 |
+| 同一接続での後続リクエスト | エラーの直後の `Ping` に正常応答(合成中のアプリが IME を失わない) |
+| 切断後の再接続 | accept ループが新しいインスタンスを作り直して受け付ける |
+| アイドルタイムアウト | `idleTimeoutSeconds=5` で起動 → 5秒後に exit code 0 で自己終了 |
+
+> **起動直後のログに出る `charID.chid` / `mm.binary` が無いというエラーは無害。**
+> upstream が既定パスで `DicdataStore` を先行初期化するために出るもので、実際の
+> 変換リクエストではバンドル内の正しい辞書が使われる(そちらでは `user` /
+> `memory` の LOUDS 不在しか報告されず、これは学習データ未作成なので正常)。
 
 ### フェーズ1 で判明した未解決の設計課題
 
