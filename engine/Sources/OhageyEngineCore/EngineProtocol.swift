@@ -9,10 +9,24 @@
 //     cases that can be absent). Converting once, at the edge, means the rest of
 //     the engine works with values that cannot be in an impossible state.
 //
-// The proto <-> model mapping lives in the OhageyEngine target, next to the pipe
-// server that actually speaks the wire format.
+// The proto <-> model mapping lives in the OhageyEngineProto target
+// (WireMapping.swift), alongside the generated types it converts from.
 
 import Foundation
+
+/// Bounds the wire layer applies when turning a client request into an
+/// `EngineRequest`.
+public enum EngineLimits {
+    /// Used when a client asks for `n_best == 0`, which ohagey.proto defines as
+    /// "engine default". Nine is one page of a conventional Japanese candidate
+    /// window.
+    public static let defaultCandidateCount = 9
+
+    /// Upper bound on candidates one request may ask for. The count sizes work
+    /// inside the converter and an array on the reply path, so a buggy or
+    /// hostile client must not get to choose it freely.
+    public static let maxCandidateCount = 128
+}
 
 /// A request the engine knows how to serve.
 public enum EngineRequest: Equatable, Sendable {
