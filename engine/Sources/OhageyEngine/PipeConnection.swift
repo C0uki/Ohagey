@@ -3,6 +3,10 @@
 // Owns a connected pipe instance for its lifetime: read bytes, reassemble
 // frames, route each request, write the framed reply. Runs on its own OS
 // thread and blocks — see the concurrency note at the top of PipeServer.swift.
+//
+// When a bad request drops the connection and when it does not is decision
+// 0030; the short version is that this connection is one host application's
+// only IME, so dropping it costs the user whatever they were composing.
 
 import Foundation
 #if os(Windows)
