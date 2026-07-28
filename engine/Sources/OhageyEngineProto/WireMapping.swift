@@ -12,6 +12,7 @@
 // is exactly the kind of code that needs tests (absent oneof cases, sentinel
 // values, hostile field contents). This target already depends on
 // SwiftProtobuf and pulls in no C++ interop, so testing it stays cheap.
+// See decision 0029.
 
 import Foundation
 import OhageyEngineCore
@@ -23,7 +24,8 @@ import SwiftProtobuf
 /// whole reason they are distinguished: `unservable` still carries a
 /// `requestID`, so the server can answer with a correlated `failure` and keep
 /// the connection alive. `malformed` does not — the bytes never parsed, so
-/// there is no ID to reply under.
+/// there is no ID to reply under. Decision 0030 covers why that difference
+/// decides whether the connection survives.
 public enum WireDecodeFailure: Error {
     case malformed(underlying: any Error)
     case unservable(requestID: UInt32, error: EngineError)

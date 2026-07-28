@@ -13,9 +13,12 @@
 // convert in parallel. If the thread count ever becomes a problem, the fix is
 // overlapped I/O with a completion port, not more tasks.
 //
-// STATUS: the accept and read loops now exist but have not been exercised
-// against a real client. Every WinSDK call still needs verification on a live
-// connection before it is trusted.
+// The access control on the pipe is decision 0031; the masks and SDDL live in
+// `PipeSecurity` (OhageyEngineCore) so they can be tested.
+//
+// STATUS: exercised against a real client — repeated connections, conversion,
+// error replies and duplicate-launch detection. Not yet exercised by
+// simultaneous clients, or by an AppContainer (UWP) client.
 
 import Foundation
 #if os(Windows)
@@ -26,8 +29,11 @@ import OhageyEngineCore
 /// Errors surfaced while setting up or serving the pipe.
 enum PipeServerError: Error {
     case sessionIdUnavailable
+    case userSIDUnavailable(code: UInt32)
     case securityDescriptorFailed(code: UInt32)
     case createPipeFailed(code: UInt32)
+    /// Another process holds the pipe name — a second engine, or a squatter.
+    case pipeNameAlreadyOwned(name: String)
     case connectFailed(code: UInt32)
     case unsupportedPlatform
 }
@@ -44,29 +50,6 @@ enum PipeServer {
         "\\\\.\\pipe\\ohagey_session_\(sessionId)"
     }
 
-    /// Security descriptor for the pipe, in SDDL (decision 0006).
-    ///
-    /// Requirements this must satisfy:
-    ///   - AppContainer processes (UWP apps, sandboxed browser tabs) must be
-    ///     able to connect  -> `AC` (ALL APPLICATION PACKAGES) ACE.
-    ///   - Elevated (admin) processes must be able to connect. Elevation does
-    ///     not remove access, so no extra ACE is needed for that direction.
-    ///   - Low-integrity clients must be able to *write*, which the default
-    ///     medium integrity label would block -> low mandatory label with the
-    ///     no-write-up policy cleared.
-    ///
-    /// ⚠️ SECURITY REVIEW REQUIRED before shipping. An IME pipe carries
-    /// everything the user types, so the grant below must be as narrow as it
-    /// can be while still admitting sandboxed clients. Open questions:
-    ///   - Should the `WD` (Everyone) ACE be narrowed to the interactive user
-    ///     / logon SID instead? Every process in the session can already reach
-    ///     the pipe, but Everyone is broader than necessary.
-    ///   - Is `GRGW` the minimal right set, or should it be spelled as
-    ///     explicit FILE_* rights?
-    /// Compare against Mozc's named-pipe ACL before finalizing.
-    static let securityDescriptorSDDL: String =
-        "D:(A;;GRGW;;;WD)(A;;GRGW;;;AC)S:(ML;;NW;;;LW)"
-
     /// Windows session ID of the current process, used to derive the pipe name.
     static func currentSessionId() throws -> UInt32 {
         #if os(Windows)
@@ -81,13 +64,62 @@ enum PipeServer {
     }
 
     #if os(Windows)
-    /// Creates one pipe instance with the ACL above.
+    /// SDDL form of the SID this process runs as.
+    ///
+    /// Looked up rather than hardcoded: the pipe is granted to *this* user, so
+    /// a second interactive user on the same machine gets no access to it
+    /// (decision 0031).
+    static func currentUserSID() throws -> String {
+        var rawToken: HANDLE?
+        guard OpenProcessToken(GetCurrentProcess(), DWORD(TOKEN_QUERY), &rawToken),
+              let token = rawToken
+        else {
+            throw PipeServerError.userSIDUnavailable(code: GetLastError())
+        }
+        defer { _ = CloseHandle(token) }
+
+        // First call sizes the buffer and is expected to fail.
+        var length: DWORD = 0
+        _ = GetTokenInformation(token, TokenUser, nil, 0, &length)
+        guard length > 0 else {
+            throw PipeServerError.userSIDUnavailable(code: GetLastError())
+        }
+
+        let buffer = UnsafeMutableRawPointer.allocate(
+            byteCount: Int(length),
+            alignment: MemoryLayout<TOKEN_USER>.alignment
+        )
+        defer { buffer.deallocate() }
+
+        guard GetTokenInformation(token, TokenUser, buffer, length, &length) else {
+            throw PipeServerError.userSIDUnavailable(code: GetLastError())
+        }
+
+        let user = buffer.assumingMemoryBound(to: TOKEN_USER.self).pointee
+        var rawSID: LPWSTR?
+        guard ConvertSidToStringSidW(user.User.Sid, &rawSID), let sid = rawSID else {
+            throw PipeServerError.userSIDUnavailable(code: GetLastError())
+        }
+        defer { LocalFree(sid) }
+        return String(decodingCString: sid, as: UTF16.self)
+    }
+
+    /// Creates one pipe instance with the ACL from `PipeSecurity`.
     ///
     /// A pipe *instance* serves a single client, so the accept loop creates a
     /// fresh instance for each connection (`PIPE_UNLIMITED_INSTANCES`).
-    static func createPipeInstance(name: String) throws -> HANDLE {
+    ///
+    /// - Parameter isFirstInstance: pass true only for the instance created
+    ///   before any client has connected. It adds
+    ///   `FILE_FLAG_FIRST_PIPE_INSTANCE`, which makes the call fail if the name
+    ///   already exists — see `PipeServerError.pipeNameAlreadyOwned`.
+    static func createPipeInstance(
+        name: String,
+        sddl: String,
+        isFirstInstance: Bool = false
+    ) throws -> HANDLE {
         var securityDescriptor: PSECURITY_DESCRIPTOR?
-        let converted = securityDescriptorSDDL.withCString(encodedAs: UTF16.self) { sddl in
+        let converted = sddl.withCString(encodedAs: UTF16.self) { sddl in
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
                 sddl,
                 DWORD(SDDL_REVISION_1),
@@ -106,13 +138,27 @@ enum PipeServer {
             bInheritHandle: false
         )
 
+        // FILE_FLAG_FIRST_PIPE_INSTANCE makes CreateNamedPipeW fail if the name
+        // is already taken, instead of quietly adding an instance to somebody
+        // else's pipe. Only meaningful on the very first instance — every later
+        // one legitimately joins the pipe we ourselves created.
+        var openMode = DWORD(PIPE_ACCESS_DUPLEX)
+        if isFirstInstance {
+            openMode |= DWORD(FILE_FLAG_FIRST_PIPE_INSTANCE)
+        }
+
         let handle = name.withCString(encodedAs: UTF16.self) { wideName in
             CreateNamedPipeW(
                 wideName,
-                DWORD(PIPE_ACCESS_DUPLEX),
+                openMode,
                 // Byte-stream mode: our own length prefix does the framing, so
                 // we do not rely on message-mode boundaries.
-                DWORD(PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT),
+                //
+                // PIPE_REJECT_REMOTE_CLIENTS refuses connections arriving over
+                // SMB. The engine only ever serves TSF clients on this machine,
+                // and an IME reachable from the network is a keylogger with a
+                // published address.
+                DWORD(PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS),
                 DWORD(PIPE_UNLIMITED_INSTANCES),
                 DWORD(64 * 1024),   // out buffer
                 DWORD(64 * 1024),   // in buffer
@@ -121,7 +167,17 @@ enum PipeServer {
             )
         }
         guard let handle, handle != INVALID_HANDLE_VALUE else {
-            throw PipeServerError.createPipeFailed(code: GetLastError())
+            let code = GetLastError()
+            // Someone already owns this name. Either another engine won the
+            // race to start (fine — decision 0015 wants exactly one), or a
+            // process is squatting the name to impersonate us. We cannot tell
+            // the two apart, and in both cases the right move is to stop:
+            // clients will talk to whoever holds the pipe, and adding our
+            // instances to a squatter's pipe would be the worst outcome.
+            if isFirstInstance && code == DWORD(ERROR_ACCESS_DENIED) {
+                throw PipeServerError.pipeNameAlreadyOwned(name: name)
+            }
+            throw PipeServerError.createPipeFailed(code: code)
         }
         return handle
     }
@@ -141,8 +197,17 @@ enum PipeServer {
         watchdog: IdleWatchdog,
         log: @escaping @Sendable (String) -> Void
     ) throws {
+        let sddl = PipeSecurity.securityDescriptorSDDL(userSID: try currentUserSID())
+        log("pipe SDDL: \(sddl)")
+        var isFirstInstance = true
+
         while true {
-            let handle = try createPipeInstance(name: name)
+            let handle = try createPipeInstance(
+                name: name,
+                sddl: sddl,
+                isFirstInstance: isFirstInstance
+            )
+            isFirstInstance = false
 
             do {
                 try waitForClient(handle)

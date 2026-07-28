@@ -44,7 +44,8 @@ OS 非依存で完結し、後続実装の土台になるもの。
       (framing・設定・ルーティング)をライブラリターゲットに切り出した。C++ interop を
       持たないのでテストのビルドは軽く、llama.cpp のリンクも不要。
       **実機で全テストパスを確認済み**(framing 12件)。
-- [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。**ACL はセキュリティレビュー未実施**。
+- [x] パイプ命名(セッションID 込み)と ACL(SDDL)の定義、`CreateNamedPipeW` 呼び出し(`PipeServer.swift`)。
+      **ACL はセキュリティレビュー完了**(決定 0031)。`PipeSecurity.swift` に切り出してテスト済み 12 件。
 - [x] 設定とパスの解決(`EngineSettings.swift`)— `%LOCALAPPDATA%\Ohagey\`(決定 0024)、モデルパス(決定 0008)、学習既定 ON(決定 0025)。
 - [x] 変換ラッパー骨格(`ConversionService.swift`)— `ConvertRequestOptions` / `ZenzaiMode` の配線、モデル非在時の `.off` フォールバック。
 - [x] Protobuf 生成の配線: `Scripts/generate-proto.sh` + `Package.swift` の `swift-protobuf` 依存有効化。
@@ -77,9 +78,16 @@ OS 非依存で完結し、後続実装の土台になるもの。
 - [x] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` / `PipeConnection.swift`)。
 - [x] アイドルタイムアウト自己終了(`IdleWatchdog.swift`、決定 0015)。**テスト済み 9 件**
       (スケジューラを注入して実時間を待たずに検証)。
-- [ ] 設定のホットリロード(決定 0014)。
+- [x] 設定のホットリロード(`SettingsWatcher.swift`、決定 0014)。
+      `ReadDirectoryChangesW` でディレクトリを監視し、`settings.json` の変更だけを拾う。
+      **実装中に既存のバグを1つ見つけて直した**: Swift の合成 `Codable` はプロパティの
+      既定値を使わずキー欠落で throw するため、部分的な設定ファイルは全体が復号失敗し、
+      `load()` が**全設定を既定値に戻していた**(= 学習が勝手に ON に戻る、決定 0025 違反)。
+      デコーダを手書きして欠落キーは既定値を保つようにした。**テスト済み 15 件。**
 - [x] `swift build` を通す。
-- [ ] CI(windows-latest)で有効化。
+- [x] CI(windows-latest)で有効化。llama.cpp `b4846` をビルドしてキャッシュし、
+      `swift build` + `swift test` を回す。`swift test` はパッケージ全体をビルドするため、
+      ライブラリのテストだけを llama.cpp 抜きで回すことはできない。
 
 #### 実機で検証済み(実クライアントを繋いでの往復)
 
@@ -93,7 +101,11 @@ PowerShell の名前付きパイプクライアントから実際にフレーム
 | 不正リクエスト(oneof 未設定) | `INVALID_ARGUMENT` + メッセージを**同じ request_id で**返し、**接続は維持**。 |
 | 同一接続での後続リクエスト | エラーの直後の `Ping` に正常応答(合成中のアプリが IME を失わない) |
 | 切断後の再接続 | accept ループが新しいインスタンスを作り直して受け付ける |
+| **6クライアント同時接続** | 全接続を同時に開いたまま各々が変換+Ping。**6/6 が自分の `request_id` で正しく応答を受け取った** |
 | アイドルタイムアウト | `idleTimeoutSeconds=5` で起動 → 5秒後に exit code 0 で自己終了 |
+| **設定のホットリロード** | 壊れた書き込みは無視(現設定を維持)、`learningEnabled` は即時反映、同内容の再書き込みは無反応、`backend` 変更は「再起動が必要」と通知 |
+| **パイプ ACL の読み戻し** | 稼働中のパイプから実際の DACL を取得し設計と一致を確認。`WD` 無し、ユーザーのみ `0x12019f`、SY/BA/AC は `0x100183`、Owner も正しい |
+| **Zenzai のリンク** | `dumpbin /dependents` で `llama.dll` 依存を確認 — Zenzai は実際にリンクされている(mock ではない) |
 
 > **起動直後のログに出る `charID.chid` / `mm.binary` が無いというエラーは無害。**
 > upstream が既定パスで `DicdataStore` を先行初期化するために出るもので、実際の
@@ -114,9 +126,12 @@ PowerShell の名前付きパイプクライアントから実際にフレーム
    書かれているが、`Package.swift` は `0.8.0` 系にピン留めしている。pre-1.0 で API が
    動くため、`ConvertRequestOptions` の必須引数(`textReplacer`、
    `specialCandidateProviders` 等)は実ビルド時に要確認。
-3. **パイプ ACL のセキュリティレビュー**: `PipeServer.securityDescriptorSDDL` は
-   AppContainer / 低整合性クライアントを通す必要から広めの許可になっている。
-   IME のパイプは全入力が通るため、出荷前に Mozc 等と比較して最小権限に絞ること。
+3. ~~**パイプ ACL のセキュリティレビュー**~~ → **決定 0031 で解決済み。**
+   `WD`(Everyone)を現在のユーザー SID + `SY` + `BA` + `AC` に置換し、`GRGW` を
+   明示的な `FILE_*` 権限に、`PIPE_REJECT_REMOTE_CLIENTS` と(初回のみ)
+   `FILE_FLAG_FIRST_PIPE_INSTANCE` を追加した。
+   **同一ユーザーのプロセス間は DACL で区別できない**ため境界にできない点も明記してある。
+   詳細は [`decisions/0031-pipe-acl.md`](decisions/0031-pipe-acl.md)。
 
 ## フェーズ2 — TSF(C++ / Windows 実機必須)
 

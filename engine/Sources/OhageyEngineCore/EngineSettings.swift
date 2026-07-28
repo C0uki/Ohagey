@@ -21,7 +21,7 @@ public enum Backend: String, Codable, Sendable {
 ///
 /// `Sendable` for the same reason as `Backend`: settings are read on one actor
 /// and applied on another when a hot-reload lands (decision 0014).
-public struct EngineSettings: Codable, Sendable {
+public struct EngineSettings: Codable, Sendable, Equatable {
     /// Learning is on by default; the settings app can disable and erase it
     /// for shared machines such as school PCs (decision 0025).
     public var learningEnabled: Bool = true
@@ -36,6 +36,35 @@ public struct EngineSettings: Codable, Sendable {
     public init() {}
 
     public static let `default` = EngineSettings()
+
+    /// Decodes leniently, keeping the default for anything the file does not
+    /// mention.
+    ///
+    /// Written by hand because the synthesized `Codable` does the opposite: a
+    /// missing key throws `keyNotFound`, which would fail the whole file. That
+    /// failure is not contained — `load` answers it with *all* defaults, so a
+    /// user whose file said only `{"learningEnabled": false}` would silently
+    /// get learning switched back on (decision 0025). The settings app's schema
+    /// is still unsettled (decision 0014), so a file written by a different
+    /// version of it has to remain readable.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = EngineSettings()
+
+        learningEnabled = try container.decodeIfPresent(Bool.self, forKey: .learningEnabled)
+            ?? defaults.learningEnabled
+        zenzaiInferenceLimit = try container.decodeIfPresent(Int.self, forKey: .zenzaiInferenceLimit)
+            ?? defaults.zenzaiInferenceLimit
+        idleTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .idleTimeoutSeconds)
+            ?? defaults.idleTimeoutSeconds
+
+        // A backend name this build does not know is a newer settings app, not
+        // a corrupt file. Falling back to the default beats discarding every
+        // other setting alongside it; the effective backend is visible in the
+        // ping response either way.
+        backend = (try? container.decodeIfPresent(Backend.self, forKey: .backend))
+            .flatMap { $0 } ?? defaults.backend
+    }
 }
 
 /// Filesystem locations the engine uses.
@@ -83,25 +112,48 @@ public enum EnginePaths {
 }
 
 extension EngineSettings {
+    /// Reads settings, throwing if the file is missing or does not parse.
+    ///
+    /// Hot-reload needs this rather than `load`. A settings file caught
+    /// mid-write does not parse, and quietly substituting defaults at that
+    /// moment would silently turn learning back on for a user who had just
+    /// switched it off (decision 0025) — the one thing this setting exists to
+    /// prevent. The caller keeps the settings it already has instead.
+    public static func decode(from url: URL = EnginePaths.settingsURL) throws -> EngineSettings {
+        try JSONDecoder().decode(EngineSettings.self, from: Data(contentsOf: url))
+    }
+
     /// Loads settings, falling back to defaults when the file is absent or
     /// unreadable. A malformed settings file must never stop the IME from
-    /// working — the user would be left unable to type.
+    /// starting — the user would be left unable to type.
     public static func load(from url: URL = EnginePaths.settingsURL) -> EngineSettings {
-        guard let data = try? Data(contentsOf: url),
-              let decoded = try? JSONDecoder().decode(EngineSettings.self, from: data)
-        else {
-            return .default
+        (try? decode(from: url)) ?? .default
+    }
+
+    /// Names of the settings that changed but cannot take effect until the
+    /// engine restarts.
+    ///
+    /// Reported rather than silently ignored: a user who flips the backend in
+    /// the settings app and sees nothing happen will conclude the setting is
+    /// broken. The settings app is expected to say so in its UI too
+    /// (decision 0028).
+    public func settingsRequiringRestart(comparedTo previous: EngineSettings) -> [String] {
+        var names: [String] = []
+        // The compute backend is fixed by which llama.cpp DLL the process
+        // loaded at startup; nothing short of a new process can change it.
+        if backend != previous.backend {
+            names.append("backend")
         }
-        return decoded
+        // The watchdog's countdown is armed once, at startup.
+        if idleTimeoutSeconds != previous.idleTimeoutSeconds {
+            names.append("idleTimeoutSeconds")
+        }
+        return names
     }
 }
 
 // TODO (implementation phase):
-//  - Watch the settings file / registry key for changes and hot-reload without
-//    dropping live connections (decision 0014: ReadDirectoryChangesW or
-//    RegNotifyChangeKeyValue).
 //  - Confirm whether the settings app writes JSON here or registry values, and
 //    align this type with the schema it produces (the registry schema is still
-//    an open item in docs/decisions/README.md).
-//  - A backend switch may require rebuilding the converter; decide whether that
-//    happens lazily on the next request or eagerly on the change notification.
+//    an open item in docs/decisions/README.md). The watcher in
+//    SettingsWatcher.swift covers the file case only.
