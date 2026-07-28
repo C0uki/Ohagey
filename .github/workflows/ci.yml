@@ -5,10 +5,8 @@ on:
     branches: [ main ]
   pull_request:
 
-# 雛形段階の CI（docs/roadmap.md 参照）。
-# tsf/・engine/・settings-app/ のビルド成果物がまだ存在しないため、現時点で
-# 実際に走るのは no-committed-model ジョブのみ。Windows 上の実ビルドジョブは
-# 定義だけ用意し、各コンポーネントがビルド可能になった時点で有効化する。
+# docs/roadmap.md 参照。engine/ はフェーズ1でビルド・テストが通るようになったので
+# 有効化済み。tsf/・settings-app/ はまだ雛形のため、定義だけ用意してある。
 
 permissions:
   contents: read
@@ -33,11 +31,67 @@ jobs:
           fi
           echo "OK: no model weight files tracked."
 
-  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
+  # エンジン (Swift, 決定 0005 / 0020)。
   #
-  # engine (Swift, 決定 0005 / 0020):
-  #   runs-on: windows-latest。engine/ で `swift build`。
-  #   AzooKeyKanaKanjiConverter + Zenzai に対してコンパイルが通るようになったら有効化。
+  # Zenzai trait が有効なので llama.cpp のリンクが必要で、`swift test` は
+  # パッケージ全体をビルドする（＝ライブラリのテストだけを llama.cpp 抜きで
+  # 回すことはできない）。そのため llama.cpp をここでビルドしてキャッシュする。
+  #
+  # llama.cpp のバージョンは AzooKeyKanaKanjiConverter と独立には動かせない
+  # （決定 0028）。ここを変えるときは engine/Package.swift の pin も必ず一緒に
+  # 確認すること。キャッシュキーもこのバージョンで切ってある。
+  engine:
+    name: engine — swift build & test (Windows x64)
+    runs-on: windows-latest
+    env:
+      LLAMA_CPP_TAG: b4846
+    steps:
+      - uses: actions/checkout@v4
+
+      # AzooKeyKanaKanjiConverter のサブモジュールはパスが深く、260 文字制限に
+      # 当たることがある（docs/local-setup.md 参照）。
+      - name: Allow long paths
+        run: git config --global core.longpaths true
+
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.1.2-release
+          tag: 6.1.2-RELEASE
+
+      - name: Cache llama.cpp
+        id: cache-llama
+        uses: actions/cache@v4
+        with:
+          path: llama.cpp/build-${{ env.LLAMA_CPP_TAG }}
+          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}-windows-x64-shared
+
+      - name: Build llama.cpp
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch $env:LLAMA_CPP_TAG https://github.com/ggml-org/llama.cpp.git
+          cd llama.cpp
+          # BUILD_SHARED_LIBS=ON で llama.lib / llama.dll を出す（決定 0028）。
+          cmake -B build-$env:LLAMA_CPP_TAG -DBUILD_SHARED_LIBS=ON
+          cmake --build build-$env:LLAMA_CPP_TAG --config Release
+
+      # LIB はリンク時（llama.lib）、PATH は実行時（llama.dll）。
+      # どちらか一方では足りない。
+      - name: Build and test
+        working-directory: engine
+        run: |
+          $llama = "${{ github.workspace }}\llama.cpp\build-$env:LLAMA_CPP_TAG"
+          $env:LIB = "$llama\src\Release;$env:LIB"
+          $env:PATH = "$llama\bin\Release;$env:PATH"
+          swift build
+          swift test
+
+  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
   #
   # tsf (C++ / MSBuild, 決定 0002 / 0003 / 0020):
   #   runs-on: windows-latest。vendoring & 改造した SampleIME を x64 で MSBuild。

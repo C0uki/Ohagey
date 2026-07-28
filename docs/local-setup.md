@@ -296,8 +296,11 @@ swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
 - ~~パイプ ACL(SDDL)のセキュリティレビュー~~ → 完了(決定 0031)。
   **UWP / AppContainer アプリからの実接続は未検証**(`AC` の許可と低整合性ラベルは
   仕様上の挙動から入れており、実機で測ってはいない)。
-- **複数クライアントの同時接続は未検証。** 接続を順に張る形でしか試していない。
-- **Zenzai 経路は未検証。** モデル未インストール時の辞書変換フォールバックでのみ確認した。
+- ~~複数クライアントの同時接続~~ → 6クライアント同時で確認済み。
+- **Zenzai 経路は未検証。** `dumpbin /dependents` で `llama.dll` 依存は確認済み
+  (＝ mock ではなく実際にリンクされている)が、**モデル未インストールのため
+  辞書変換フォールバックでしか動かしていない**。
+  `C:\Program Files\Ohagey\models\ggml-model-Q5_K_M.gguf` を置けば検証できる。
 
 > `PipeServer` の WinSDK 呼び出しと実変換は**実クライアントとの往復で検証済み**に
 > なった。何をどこまで確認したかは `docs/roadmap.md` の表を参照。

@@ -43,7 +43,20 @@ enum OhageyEngineMain {
             let name = PipeServer.pipeName(sessionId: sessionId)
             log("pipe name: \(name)")
 
-            let router = RequestRouter(handler: ConversionService(settings: settings))
+            let service = ConversionService(settings: settings)
+            let router = RequestRouter(handler: service)
+
+            // Settings arrive by file, not by IPC (decision 0014). Applied on
+            // the main actor because that is where the converter lives; live
+            // connections are untouched, and the new values take effect on the
+            // next conversion.
+            SettingsWatcher.start(
+                settingsURL: EnginePaths.settingsURL,
+                initial: settings,
+                log: log
+            ) { reloaded in
+                Task { @MainActor in service.updateSettings(reloaded) }
+            }
 
             let idleTimeout = settings.idleTimeoutSeconds
             let watchdog = IdleWatchdog(timeout: TimeInterval(idleTimeout)) {
@@ -99,6 +112,12 @@ enum OhageyEngineMain {
         // Console logging only. No telemetry, no crash reporting, nothing
         // leaves the machine (decision 0016).
         print("OhageyEngine: \(message)")
+        // Flush every line. stdout is block-buffered once redirected to a file,
+        // and this process usually ends by idle timeout or by being killed —
+        // both of which discard the buffer, so a log kept for diagnosing a
+        // problem would be empty exactly when it was needed. Log lines are
+        // rare enough that the syscall does not matter.
+        fflush(stdout)
     }
 }
 
