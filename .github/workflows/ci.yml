@@ -58,11 +58,15 @@ jobs:
         with:
           arch: x64
 
+      # docs/local-setup.md の「動作確認済みの組み合わせ」に合わせる。
+      # 6.1.2 では Windows SDK 10.0.26100 のヘッダに対して
+      # `could not build module 'std'` になり、C++ interop（Zenzai）が通らない。
+      # ツールチェーンと SDK の組み合わせは実際に確認したものだけを使うこと。
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
         with:
-          branch: swift-6.1.2-release
-          tag: 6.1.2-RELEASE
+          branch: swift-6.3.3-release
+          tag: 6.3.3-RELEASE
 
       - name: Cache llama.cpp
         id: cache-llama
