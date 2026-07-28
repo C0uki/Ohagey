@@ -302,11 +302,30 @@ swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
 
 ## Zenzai の実測(2026-07)
 
-`C:\Program Files\Ohagey\models\ggml-model-Q5_K_M.gguf`
-(`Miwa-Keita/zenz-v3.1-small-gguf`、70.44 MiB)を配置して確認した。
-**配置には管理者権限が要る**(決定 0008 の実配置先が `%ProgramFiles%` のため)。
-`ProgramFiles` 環境変数で逃げることは**できない** — Windows は新規プロセス生成時に
-この変数をレジストリから再設定するので、子プロセスには元の値しか渡らない(実測)。
+`Miwa-Keita/zenz-v3.1-small-gguf` の `ggml-model-Q5_K_M.gguf`(70.44 MiB)で確認した。
+
+### 開発時のモデル配置(管理者権限は不要)
+
+実配置先 `%ProgramFiles%\Ohagey\models\` への書き込みには管理者権限が要るが、
+**`OHAGEY_MODEL_PATH` で上書きできる**。好きな場所にモデルを置けばよい:
+
+```bat
+curl -L --create-dirs -o C:\swb\models\ggml-model-Q5_K_M.gguf ^
+  https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/ggml-model-Q5_K_M.gguf
+set OHAGEY_MODEL_PATH=C:\swb\models\ggml-model-Q5_K_M.gguf
+```
+
+**この上書きは debug ビルドでしか効かない**(release では無視される)。理由は決定 0008 を参照。
+効いているかは起動ログで分かる:
+
+```
+OhageyEngine: OHAGEY_MODEL_PATH is set — debug builds only, ignored in release
+OhageyEngine: Zenzai model found at C:/swb/models/ggml-model-Q5_K_M.gguf
+```
+
+> `ProgramFiles` 環境変数を差し替える手は**使えない**。Windows は新規プロセス生成時に
+> この変数をレジストリから再設定するので、子プロセスには元の値しか渡らない(実測)。
+> `OHAGEY_MODEL_PATH` はまさにこれが理由で用意してある。
 
 変換品質は辞書のみとは明確に別物:
 
