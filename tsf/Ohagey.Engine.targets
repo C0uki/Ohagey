@@ -69,7 +69,23 @@
     <Message Importance="high"
              Text="Ohagey: building the Swift engine ($(OhageySwiftConfiguration))" />
 
-    <!-- No ContinueOnError: if the engine does not compile, a build that
+    <!-- INCLUDE and EXTERNAL_INCLUDE are cleared for this call on purpose.
+         They describe the C++ headers MSBuild picked for *this* project, and
+         the Swift toolchain does not want them: its clang resolves the MSVC and
+         Windows SDK headers through paths recorded when Swift was installed.
+         When the two disagree the C module build fails in a way that names
+         neither cause — on the CI runner INCLUDE pointed at MSVC 14.51 while
+         Swift's clang used 14.44, and the result was
+
+             dispatch/time.h: missing '#include <stdint.h>';
+             'uint64_t' must be declared before it is used
+             MSVC\14.44.35207\include\stdint.h: declaration here is not visible
+
+         LIB is deliberately left alone: pointing it at llama.lib is what
+         docs/local-setup.md tells people to do, and clearing it would break
+         every local build that relies on that.
+
+         No ContinueOnError: if the engine does not compile, a build that
          claimed to succeed would leave the DLL talking to a stale one.
 
          IgnoreStandardErrorWarningFormat stops MSBuild from re-reading swift's
@@ -80,6 +96,7 @@
          and the exit code still fails the build. -->
     <Exec Command="&quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs)"
           WorkingDirectory="$(OhageyEngineDirectory)"
+          EnvironmentVariables="INCLUDE=;EXTERNAL_INCLUDE="
           IgnoreStandardErrorWarningFormat="true"
           StandardOutputImportance="normal" />
   </Target>
