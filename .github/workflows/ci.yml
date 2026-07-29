@@ -147,10 +147,21 @@ jobs:
         working-directory: tsf/SampleIME
         run: |
           $llama = "${{ github.workspace }}\llama.cpp\build-$env:LLAMA_CPP_TAG\src\Release"
+
+          # swift.exe by absolute path rather than trusting PATH. MSBuild's Exec
+          # goes through cmd.exe, and on this runner the Swift toolchain — added
+          # to a PATH that is already long — is not visible by the time cmd
+          # looks. The engine job does not hit this because it calls swift from
+          # pwsh directly.
+          $swift = (Get-Command swift -ErrorAction SilentlyContinue)?.Source
+          if (-not $swift) { throw "swift.exe not found; the Swift setup step did not take" }
+          Write-Host "swift: $swift"
+
           foreach ($config in @("Debug", "Release")) {
             msbuild SampleIME.vcxproj /t:Rebuild `
               /p:Configuration=$config /p:Platform=x64 `
               /p:OhageyLlamaLibDir="$llama" `
+              /p:OhageySwiftExe="$swift" `
               /nologo /v:minimal
             if ($LASTEXITCODE -ne 0) { throw "$config build failed" }
           }
