@@ -159,6 +159,10 @@ private:
     // vector reallocation would dangle every range handed out so far.
     std::deque<std::wstring> _candidateStrings;
 
+    // Kana shown in the composition, for the same reason: GetReadingStrings
+    // hands back a view and needs something to point at.
+    std::wstring _displayReading;
+
     // Resolves `keystrokes` (romaji) to kana and fills `pCandidateList` from
     // the engine's answer.
     void GetCandidateListFromEngine(const CStringRange& keystrokes,

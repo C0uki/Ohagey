@@ -153,6 +153,34 @@ int main()
         Expect(c.Reading() == L"ほ", "ho -> ほ");
     }
 
+    printf("\ncomposition display\n");
+    {
+        // The reading goes to the engine; the display is what the user reads.
+        // They differ only while a syllable is unfinished.
+        struct Case { const wchar_t* romaji; const wchar_t* display; const wchar_t* reading; };
+        const Case cases[] = {
+            { L"k",       L"k",          L""          },
+            { L"ky",      L"ky",         L""          },
+            { L"kyo",     L"きょ",        L"きょ"      },
+            { L"henk",    L"へんk",       L"へん"      },
+            // A trailing n reads and shows as ん...
+            { L"hon",     L"ほん",        L"ほん"      },
+            // ...and stops doing so the moment a vowel claims it.
+            { L"hona",    L"ほな",        L"ほな"      },
+            { L"nihongo", L"にほんご",    L"にほんご"  },
+        };
+
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
+        {
+            const std::wstring display = RomajiToDisplay(cases[i].romaji);
+            const std::wstring reading = RomajiToKana(cases[i].romaji);
+            const bool ok = (display == cases[i].display) && (reading == cases[i].reading);
+            if (!ok) ++g_failures;
+            printf("  [%s] %-8s display=%-10s reading=%s\n", ok ? "PASS" : "FAIL",
+                   Utf8(cases[i].romaji).c_str(), Utf8(display).c_str(), Utf8(reading).c_str());
+        }
+    }
+
     printf("\nstray input\n");
     {
         // A letter that cannot start a syllable must not poison what follows.

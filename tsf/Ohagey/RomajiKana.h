@@ -58,9 +58,14 @@ namespace Ohagey
         // the engine to convert letters.
         std::wstring Reading() const;
 
-        // Kana plus unresolved romaji, which is what the user should see in the
-        // composition while typing.
-        std::wstring Display() const { return _kana + _pending; }
+        // What the user should see in the composition while typing: kana, plus
+        // any romaji still mid-syllable.
+        //
+        // A trailing lone `n` shows as ん, the same as `Reading()` converts it.
+        // Someone typing `hon` expects to see ほん, not ほn — and if they go on
+        // to type `a` it becomes ほな, which is exactly what recomputing from
+        // the romaji gives.
+        std::wstring Display() const;
 
     private:
         // Rebuilds _kana and _pending from _romaji. Used by Backspace, where
@@ -75,5 +80,17 @@ namespace Ohagey
 
     // Converts a whole romaji string in one go. Same rules as feeding it
     // character by character.
+    //
+    // Returns the *reading*: resolved kana, with a trailing lone `n` closed to
+    // ん. Anything else still mid-syllable is dropped, because `ky` is not a
+    // reading and the engine has nothing to do with it.
     std::wstring RomajiToKana(const std::wstring& romaji);
+
+    // What to show in the composition while typing: resolved kana followed by
+    // whatever romaji has not resolved yet.
+    //
+    // Differs from `RomajiToKana` on purpose. The reading is what the engine is
+    // asked to convert; this is what the user is looking at, and someone who
+    // has typed `ky` needs to see that they typed it.
+    std::wstring RomajiToDisplay(const std::wstring& romaji);
 }
