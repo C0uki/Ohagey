@@ -68,6 +68,35 @@ HANDLE pipe = CreateFileW(
 リトライしてください(サーバーは接続を受けた直後に次のインスタンスを作りますが、
 その受け渡しの一瞬だけ空きが無くなります)。
 
+## ビルド
+
+「x64 Native Tools Command Prompt for VS 2022」で:
+
+```bat
+cd tsf\SampleIME
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
+```
+
+**Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\SampleIME.dll` が
+生成される**ことを確認済み。COM のエクスポート(`DllGetClassObject` /
+`DllCanUnloadNow` / `DllRegisterServer` / `DllUnregisterServer`)も揃っている。
+
+### 本家からのビルド設定の変更点
+
+| 変更 | 理由 |
+|---|---|
+| `Win32` 構成を削除 | x64 のみ対応(決定 0018)。Debug/Release × x64 の2構成だけにした |
+| `PlatformToolset` を `v110` → `v143` | VS2012 のツールセットは入っていない |
+| `VCTargetsPath11` フォールバックを削除 | VS2012 の名残。現行 MSBuild を存在しないツールセットに向けてしまう |
+| `Windows Kits\8.0` の include/lib 絶対パスを削除 | 2012年の SDK。未インストールで、実効パスの後ろに付いていたため無視されていただけ |
+| Release の `OptimizeReferences` / `EnableCOMDATFolding` の `false` を削除 | `/OPT:NOREF` が `WholeProgramOptimization` の LTCG と衝突する(LNK1295) |
+| Debug の `DebugInformationFormat` を `ProgramDatabase` に | 既定の /ZI が `/INCREMENTAL:NO` で捨てられ、毎回 LNK4075 が出ていた |
+
 ## ステータス
-🚧 まだvendoringしていません。このREADMEは手順の記録です。実装を始める前に上記の
-コマンドを実行し、`tsf/SampleIME/`を実際に取り込んでください。
+
+- [x] vendoring(上記コミットから取り込み)
+- [x] x64 でビルドが通る(決定 0018)
+- [ ] `CompositionProcessorEngine`/辞書検索 → 名前付きパイプクライアントに置換
+- [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
+- [ ] 全エントリポイントを SEH で防御(決定 0017)
+- [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
