@@ -92,11 +92,44 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | Release の `OptimizeReferences` / `EnableCOMDATFolding` の `false` を削除 | `/OPT:NOREF` が `WholeProgramOptimization` の LTCG と衝突する(LNK1295) |
 | Debug の `DebugInformationFormat` を `ProgramDatabase` に | 既定の /ZI が `/INCREMENTAL:NO` で捨てられ、毎回 LNK4075 が出ていた |
 
+## エンジンとの IPC(`../Ohagey/`)
+
+`tsf/Ohagey/` は vendoring したコードではなく**おはぎー自身のコード**。
+
+| ファイル | 役割 |
+|---|---|
+| `OhageyProtocol.h` | クライアント API(`EngineClient`)と結果型 |
+| `OhageyWire.{h,cpp}` | Protobuf の wire 形式。**`ohagey.proto` の範囲だけ手書き**(決定 0032) |
+| `OhageyEngineClient.cpp` | 名前付きパイプ接続、フレーミング、リクエスト/レスポンス |
+| `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス** |
+
+`OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
+エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
+
+```bat
+rem OhageyEngine.exe を起動しておくこと
+powershell -File tsf\Ohagey\tools\build-and-run.ps1
+```
+
 ## ステータス
 
 - [x] vendoring(上記コミットから取り込み)
 - [x] x64 でビルドが通る(決定 0018)
-- [ ] `CompositionProcessorEngine`/辞書検索 → 名前付きパイプクライアントに置換
+- [x] `CompositionProcessorEngine` の辞書検索 → `EngineClient` に置換
+- [ ] **ローマ字 → かな変換**(下記。これが無いと実際には入力できない)
+- [ ] 確定時の学習フィードバック(`Commit`)の配線
+- [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
 - [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
 - [ ] 全エントリポイントを SEH で防御(決定 0017)
 - [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
+
+### ⚠️ 次にやること: ローマ字 → かな
+
+**現状、エンジンに送っている読みは `_keystrokeBuffer` の生の内容**、つまり
+SampleIME が中国語 Pinyin 用に貯めている **ASCII のキーストローク列**。
+エンジンは**ひらがな**を期待している(`ConversionService` は `.direct` 入力方式で
+「TSF 層がローマ字をかなに解決済み」を前提にしている)。
+
+したがって配線は通っているが、**このままでは実際の入力は成立しない**。
+`henkan` ではなく `へんかん` を送る必要がある。促音・撥音・待機中の入力の扱いを
+含むテーブル変換の実装が次の作業。

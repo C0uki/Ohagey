@@ -316,8 +316,66 @@ void CCompositionProcessorEngine::RemoveVirtualKey(DWORD_PTR dwIndex)
 //     none.
 //----------------------------------------------------------------------------
 
+//+---------------------------------------------------------------------------
+//
+// GetCandidateListFromEngine     [Ohagey]
+//
+// Asks the conversion server for candidates (decisions 0004-0007). Replaces the
+// sample's table-dictionary lookup, which ran in this process.
+//
+//----------------------------------------------------------------------------
+
+void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange& reading,
+    _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList)
+{
+    if (reading.GetLength() == 0)
+    {
+        return;
+    }
+
+    // CStringRange is not null-terminated, so build the string from the range.
+    const std::wstring readingText(reading.Get(), static_cast<size_t>(reading.GetLength()));
+
+    Ohagey::ConvertResult result;
+    // n_best 0 means "engine default" in ohagey.proto. Sending 0 keeps the
+    // decision about how many candidates to produce in one place instead of
+    // duplicating it here.
+    if (_engineClient.Convert(readingText, 0, std::wstring(), &result) != Ohagey::CallResult::Ok)
+    {
+        // No candidates. The engine may be starting, may have exited on its
+        // idle timeout, or may have refused this reading; none of those are
+        // worth tearing anything down over, and the next keystroke retries.
+        return;
+    }
+
+    for (size_t i = 0; i < result.candidates.size(); ++i)
+    {
+        // Held for the whole composition; see the note on _candidateStrings.
+        _candidateStrings.push_back(result.candidates[i].text);
+        const std::wstring& text = _candidateStrings.back();
+        _candidateStrings.push_back(result.candidates[i].reading);
+        const std::wstring& itemReading = _candidateStrings.back();
+
+        // Append() default-constructs the element and hands back a pointer to
+        // it; it does not take a value.
+        CCandidateListItem* pItem = pCandidateList->Append();
+        if (!pItem)
+        {
+            return;
+        }
+        pItem->_ItemString.Set(text.c_str(), text.length());
+        pItem->_FindKeyCode.Set(itemReading.c_str(), itemReading.length());
+    }
+}
+
 void CCompositionProcessorEngine::PurgeVirtualKey()
 {
+    // Ohagey: the composition is over, so nothing can still be pointing at the
+    // candidate strings. This is the only place they are released — freeing
+    // them when the next candidate list is fetched would pull the rug out from
+    // under a candidate window that is still showing the previous one.
+    _candidateStrings.clear();
+
     if (_keystrokeBuffer.Get())
     {
         delete [] _keystrokeBuffer.Get();
@@ -382,110 +440,22 @@ void CCompositionProcessorEngine::GetReadingStrings(_Inout_ CSampleImeArray<CStr
 
 void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch)
 {
+    // [Ohagey] Rewritten: candidates come from the engine (decisions 0004-0007).
+    //
+    // The sample distinguished plain, incremental and wildcard searches because
+    // all three were ways of walking its table dictionary, and it let the user
+    // type `*` and `?` into the reading. None of that survives the move to a
+    // conversion server: the engine converts a reading, and a Japanese IME has
+    // no wildcard input to begin with. All three callers get the same thing.
+    isIncrementalWordSearch;
+    isWildcardSearch;
+
     if (!IsDictionaryAvailable())
     {
         return;
     }
 
-    if (isIncrementalWordSearch)
-    {
-        CStringRange wildcardSearch;
-        DWORD_PTR keystrokeBufLen = _keystrokeBuffer.GetLength() + 2;
-        PWCHAR pwch = new (std::nothrow) WCHAR[ keystrokeBufLen ];
-        if (!pwch)
-        {
-            return;
-        }
-
-        // check keystroke buffer already has wildcard char which end user want wildcard serach
-        DWORD wildcardIndex = 0;
-        BOOL isFindWildcard = FALSE;
-
-        if (IsWildcard())
-        {
-            for (wildcardIndex = 0; wildcardIndex < _keystrokeBuffer.GetLength(); wildcardIndex++)
-            {
-                if (IsWildcardChar(*(_keystrokeBuffer.Get() + wildcardIndex)))
-                {
-                    isFindWildcard = TRUE;
-                    break;
-                }
-            }
-        }
-
-        StringCchCopyN(pwch, keystrokeBufLen, _keystrokeBuffer.Get(), _keystrokeBuffer.GetLength());
-
-        if (!isFindWildcard)
-        {
-            // add wildcard char for incremental search
-            StringCchCat(pwch, keystrokeBufLen, L"*");
-        }
-
-        size_t len = 0;
-        if (StringCchLength(pwch, STRSAFE_MAX_CCH, &len) == S_OK)
-        {
-            wildcardSearch.Set(pwch, len);
-        }
-        else
-        {
-            return;
-        }
-
-        _pTableDictionaryEngine->CollectWordForWildcard(&wildcardSearch, pCandidateList);
-
-        if (0 >= pCandidateList->Count())
-        {
-            return;
-        }
-
-        if (IsKeystrokeSort())
-        {
-            _pTableDictionaryEngine->SortListItemByFindKeyCode(pCandidateList);
-        }
-
-        // Incremental search would show keystroke data from all candidate list items
-        // but wont show identical keystroke data for user inputted.
-        for (UINT index = 0; index < pCandidateList->Count(); index++)
-        {
-            CCandidateListItem *pLI = pCandidateList->GetAt(index);
-            DWORD_PTR keystrokeBufferLen = 0;
-
-            if (IsWildcard())
-            {
-                keystrokeBufferLen = wildcardIndex;
-            }
-            else
-            {
-                keystrokeBufferLen = _keystrokeBuffer.GetLength();
-            }
-
-            CStringRange newFindKeyCode;
-            newFindKeyCode.Set(pLI->_FindKeyCode.Get() + keystrokeBufferLen, pLI->_FindKeyCode.GetLength() - keystrokeBufferLen);
-            pLI->_FindKeyCode.Set(newFindKeyCode);
-        }
-
-        delete [] pwch;
-    }
-    else if (isWildcardSearch)
-    {
-        _pTableDictionaryEngine->CollectWordForWildcard(&_keystrokeBuffer, pCandidateList);
-    }
-    else
-    {
-        _pTableDictionaryEngine->CollectWord(&_keystrokeBuffer, pCandidateList);
-    }
-
-    for (UINT index = 0; index < pCandidateList->Count();)
-    {
-        CCandidateListItem *pLI = pCandidateList->GetAt(index);
-        CStringRange startItemString;
-        CStringRange endItemString;
-
-        startItemString.Set(pLI->_ItemString.Get(), 1);
-        endItemString.Set(pLI->_ItemString.Get() + pLI->_ItemString.GetLength() - 1, 1);
-
-        index++;
-    }
+    GetCandidateListFromEngine(_keystrokeBuffer, pCandidateList);
 }
 
 //+---------------------------------------------------------------------------
@@ -496,40 +466,18 @@ void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCand
 
 void CCompositionProcessorEngine::GetCandidateStringInConverted(CStringRange &searchString, _In_ CSampleImeArray<CCandidateListItem> *pCandidateList)
 {
-    if (!IsDictionaryAvailable())
-    {
-        return;
-    }
-
-    // Search phrase from SECTION_TEXT's converted string list
-    CStringRange wildcardSearch;
-    DWORD_PTR srgKeystrokeBufLen = searchString.GetLength() + 2;
-    PWCHAR pwch = new (std::nothrow) WCHAR[ srgKeystrokeBufLen ];
-    if (!pwch)
-    {
-        return;
-    }
-
-    StringCchCopyN(pwch, srgKeystrokeBufLen, searchString.Get(), searchString.GetLength());
-    StringCchCat(pwch, srgKeystrokeBufLen, L"*");
-
-    // add wildcard char
-	size_t len = 0;
-	if (StringCchLength(pwch, STRSAFE_MAX_CCH, &len) != S_OK)
-    {
-        return;
-    }
-    wildcardSearch.Set(pwch, len);
-
-    _pTableDictionaryEngine->CollectWordFromConvertedStringForWildcard(&wildcardSearch, pCandidateList);
-
-    if (IsKeystrokeSort())
-    {
-        _pTableDictionaryEngine->SortListItemByFindKeyCode(pCandidateList);
-    }
-
-    wildcardSearch.Clear();
-    delete [] pwch;
+    // [Ohagey] Not supported.
+    //
+    // The sample searched its table dictionary backwards — given a converted
+    // string, find the keystrokes that would have produced it — to offer
+    // "you could have typed this" hints. That is a property of an in-process
+    // table; ohagey.proto has no reverse lookup and the engine does not index
+    // one. Adding it would mean a new message and a decision to go with it.
+    //
+    // Returning nothing leaves the candidate window without those hints, which
+    // is a missing convenience rather than a broken conversion.
+    searchString;
+    pCandidateList;
 }
 
 //+---------------------------------------------------------------------------

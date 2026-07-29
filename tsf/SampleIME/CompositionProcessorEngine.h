@@ -16,6 +16,12 @@
 #include "Compartment.h"
 #include "define.h"
 
+// ── Ohagey ──────────────────────────────────────────────────────────────────
+// Candidates come from the conversion server over a named pipe, not from a
+// table dictionary in this process (decisions 0004-0007).
+#include "../Ohagey/OhageyProtocol.h"
+#include <deque>
+
 class CCompositionProcessorEngine
 {
 public:
@@ -66,7 +72,12 @@ public:
     BOOL IsKeystrokeSort() { return _isKeystrokeSort; }
 
     // Dictionary engine
-    BOOL IsDictionaryAvailable() { return (_pTableDictionaryEngine ? TRUE : FALSE); }
+    // Ohagey: conversion lives in the engine process now, so "is a dictionary
+    // loaded" became "can we reach the engine". Connecting is cheap and the
+    // client reconnects on demand, so this does not cache a failure — an engine
+    // that exited on its idle timeout (decision 0015) must not leave the IME
+    // permanently convinced there is nothing to talk to.
+    BOOL IsDictionaryAvailable() { return _engineClient.Connect() ? TRUE : FALSE; }
 
     // Language bar control
     void SetLanguageBarStatus(DWORD status, BOOL isSet);
@@ -130,6 +141,27 @@ private:
     _KEYSTROKE _keystrokeTable[26];
 
     CTableDictionaryEngine* _pTableDictionaryEngine;
+
+    // ── Ohagey ──────────────────────────────────────────────────────────────
+    // Asks the conversion server for candidates (decisions 0004-0007).
+    Ohagey::EngineClient _engineClient;
+
+    // Backing store for the strings that `CCandidateListItem` points at.
+    //
+    // `CStringRange` is a view — it holds a `const WCHAR*` and a length and owns
+    // nothing. The sample got away with that because its candidates pointed
+    // into a memory-mapped dictionary file that outlived them. Ours arrive in a
+    // decoded response that dies at the end of the call, so something has to
+    // keep them alive for as long as the candidate list is on screen.
+    //
+    // A deque, not a vector: Japanese candidates are short enough to live in
+    // std::wstring's small-string buffer, which moves with the object, so a
+    // vector reallocation would dangle every range handed out so far.
+    std::deque<std::wstring> _candidateStrings;
+
+    // Fills `pCandidateList` from the engine's answer for `reading`.
+    void GetCandidateListFromEngine(const CStringRange& reading,
+                                    _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList);
     CStringRange _keystrokeBuffer;
 
     BOOL _hasWildcardIncludedInKeystrokeBuffer;
