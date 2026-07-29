@@ -9,6 +9,7 @@
 #include "Globals.h"
 #include "BaseWindow.h"
 #include "CandidateWindow.h"
+#include "../Ohagey/CandidateRenderer.h"
 
 //+---------------------------------------------------------------------------
 //
@@ -40,6 +41,10 @@ CCandidateWindow::CCandidateWindow(_In_ CANDWNDCALLBACK pfnCallback, _In_ void *
     _dontAdjustOnEmptyItemPage = FALSE;
 
     _isStoreAppMode = isStoreAppMode;
+
+    // [Ohagey] Built lazily on first paint; see _DrawListWithDirectWrite.
+    _pRenderer = nullptr;
+    _rendererUnavailable = FALSE;
 }
 
 //+---------------------------------------------------------------------------
@@ -53,6 +58,10 @@ CCandidateWindow::~CCandidateWindow()
     _ClearList();
     _DeleteShadowWnd();
     _DeleteVScrollBarWnd();
+
+    // [Ohagey] Releases the D2D/DWrite objects it owns.
+    delete _pRenderer;
+    _pRenderer = nullptr;
 }
 
 //+---------------------------------------------------------------------------
@@ -102,6 +111,10 @@ BOOL CCandidateWindow::_CreateMainWindow(ATOM atom, _In_opt_ HWND parentWndHandl
     {
         return FALSE;
     }
+
+    // [Ohagey] Rounded corners and the Fluent backdrop (decision 0012).
+    // Windows 11 only; older systems ignore it and keep the plain frame.
+    Ohagey::ApplyFluentWindowStyle(_GetWnd());
 
     return TRUE;
 }
@@ -417,6 +430,16 @@ void CCandidateWindow::_HandleMouseMsg(_In_ UINT mouseMsg, _In_ POINT point)
 
 void CCandidateWindow::_OnPaint(_In_ HDC dcHandle, _In_ PAINTSTRUCT *pPaintStruct)
 {
+    // [Ohagey] Direct2D + DirectWrite first (decisions 0011 / 0012).
+    //
+    // The GDI path below is kept as a fallback rather than deleted: if D2D
+    // cannot start — an old machine, a broken driver, a remote session — the
+    // user needs a candidate window that looks dated, not none at all.
+    if (_DrawListWithDirectWrite(dcHandle, pPaintStruct))
+    {
+        return;
+    }
+
     SetBkMode(dcHandle, TRANSPARENT);
 
     HFONT hFontOld = (HFONT)SelectObject(dcHandle, Global::defaultlFontHandle);
@@ -603,6 +626,68 @@ void CCandidateWindow::_OnVScroll(DWORD dwSB, _In_ DWORD nPos)
 // _DrawList
 //
 //----------------------------------------------------------------------------
+
+//+---------------------------------------------------------------------------
+//
+// _DrawListWithDirectWrite     [Ohagey]
+//
+// Draws the current page with Direct2D/DirectWrite. Returns FALSE when that is
+// not possible, so the caller can fall back to the GDI path.
+//
+//----------------------------------------------------------------------------
+
+BOOL CCandidateWindow::_DrawListWithDirectWrite(_In_ HDC dcHandle, _In_ PAINTSTRUCT *pPaintStruct)
+{
+    pPaintStruct;
+
+    if (_rendererUnavailable) return FALSE;
+
+    if (!_pRenderer)
+    {
+        _pRenderer = new (std::nothrow) Ohagey::CandidateRenderer();
+        if (!_pRenderer) return FALSE;
+
+        if (!_pRenderer->Initialize())
+        {
+            // Do not retry on every paint: if D2D could not start once it is
+            // not going to start on the next WM_PAINT either, and trying would
+            // cost the user a stutter per keystroke.
+            delete _pRenderer;
+            _pRenderer = nullptr;
+            _rendererUnavailable = TRUE;
+            return FALSE;
+        }
+    }
+
+    UINT currentPage = 0;
+    if (FAILED(_GetCurrentPage(&currentPage))) return FALSE;
+
+    UINT index = 0;
+    _AdjustPageIndex(currentPage, index);
+
+    std::vector<Ohagey::CandidateRow> rows;
+    const int pageSize = _pIndexRange->Count();
+    for (int position = 0;
+         (index < _candidateList.Count()) && (position < pageSize);
+         ++index, ++position)
+    {
+        const CCandidateListItem* pItem = _candidateList.GetAt(index);
+        if (!pItem) break;
+
+        Ohagey::CandidateRow row;
+        WCHAR label[8] = {};
+        StringCchPrintf(label, ARRAYSIZE(label), L"%d", (LONG)*_pIndexRange->GetAt(position));
+        row.label = label;
+        // CStringRange is not null-terminated, so the length has to come along.
+        row.text.assign(pItem->_ItemString.Get(), (size_t)pItem->_ItemString.GetLength());
+        row.selected = (_currentSelection == index);
+        rows.push_back(row);
+    }
+
+    RECT client = {};
+    GetClientRect(_GetWnd(), &client);
+    return _pRenderer->Draw(dcHandle, client, rows) ? TRUE : FALSE;
+}
 
 void CCandidateWindow::_DrawList(_In_ HDC dcHandle, _In_ UINT iIndex, _In_ RECT *prc)
 {

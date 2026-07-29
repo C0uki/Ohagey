@@ -102,8 +102,12 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `OhageyWire.{h,cpp}` | Protobuf の wire 形式。**`ohagey.proto` の範囲だけ手書き**(決定 0032) |
 | `OhageyEngineClient.cpp` | 名前付きパイプ接続、フレーミング、リクエスト/レスポンス |
 | `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
+| `CandidateTheme.{h,cpp}` | 候補ウィンドウの配色。ライト/ダークとアクセントを system から読む(決定 0012) |
+| `CandidateRenderer.{h,cpp}` | Direct2D + DirectWrite による候補ウィンドウ描画(決定 0011/0012) |
 | `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
 | `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
+| `tools/theme-selftest.cpp` | 配色ルールのテスト。**選択行が見えることを保証**(エンジン不要) |
+| `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す。TSF 登録なしで見た目を確認する |
 
 `OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
 エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
