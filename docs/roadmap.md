@@ -167,9 +167,14 @@ Zenzai 自体を個人化する仕組みは upstream の `ZenzaiMode.Personaliza
 - [x] 確定時の学習フィードバック(`Commit`)の配線(決定 0024/0025)。
       **ただし Zenzai 有効時は順位に効かない** — 上記「学習と Zenzai の関係」参照。
 - [ ] エンジンのオンデマンド起動(決定 0015)。インストール先が未確定のためフェーズ3待ち。
-- [ ] 候補ウィンドウを GDI から DirectWrite/DirectComposition + Fluent Design に書き換え(決定 0011/0012)。
-- [ ] 全エントリポイントを SEH で防御(決定 0017)。
-- [ ] MSBuild + `swift build` 連携ターゲット(決定 0020)、CI で MSBuild 有効化。
+- [x] 候補ウィンドウを GDI から DirectWrite に書き換え(決定 0011/0012)。
+      **DirectComposition 化は未了** — 現状は `ID2D1DCRenderTarget` 経由の中間形。
+- [x] 主要エントリポイントを SEH で防御(決定 0017)。ウィンドウプロシージャの
+      ディスパッチャ・DLL エクスポート4つ・キーイベントシンク6つ。
+      **COM エントリポイント 112 のうち残り約100は未防御**(`tsf/README.md` の表参照)。
+- [x] MSBuild + `swift build` 連携ターゲット(決定 0020)、CI で MSBuild 有効化。
+      `tsf/Ohagey.Engine.targets`。CI では engine ジョブの後に走らせ、
+      llama.cpp のキャッシュを共有する。
 
 > **TSF の実登録には管理者権限が必要**なため、メモ帳等で実際に打っての確認は未実施。
 > 検証できているのはビルドと、`tsf/Ohagey/tools/` のハーネスによる

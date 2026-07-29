@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Builds the Swift engine as part of the C++ build (decision 0020).
+
+  Two toolchains, one command: someone changing ohagey.proto has to rebuild both
+  sides, and remembering that is not a good way to find out they forgot.
+
+  ── Properties ──────────────────────────────────────────────────────────────
+
+    OhageyBuildEngine       true (default) to build engine/ alongside the DLL.
+                            Set false for a C++-only iteration.
+
+    OhageyLlamaLibDir       Directory holding llama.lib, normally
+                            <llama.cpp>\build-b4846\src\Release (decision 0028).
+                            Optional: if LIB already points there — which is what
+                            docs/local-setup.md tells you to do — leave it unset
+                            and the linker finds it on its own.
+                            Falls back to the OHAGEY_LLAMA_LIB_DIR environment
+                            variable.
+
+    OhageySwiftScratchPath  Passed to swift build as its scratch-path option. Needed when
+                            the repository sits somewhere deep: the dependency
+                            checkouts are long enough to hit the 260-character
+                            limit (see docs/local-setup.md).
+
+  Example:
+
+    msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
+            /p:OhageyLlamaLibDir=C:\src\llama.cpp\build-b4846\src\Release
+-->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <PropertyGroup>
+    <OhageyBuildEngine Condition="'$(OhageyBuildEngine)' == ''">true</OhageyBuildEngine>
+
+    <!-- tsf/ -> repository root -> engine/ -->
+    <OhageyEngineDirectory Condition="'$(OhageyEngineDirectory)' == ''">$(MSBuildThisFileDirectory)..\engine</OhageyEngineDirectory>
+
+    <OhageyLlamaLibDir Condition="'$(OhageyLlamaLibDir)' == ''">$(OHAGEY_LLAMA_LIB_DIR)</OhageyLlamaLibDir>
+
+    <!-- MSBuild's Debug/Release, in the spelling SwiftPM wants. -->
+    <OhageySwiftConfiguration Condition="'$(Configuration)' == 'Release'">release</OhageySwiftConfiguration>
+    <OhageySwiftConfiguration Condition="'$(OhageySwiftConfiguration)' == ''">debug</OhageySwiftConfiguration>
+  </PropertyGroup>
+
+  <Target Name="OhageyBuildSwiftEngine"
+          BeforeTargets="ClCompile"
+          Condition="'$(OhageyBuildEngine)' == 'true'">
+
+    <PropertyGroup>
+      <_OhageySwiftArgs>build -c $(OhageySwiftConfiguration)</_OhageySwiftArgs>
+      <_OhageySwiftArgs Condition="'$(OhageySwiftScratchPath)' != ''">$(_OhageySwiftArgs) --scratch-path "$(OhageySwiftScratchPath)"</_OhageySwiftArgs>
+      <!-- Only when we were told where llama.lib is; otherwise LIB is expected
+           to cover it, and passing an empty -L would be a linker error. -->
+      <_OhageySwiftArgs Condition="'$(OhageyLlamaLibDir)' != ''">$(_OhageySwiftArgs) -Xlinker -L"$(OhageyLlamaLibDir)"</_OhageySwiftArgs>
+    </PropertyGroup>
+
+    <Message Importance="high"
+             Text="Ohagey: building the Swift engine ($(OhageySwiftConfiguration))" />
+
+    <!-- No ContinueOnError: if the engine does not compile, a build that
+         claimed to succeed would leave the DLL talking to a stale one.
+
+         IgnoreStandardErrorWarningFormat stops MSBuild from re-reading swift's
+         output and promoting lines to build warnings. Without it every build
+         reports SwiftPM's symlink notice (harmless, and expected when Windows
+         developer mode is off — see docs/local-setup.md) as a warning, and a
+         warning that always fires is one nobody reads. The text still prints,
+         and the exit code still fails the build. -->
+    <Exec Command="swift $(_OhageySwiftArgs)"
+          WorkingDirectory="$(OhageyEngineDirectory)"
+          IgnoreStandardErrorWarningFormat="true"
+          StandardOutputImportance="normal" />
+  </Target>
+
+  <!-- Nothing to clean here: `swift package clean` would also throw away the
+       resolved dependency checkouts, which take minutes to fetch again. -->
+  <Target Name="OhageyCleanNotice" AfterTargets="Clean" Condition="'$(OhageyBuildEngine)' == 'true'">
+    <Message Importance="normal"
+             Text="Ohagey: engine build artifacts left alone; run `swift package clean` in engine/ to remove them." />
+  </Target>
+
+</Project>

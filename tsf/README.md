@@ -77,6 +77,34 @@ cd tsf\SampleIME
 msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 ```
 
+### エンジンも一緒にビルドされる(決定 0020)
+
+`Ohagey.Engine.targets` が MSBuild から `swift build` を呼ぶ。**2つのツールチェーンを
+1コマンドで**扱えるようにしてある。`ohagey.proto` を変えた人は両側を作り直す必要が
+あり、それを覚えているかどうかに賭けたくないため。
+
+| プロパティ | 意味 |
+|---|---|
+| `OhageyBuildEngine` | `false` で engine のビルドをスキップ(C++ だけ回すとき) |
+| `OhageyLlamaLibDir` | `llama.lib` のあるディレクトリ。**`LIB` が既に通っていれば不要** |
+| `OhageySwiftScratchPath` | `swift build` の出力先。深いパスで 260 文字制限に当たる場合に指定 |
+
+```bat
+rem LIB を設定していない場合
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
+        /p:OhageyLlamaLibDir=C:\path	o\llama.cppuild-b4846\src\Release
+
+rem C++ だけ回したいとき
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 /p:OhageyBuildEngine=false
+```
+
+MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `release` に対応する。
+
+> `swift build` の出力は `IgnoreStandardErrorWarningFormat` で MSBuild の警告に
+> 昇格させていない。そうしないと SwiftPM のシンボリックリンク通知(無害。Windows の
+> 開発者モードが無効なときに出る)が毎ビルド警告として出る。常に出る警告は読まれなくなる。
+> テキストは出るし、終了コードでビルドは失敗する。
+
 **Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\SampleIME.dll` が
 生成される**ことを確認済み。COM のエクスポート(`DllGetClassObject` /
 `DllCanUnloadNow` / `DllRegisterServer` / `DllUnregisterServer`)も揃っている。
@@ -102,8 +130,14 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `OhageyWire.{h,cpp}` | Protobuf の wire 形式。**`ohagey.proto` の範囲だけ手書き**(決定 0032) |
 | `OhageyEngineClient.cpp` | 名前付きパイプ接続、フレーミング、リクエスト/レスポンス |
 | `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
+| `CandidateTheme.{h,cpp}` | 候補ウィンドウの配色。ライト/ダークとアクセントを system から読む(決定 0012) |
+| `CandidateRenderer.{h,cpp}` | Direct2D + DirectWrite による候補ウィンドウ描画(決定 0011/0012) |
+| `OhageySeh.{h,cpp}` | 構造化例外のフィルタ。ホストアプリを巻き添えにしない(決定 0017) |
 | `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
 | `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
+| `tools/theme-selftest.cpp` | 配色ルールのテスト。**選択行が見えることを保証**(エンジン不要) |
+| `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す。TSF 登録なしで見た目を確認する |
+| `tools/seh-selftest.cpp` | SEH ガードのテスト。**実際に落として捕まることを確認**(エンジン不要) |
 
 `OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
 エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
@@ -139,7 +173,7 @@ powershell -File tsf\Ohagey\tools\build-and-run-kana.ps1
 - [x] 確定時の学習フィードバック(`Commit`)の配線 — ただし Zenzai 有効時は順位に効かない(`docs/roadmap.md` 参照)
 - [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
 - [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
-- [ ] 全エントリポイントを SEH で防御(決定 0017)
+- [x] 主要エントリポイントを SEH で防御(決定 0017)— **ただし全 COM メソッドには未適用。上記参照**
 - [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
 
 ### 読み(`Reading()`)と表示(`Display()`)の違い

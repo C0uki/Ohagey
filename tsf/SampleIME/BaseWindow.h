@@ -133,7 +133,9 @@ private:
     void CalcFitPointAroundTextExtent(_In_ const RECT *prcTextExtent, _In_ const RECT *prcWorkArea, _In_ const RECT *prcWindow, _Out_ POINT *ppt);
     DWORD RectInRect(_In_ const RECT *prcLimit, _In_ const RECT *prcTarget);
 
+    // [Ohagey] SEH guard (decision 0017); the body is in _WindowProcImpl.
     static LRESULT CALLBACK _WindowProc(_In_ HWND wndHandle, UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam);
+    static LRESULT CALLBACK _WindowProcImpl(_In_ HWND wndHandle, UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam);
 
     static CBaseWindow *_GetThis(_In_ HWND wndHandle)
     {

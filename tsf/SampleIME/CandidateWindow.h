@@ -8,6 +8,8 @@
 
 #pragma once
 
+namespace Ohagey { class CandidateRenderer; }
+
 #include "private.h"
 #include "BaseWindow.h"
 #include "ShadowWindow.h"
@@ -70,6 +72,10 @@ public:
 
 private:
     void _HandleMouseMsg(_In_ UINT mouseMsg, _In_ POINT point);
+    // [Ohagey] Direct2D/DirectWrite paint path (decisions 0011 / 0012).
+    // Returns FALSE when it cannot draw, so _OnPaint falls back to _DrawList.
+    BOOL _DrawListWithDirectWrite(_In_ HDC dcHandle, _In_ PAINTSTRUCT *pps);
+
     void _DrawList(_In_ HDC dcHandle, _In_ UINT iIndex, _In_ RECT *prc);
     void _DrawBorder(_In_ HWND wndHandle, _In_ int cx);
     BOOL _SetSelectionOffset(_In_ int offSet);
@@ -112,6 +118,13 @@ private:
 
     CShadowWindow* _pShadowWnd;
     CScrollBarWindow* _pVScrollBarWnd;
+
+    // ── Ohagey ──────────────────────────────────────────────────────────────
+    // Direct2D/DirectWrite renderer, created on first paint. Null while it has
+    // not been needed yet or after it failed to start; `_rendererUnavailable`
+    // tells those two apart so a failure is not retried on every paint.
+    Ohagey::CandidateRenderer* _pRenderer;
+    BOOL _rendererUnavailable;
 
     BOOL _dontAdjustOnEmptyItemPage;
     BOOL _isStoreAppMode;
