@@ -8,6 +8,7 @@
 #include "Private.h"
 #include "Globals.h"
 #include "SampleIME.h"
+#include "../Ohagey/OhageySeh.h"
 #include "CandidateListUIPresenter.h"
 #include "CompositionProcessorEngine.h"
 #include "KeyHandlerEditSession.h"
@@ -262,7 +263,7 @@ BOOL CSampleIME::_IsKeyboardDisabled()
 // Called by the system whenever this service gets the keystroke device focus.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnSetFocus(BOOL fForeground)
+HRESULT CSampleIME::OnSetFocusImpl(BOOL fForeground)
 {
 	fForeground;
 
@@ -276,7 +277,7 @@ STDAPI CSampleIME::OnSetFocus(BOOL fForeground)
 // Called by the system to query this service wants a potential keystroke.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnTestKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+HRESULT CSampleIME::OnTestKeyDownImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
 {
     Global::UpdateModifiers(wParam, lParam);
 
@@ -306,7 +307,7 @@ STDAPI CSampleIME::OnTestKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lPa
 // on exit, the application will not handle the keystroke.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+HRESULT CSampleIME::OnKeyDownImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
 {
     Global::UpdateModifiers(wParam, lParam);
 
@@ -355,7 +356,7 @@ STDAPI CSampleIME::OnKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam,
 // Called by the system to query this service wants a potential keystroke.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnTestKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+HRESULT CSampleIME::OnTestKeyUpImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
 {
     if (pIsEaten == nullptr)
     {
@@ -380,7 +381,7 @@ STDAPI CSampleIME::OnTestKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lPara
 // on exit, the application will not handle the keystroke.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+HRESULT CSampleIME::OnKeyUpImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
 {
     Global::UpdateModifiers(wParam, lParam);
 
@@ -399,7 +400,7 @@ STDAPI CSampleIME::OnKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, B
 // Called when a hotkey (registered by us, or by the system) is typed.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnPreservedKey(ITfContext *pContext, REFGUID rguid, BOOL *pIsEaten)
+HRESULT CSampleIME::OnPreservedKeyImpl(ITfContext *pContext, REFGUID rguid, BOOL *pIsEaten)
 {
 	pContext;
 
@@ -454,4 +455,96 @@ void CSampleIME::_UninitKeyEventSink()
     pKeystrokeMgr->UnadviseKeyEventSink(_tfClientId);
 
     pKeystrokeMgr->Release();
+}
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards for the key event sink (decision 0017).
+//
+//  This is where a keystroke enters our code, and so where the named-pipe
+//  client, the romaji converter and the candidate window all end up running.
+//  A fault here would otherwise reach the host application through TSF.
+//
+//  On a fault the key is reported as not eaten: it goes to the application as
+//  ordinary input. The user gets a stray latin character instead of a
+//  conversion, which they can see and delete — better than the keystroke
+//  vanishing, and far better than the application going with it.
+//
+//----------------------------------------------------------------------------
+
+STDAPI CSampleIME::OnSetFocus(BOOL fForeground)
+{
+    __try
+    {
+        return OnSetFocusImpl(fForeground);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        return S_OK;
+    }
+}
+
+STDAPI CSampleIME::OnTestKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+{
+    __try
+    {
+        return OnTestKeyDownImpl(pContext, wParam, lParam, pIsEaten);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        if (pIsEaten) *pIsEaten = FALSE;
+        return S_OK;
+    }
+}
+
+STDAPI CSampleIME::OnKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+{
+    __try
+    {
+        return OnKeyDownImpl(pContext, wParam, lParam, pIsEaten);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        if (pIsEaten) *pIsEaten = FALSE;
+        return S_OK;
+    }
+}
+
+STDAPI CSampleIME::OnTestKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+{
+    __try
+    {
+        return OnTestKeyUpImpl(pContext, wParam, lParam, pIsEaten);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        if (pIsEaten) *pIsEaten = FALSE;
+        return S_OK;
+    }
+}
+
+STDAPI CSampleIME::OnKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten)
+{
+    __try
+    {
+        return OnKeyUpImpl(pContext, wParam, lParam, pIsEaten);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        if (pIsEaten) *pIsEaten = FALSE;
+        return S_OK;
+    }
+}
+
+STDAPI CSampleIME::OnPreservedKey(ITfContext *pContext, REFGUID rguid, BOOL *pIsEaten)
+{
+    __try
+    {
+        return OnPreservedKeyImpl(pContext, rguid, pIsEaten);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        if (pIsEaten) *pIsEaten = FALSE;
+        return S_OK;
+    }
 }

@@ -8,6 +8,7 @@
 #include "Private.h"
 #include "Globals.h"
 #include "BaseWindow.h"
+#include "../Ohagey/OhageySeh.h"
 
 #define idTimer_UIObject 39772
 
@@ -563,6 +564,27 @@ void CBaseWindow::_SetTimerObject(_In_opt_ CBaseWindow *pUIObj, UINT uElapse)
 
 /* static */
 LRESULT CALLBACK CBaseWindow::_WindowProc(_In_ HWND wndHandle, UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam)
+{
+    // [Ohagey] Every window this DLL creates dispatches through here, so one
+    // guard covers all of them — including the Direct2D candidate rendering
+    // (decision 0017). The body lives in _WindowProcImpl because __try cannot
+    // share a function with C++ object unwinding.
+    //
+    // Declares nothing with a destructor: that is what makes the __try legal.
+    __try
+    {
+        return _WindowProcImpl(wndHandle, uMsg, wParam, lParam);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        // Behave like a window that did not handle the message. The host keeps
+        // running; the user loses whatever this message would have drawn.
+        return DefWindowProc(wndHandle, uMsg, wParam, lParam);
+    }
+}
+
+/* static */
+LRESULT CALLBACK CBaseWindow::_WindowProcImpl(_In_ HWND wndHandle, UINT uMsg, _In_ WPARAM wParam, _In_ LPARAM lParam)
 {
     if (uMsg == WM_CREATE)
     {

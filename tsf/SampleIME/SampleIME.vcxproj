@@ -30,6 +30,7 @@
     <ClInclude Include="..\Ohagey\OhageyProtocol.h" />
     <ClInclude Include="..\Ohagey\OhageyWire.h" />
     <ClInclude Include="..\Ohagey\CandidateRenderer.h" />
+    <ClInclude Include="..\Ohagey\OhageySeh.h" />
     <ClInclude Include="..\Ohagey\CandidateTheme.h" />
     <ClInclude Include="..\Ohagey\RomajiKana.h" />
     <ClInclude Include="CompositionProcessorEngine.h" />
@@ -74,6 +75,7 @@
     <ClCompile Include="..\Ohagey\OhageyEngineClient.cpp" />
     <ClCompile Include="..\Ohagey\OhageyWire.cpp" />
     <ClCompile Include="..\Ohagey\CandidateRenderer.cpp" />
+    <ClCompile Include="..\Ohagey\OhageySeh.cpp" />
     <ClCompile Include="..\Ohagey\CandidateTheme.cpp" />
     <ClCompile Include="..\Ohagey\RomajiKana.cpp" />
     <ClCompile Include="CompositionProcessorEngine.cpp" />

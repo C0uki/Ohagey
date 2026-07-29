@@ -7,6 +7,7 @@
 
 #include "Private.h"
 #include "Globals.h"
+#include "../Ohagey/OhageySeh.h"
 #include "SampleIME.h"
 
 // from Register.cpp
@@ -198,7 +199,7 @@ void FreeGlobalObjects(void)
 //
 //----------------------------------------------------------------------------
 _Check_return_
-STDAPI  DllGetClassObject(
+static HRESULT DllGetClassObjectImpl(
 	_In_ REFCLSID rclsid, 
 	_In_ REFIID riid, 
 	_Outptr_ void** ppv)
@@ -242,7 +243,7 @@ STDAPI  DllGetClassObject(
 //
 //----------------------------------------------------------------------------
 
-STDAPI DllCanUnloadNow(void)
+static HRESULT DllCanUnloadNowImpl(void)
 {
     if (Global::dllRefCount >= 0)
     {
@@ -258,7 +259,7 @@ STDAPI DllCanUnloadNow(void)
 //
 //----------------------------------------------------------------------------
 
-STDAPI DllUnregisterServer(void)
+static HRESULT DllUnregisterServerImpl(void)
 {
     UnregisterProfiles();
     UnregisterCategories();
@@ -273,13 +274,78 @@ STDAPI DllUnregisterServer(void)
 //
 //----------------------------------------------------------------------------
 
-STDAPI DllRegisterServer(void)
+static HRESULT DllRegisterServerImpl(void)
 {
     if ((!RegisterServer()) || (!RegisterProfiles()) || (!RegisterCategories()))
     {
-        DllUnregisterServer();
+        DllUnregisterServerImpl();
         return E_FAIL;
     }
     return S_OK;
 }
 
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards for the exported entry points (decision 0017).
+//
+//  These are called by the loader and by COM. A fault escaping one of them
+//  lands in the host application with nobody left to handle it, so each is a
+//  thin wrapper around the real body; __try cannot share a function with C++
+//  object unwinding, and none of these wrappers declares anything with a
+//  destructor.
+//
+//----------------------------------------------------------------------------
+
+STDAPI DllGetClassObject(_In_ REFCLSID rclsid, _In_ REFIID riid, _Outptr_ void** ppv)
+{
+    __try
+    {
+        return DllGetClassObjectImpl(rclsid, riid, ppv);
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        // The caller keeps ppv; leave it null rather than whatever the fault
+        // left behind, or COM will release a pointer that was never valid.
+        if (ppv) *ppv = nullptr;
+        return E_UNEXPECTED;
+    }
+}
+
+STDAPI DllCanUnloadNow(void)
+{
+    __try
+    {
+        return DllCanUnloadNowImpl();
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        // S_FALSE means "keep me loaded". After a fault we cannot say whether
+        // anything still points into this DLL, and unloading it then would turn
+        // a contained fault into the host jumping into freed pages.
+        return S_FALSE;
+    }
+}
+
+STDAPI DllUnregisterServer(void)
+{
+    __try
+    {
+        return DllUnregisterServerImpl();
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        return E_UNEXPECTED;
+    }
+}
+
+STDAPI DllRegisterServer(void)
+{
+    __try
+    {
+        return DllRegisterServerImpl();
+    }
+    __except (Ohagey::SehFilter(GetExceptionCode(), GetExceptionInformation()))
+    {
+        return E_UNEXPECTED;
+    }
+}

@@ -57,11 +57,17 @@ public:
 
     // ITfKeyEventSink
     STDMETHODIMP OnSetFocus(BOOL fForeground);
+    HRESULT OnSetFocusImpl(BOOL fForeground);
     STDMETHODIMP OnTestKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
+    HRESULT OnTestKeyDownImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
     STDMETHODIMP OnKeyDown(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
+    HRESULT OnKeyDownImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
     STDMETHODIMP OnTestKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
+    HRESULT OnTestKeyUpImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
     STDMETHODIMP OnKeyUp(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
+    HRESULT OnKeyUpImpl(ITfContext *pContext, WPARAM wParam, LPARAM lParam, BOOL *pIsEaten);
     STDMETHODIMP OnPreservedKey(ITfContext *pContext, REFGUID rguid, BOOL *pIsEaten);
+    HRESULT OnPreservedKeyImpl(ITfContext *pContext, REFGUID rguid, BOOL *pIsEaten);
 
     // ITfCompositionSink
     STDMETHODIMP OnCompositionTerminated(TfEditCookie ecWrite, _In_ ITfComposition *pComposition);

@@ -104,10 +104,12 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
 | `CandidateTheme.{h,cpp}` | 候補ウィンドウの配色。ライト/ダークとアクセントを system から読む(決定 0012) |
 | `CandidateRenderer.{h,cpp}` | Direct2D + DirectWrite による候補ウィンドウ描画(決定 0011/0012) |
+| `OhageySeh.{h,cpp}` | 構造化例外のフィルタ。ホストアプリを巻き添えにしない(決定 0017) |
 | `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
 | `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
 | `tools/theme-selftest.cpp` | 配色ルールのテスト。**選択行が見えることを保証**(エンジン不要) |
 | `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す。TSF 登録なしで見た目を確認する |
+| `tools/seh-selftest.cpp` | SEH ガードのテスト。**実際に落として捕まることを確認**(エンジン不要) |
 
 `OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
 エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
@@ -143,7 +145,7 @@ powershell -File tsf\Ohagey\tools\build-and-run-kana.ps1
 - [x] 確定時の学習フィードバック(`Commit`)の配線 — ただし Zenzai 有効時は順位に効かない(`docs/roadmap.md` 参照)
 - [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
 - [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
-- [ ] 全エントリポイントを SEH で防御(決定 0017)
+- [x] 主要エントリポイントを SEH で防御(決定 0017)— **ただし全 COM メソッドには未適用。上記参照**
 - [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
 
 ### 読み(`Reading()`)と表示(`Display()`)の違い
