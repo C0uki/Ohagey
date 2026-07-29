@@ -393,6 +393,7 @@ void CCompositionProcessorEngine::PurgeVirtualKey()
     // them when the next candidate list is fetched would pull the rug out from
     // under a candidate window that is still showing the previous one.
     _candidateStrings.clear();
+    _displayReading.clear();
 
     if (_keystrokeBuffer.Get())
     {
@@ -422,32 +423,41 @@ WCHAR CCompositionProcessorEngine::GetVirtualKey(DWORD_PTR dwIndex)
 
 void CCompositionProcessorEngine::GetReadingStrings(_Inout_ CSampleImeArray<CStringRange> *pReadingStrings, _Out_ BOOL *pIsWildcardIncluded)
 {
-    CStringRange oneKeystroke;
+    // [Ohagey] Show kana, not the romaji that produced it.
+    //
+    // The sample handed back the keystroke buffer verbatim, which was correct
+    // when keystrokes *were* the reading. Typing `henkan` has to put へんかん in
+    // the composition, not `henkan`.
+    //
+    // Unresolved romaji stays visible — after `ky` the user needs to see that
+    // they typed it — which is why this uses Display() rather than the reading
+    // that goes to the engine.
+    //
+    // The string is a member because CStringRange owns nothing: a local would
+    // be gone before the caller put it in the composition.
 
+    // Wildcards were a table-dictionary feature and the search that used them
+    // is gone (see GetCandidateList); Japanese input has no `*` or `?`.
     _hasWildcardIncludedInKeystrokeBuffer = FALSE;
+    *pIsWildcardIncluded = FALSE;
 
-    if (pReadingStrings->Count() == 0 && _keystrokeBuffer.GetLength())
+    if (pReadingStrings->Count() != 0 || _keystrokeBuffer.GetLength() == 0)
     {
-        CStringRange* pNewString = nullptr;
-
-        pNewString = pReadingStrings->Append();
-        if (pNewString)
-        {
-            *pNewString = _keystrokeBuffer;
-        }
-
-        for (DWORD index = 0; index < _keystrokeBuffer.GetLength(); index++)
-        {
-            oneKeystroke.Set(_keystrokeBuffer.Get() + index, 1);
-
-            if (IsWildcard() && IsWildcardChar(*oneKeystroke.Get()))
-            {
-                _hasWildcardIncludedInKeystrokeBuffer = TRUE;
-            }
-        }
+        return;
     }
 
-    *pIsWildcardIncluded = _hasWildcardIncludedInKeystrokeBuffer;
+    const std::wstring romaji(_keystrokeBuffer.Get(), static_cast<size_t>(_keystrokeBuffer.GetLength()));
+    _displayReading = Ohagey::RomajiToDisplay(romaji);
+    if (_displayReading.empty())
+    {
+        return;
+    }
+
+    CStringRange* pNewString = pReadingStrings->Append();
+    if (pNewString)
+    {
+        pNewString->Set(_displayReading.c_str(), _displayReading.length());
+    }
 }
 
 //+---------------------------------------------------------------------------

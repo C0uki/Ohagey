@@ -160,6 +160,12 @@ namespace Ohagey
         return _kana;
     }
 
+    std::wstring RomajiKana::Display() const
+    {
+        if (_pending == L"n") return _kana + L"ん";
+        return _kana + _pending;
+    }
+
     void RomajiKana::Rebuild()
     {
         _kana.clear();
@@ -244,13 +250,26 @@ namespace Ohagey
         }
     }
 
+    namespace
+    {
+        RomajiKana Feed(const std::wstring& romaji)
+        {
+            RomajiKana converter;
+            for (size_t i = 0; i < romaji.size(); ++i)
+            {
+                converter.Append(romaji[i]);
+            }
+            return converter;
+        }
+    }
+
     std::wstring RomajiToKana(const std::wstring& romaji)
     {
-        RomajiKana converter;
-        for (size_t i = 0; i < romaji.size(); ++i)
-        {
-            converter.Append(romaji[i]);
-        }
-        return converter.Reading();
+        return Feed(romaji).Reading();
+    }
+
+    std::wstring RomajiToDisplay(const std::wstring& romaji)
+    {
+        return Feed(romaji).Display();
     }
 }
