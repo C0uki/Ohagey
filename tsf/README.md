@@ -4,17 +4,35 @@
 改造したものを配置します。取り込み元:
 https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/IME/cpp/SampleIME
 
-## vendoring手順(一度だけ実行、再現性のため記録)
-```
-# リポジトリのルートから実行:
-git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-classic-samples.git _tmp-wcs
-cd _tmp-wcs
+## vendoring手順(実施済み・再現性のため記録)
+
+**取り込み元コミット: `77f217b3f89d4dac7864a62cc91ff7b569f26a50`**
+(microsoft/Windows-classic-samples、MIT License)
+
+```bash
+# clone 先は短いパスにすること。ワークツリー配下に置くと、深いパスと相まって
+# Windows の 260 文字制限に当たることがある(docs/local-setup.md 参照)。
+git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-classic-samples.git C:/swb/wcs
+cd C:/swb/wcs
 git sparse-checkout set Samples/IME/cpp/SampleIME
-cp -r Samples/IME/cpp/SampleIME/* ../tsf/SampleIME/
-cd ..
-rm -rf _tmp-wcs
+cp -r Samples/IME/cpp/SampleIME/* <repo>/tsf/SampleIME/
+rm -rf <repo>/tsf/SampleIME/Dictionary      # 下記参照
+cp LICENSE <repo>/tsf/SampleIME/LICENSE-Microsoft.txt
 ```
+
 (sparse checkoutにより、Windows-classic-samples全体をcloneせずに済みます — 決定0021)
+
+### 取り込まなかったもの
+
+- **`Dictionary/SampleIMESimplifiedQuanPin.txt`(1.5MB)** — 簡体字 Pinyin の変換表。
+  おはぎーは日本語 IME で、辞書引きは `engine/` 側に置き換える(決定 0004〜0007)ため、
+  最初から不要。コミットしてから消すだけの 1.5MB なので取り込んでいない。
+  これを読む `TableDictionaryEngine` / `DictionaryParser` 等も置き換え対象。
+
+### ライセンス
+
+Microsoft 版の MIT ライセンス文を `SampleIME/LICENSE-Microsoft.txt` として保持している。
+おはぎー自体も MIT(決定 0022)なので条件は満たせるが、**帰属表示は残すこと**。
 
 ## 本家SampleIMEからの主な改造予定点
 - `CompositionProcessorEngine`/辞書検索 → 名前付きパイプ経由のクライアント(Protobuf)に
