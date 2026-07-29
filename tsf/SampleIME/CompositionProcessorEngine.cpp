@@ -386,6 +386,39 @@ void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange&
     }
 }
 
+//+---------------------------------------------------------------------------
+//
+// NotifyCommitted     [Ohagey]
+//
+// Feeds the confirmed reading/candidate pair back to the engine so it can
+// learn (decisions 0024 / 0025).
+//
+//----------------------------------------------------------------------------
+
+void CCompositionProcessorEngine::NotifyCommitted(const CStringRange& committedText, BOOL updateLearning)
+{
+    if (committedText.GetLength() == 0 || _keystrokeBuffer.GetLength() == 0)
+    {
+        return;
+    }
+
+    const std::wstring romaji(_keystrokeBuffer.Get(), static_cast<size_t>(_keystrokeBuffer.GetLength()));
+    const std::wstring reading = Ohagey::RomajiToKana(romaji);
+    if (reading.empty())
+    {
+        // Nothing resolved into kana, so there is no reading to associate the
+        // text with. Learning from that would key the store on nothing.
+        return;
+    }
+
+    const std::wstring text(committedText.Get(), static_cast<size_t>(committedText.GetLength()));
+
+    // The result is deliberately ignored. A commit that does not reach the
+    // engine costs the user a learning opportunity; it must not cost them the
+    // text they just typed, which is already in the document by now.
+    _engineClient.Commit(reading, text, updateLearning ? true : false);
+}
+
 void CCompositionProcessorEngine::PurgeVirtualKey()
 {
     // Ohagey: the composition is over, so nothing can still be pointing at the

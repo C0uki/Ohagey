@@ -184,6 +184,77 @@ int wmain()
         }
     }
 
+    // ── Learning (decisions 0024 / 0025) ───────────────────────────────────
+    //
+    // Confirming a candidate the engine did not rank first should move it up
+    // next time. This is the only way to tell that Commit does anything: the
+    // call returns success either way.
+    //
+    // NOTE: this writes to the real learning store under %LOCALAPPDATA%\Ohagey.
+    // That is regenerable, but it does mean running this harness nudges your
+    // own conversion rankings.
+    printf("\nlearning\n");
+    {
+        const std::wstring reading = L"へんかん";
+        ConvertResult before;
+        r = client.Convert(reading, 5, L"", &before);
+
+        if (r == CallResult::Ok && before.candidates.size() >= 2)
+        {
+            const std::wstring first = before.candidates[0].text;
+            const std::wstring second = before.candidates[1].text;
+            Say("  before: 1st=", first);
+            Say("          2nd=", second);
+
+            // Confirmed several times, not once.
+            //
+            // Learning accumulates and persists, so this test's starting point
+            // is whatever previous runs left behind: a single confirmation is
+            // enough from a clean store but not necessarily enough to outweigh
+            // a candidate that earlier runs already reinforced. Repeating makes
+            // the assertion hold regardless of prior state.
+            bool committed = true;
+            for (int attempt = 0; attempt < 3; ++attempt)
+            {
+                if (client.Commit(reading, second, true) != CallResult::Ok) committed = false;
+                ConvertResult reconvert;
+                client.Convert(reading, 5, L"", &reconvert);
+            }
+            Check(committed, "committed the second candidate");
+
+            ConvertResult after;
+            r = client.Convert(reading, 5, L"", &after);
+            Check(r == CallResult::Ok && !after.candidates.empty(), "converted again");
+            if (r == CallResult::Ok && !after.candidates.empty())
+            {
+                Say("  after:  1st=", after.candidates[0].text);
+                const bool promoted = (after.candidates[0].text == second);
+
+                if (before.zenzaiUsed)
+                {
+                    // Expected: Zenzai re-ranks with the neural model and the
+                    // learning store feeds the lattice underneath it, so one
+                    // confirmation does not move the top candidate.
+                    // Personalizing Zenzai itself needs
+                    // ZenzaiMode.PersonalizationMode and its n-gram models,
+                    // which we do not ship yet.
+                    printf("  [ -- ] ranking %s (Zenzai on — learning is not expected to reorder)\n",
+                           promoted ? "changed" : "unchanged");
+                }
+                else
+                {
+                    // Dictionary-only: the learning store *is* the ranking, so
+                    // a confirmation has to show up.
+                    Check(promoted, "the confirmed candidate is now ranked first");
+                }
+            }
+        }
+        else
+        {
+            Check(false, "needed at least two candidates to test learning");
+        }
+    }
+
     printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASSED" : "FAILED",
             g_failures, g_failures == 1 ? "" : "s");
     return g_failures == 0 ? 0 : 1;

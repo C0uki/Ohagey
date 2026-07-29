@@ -55,6 +55,17 @@ public:
     void GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch);
     void GetCandidateStringInConverted(CStringRange &searchString, _In_ CSampleImeArray<CCandidateListItem> *pCandidateList);
 
+    // [Ohagey] Tells the engine which candidate the user settled on, so it can
+    // learn from the choice (decisions 0024 / 0025).
+    //
+    // Must be called while the keystroke buffer still holds the composition:
+    // the reading is derived from it, and finalizing clears it.
+    //
+    // `updateLearning` is the caller's intent, not the user's preference — the
+    // engine applies its own learning setting on top. Pass FALSE where
+    // remembering what was typed would be wrong whatever that setting says.
+    void NotifyCommitted(const CStringRange& committedText, BOOL updateLearning);
+
     // Preserved key handler
     void OnPreservedKey(REFGUID rguid, _Out_ BOOL *pIsEaten, _In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId);
 
