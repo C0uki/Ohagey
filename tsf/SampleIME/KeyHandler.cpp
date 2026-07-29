@@ -300,6 +300,26 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
             {
                 return hr;
             }
+
+            // [Ohagey] Tell the engine what the user settled on so it can learn
+            // (decisions 0024 / 0025).
+            //
+            // Here, not after _HandleCancel below: that tears the composition
+            // down, and the reading is derived from the keystroke buffer it
+            // clears. Also only on success — learning from a candidate that
+            // never made it into the document would teach the engine a choice
+            // the user never got.
+            //
+            // Secure mode covers the logon screen and UAC, where remembering
+            // what was typed is wrong whatever the user's learning setting
+            // says. It does not cover an ordinary password field inside a
+            // normal application; TSF does not tell us about those here, and
+            // handling them needs the per-context disabled state instead.
+            CCompositionProcessorEngine* pEngine = _pCompositionProcessorEngine;
+            if (pEngine)
+            {
+                pEngine->NotifyCommitted(candidateString, _IsSecureMode() ? FALSE : TRUE);
+            }
         }
     }
     else

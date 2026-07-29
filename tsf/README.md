@@ -136,7 +136,7 @@ powershell -File tsf\Ohagey\tools\build-and-run-kana.ps1
 - [x] `CompositionProcessorEngine` の辞書検索 → `EngineClient` に置換
 - [x] ローマ字 → かな変換
 - [x] 合成中の表示をかなにする
-- [ ] 確定時の学習フィードバック(`Commit`)の配線
+- [x] 確定時の学習フィードバック(`Commit`)の配線 — ただし Zenzai 有効時は順位に効かない(`docs/roadmap.md` 参照)
 - [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
 - [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
 - [ ] 全エントリポイントを SEH で防御(決定 0017)
