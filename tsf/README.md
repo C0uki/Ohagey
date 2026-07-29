@@ -77,6 +77,34 @@ cd tsf\SampleIME
 msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 ```
 
+### エンジンも一緒にビルドされる(決定 0020)
+
+`Ohagey.Engine.targets` が MSBuild から `swift build` を呼ぶ。**2つのツールチェーンを
+1コマンドで**扱えるようにしてある。`ohagey.proto` を変えた人は両側を作り直す必要が
+あり、それを覚えているかどうかに賭けたくないため。
+
+| プロパティ | 意味 |
+|---|---|
+| `OhageyBuildEngine` | `false` で engine のビルドをスキップ(C++ だけ回すとき) |
+| `OhageyLlamaLibDir` | `llama.lib` のあるディレクトリ。**`LIB` が既に通っていれば不要** |
+| `OhageySwiftScratchPath` | `swift build` の出力先。深いパスで 260 文字制限に当たる場合に指定 |
+
+```bat
+rem LIB を設定していない場合
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
+        /p:OhageyLlamaLibDir=C:\path	o\llama.cppuild-b4846\src\Release
+
+rem C++ だけ回したいとき
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 /p:OhageyBuildEngine=false
+```
+
+MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `release` に対応する。
+
+> `swift build` の出力は `IgnoreStandardErrorWarningFormat` で MSBuild の警告に
+> 昇格させていない。そうしないと SwiftPM のシンボリックリンク通知(無害。Windows の
+> 開発者モードが無効なときに出る)が毎ビルド警告として出る。常に出る警告は読まれなくなる。
+> テキストは出るし、終了コードでビルドは失敗する。
+
 **Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\SampleIME.dll` が
 生成される**ことを確認済み。COM のエクスポート(`DllGetClassObject` /
 `DllCanUnloadNow` / `DllRegisterServer` / `DllUnregisterServer`)も揃っている。

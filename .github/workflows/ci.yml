@@ -95,11 +95,78 @@ jobs:
           swift build
           swift test
 
-  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
+  # TSF テキストサービス (C++ / MSBuild, 決定 0002 / 0003 / 0018 / 0020)。
   #
-  # tsf (C++ / MSBuild, 決定 0002 / 0003 / 0020):
-  #   runs-on: windows-latest。vendoring & 改造した SampleIME を x64 で MSBuild。
-  #   tsf/SampleIME/ を取り込み .sln がビルドできるようになったら有効化。
+  # engine ジョブの後に走らせる。MSBuild は決定 0020 の連携ターゲット経由で
+  # `swift build` も呼ぶため llama.cpp が要るが、engine ジョブが同じキーで
+  # キャッシュを温めてくれる。並列にすると初回に llama.cpp を2回ビルドすることに
+  # なるので、待つ方を選んだ。
+  #
+  # ここで engine のビルドを切らずに通しているのは、**連携そのものを検証する**ため。
+  # 誰も実行しないビルド統合は壊れたまま気づかれない。
+  tsf:
+    name: tsf — MSBuild x64 (+ engine 連携)
+    runs-on: windows-latest
+    needs: engine
+    env:
+      LLAMA_CPP_TAG: b4846
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Allow long paths
+        run: git config --global core.longpaths true
+
+      - name: Set up MSVC (x64)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Swift
+        uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.3.3-release
+          tag: 6.3.3-RELEASE
+
+      # engine ジョブが保存済み。ここではミスするはずがないが、するなら
+      # llama.cpp をビルドし直すのではなく落としたい（同じものを2度ビルドしても
+      # 得るものが無い）。
+      - name: Restore llama.cpp
+        id: cache-llama
+        uses: actions/cache/restore@v4
+        with:
+          path: llama.cpp/build-${{ env.LLAMA_CPP_TAG }}
+          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}-windows-x64-shared
+
+      - name: Fail if llama.cpp was not cached
+        if: steps.cache-llama.outputs.cache-hit != 'true'
+        run: |
+          Write-Error "llama.cpp のキャッシュが見つからない。engine ジョブが保存に失敗している可能性がある"
+          exit 1
+
+      - name: Build (Debug and Release)
+        working-directory: tsf/SampleIME
+        run: |
+          $llama = "${{ github.workspace }}\llama.cpp\build-$env:LLAMA_CPP_TAG\src\Release"
+          foreach ($config in @("Debug", "Release")) {
+            msbuild SampleIME.vcxproj /t:Rebuild `
+              /p:Configuration=$config /p:Platform=x64 `
+              /p:OhageyLlamaLibDir="$llama" `
+              /nologo /v:minimal
+            if ($LASTEXITCODE -ne 0) { throw "$config build failed" }
+          }
+
+      # 実際に IME として動かすには TSF への登録（管理者権限）が要るので、CI で
+      # 検証できるのはここまで。DLL が出来て COM のエクスポートが揃っていること。
+      - name: Check the DLL exports
+        working-directory: tsf/SampleIME
+        run: |
+          $exports = dumpbin /exports x64\Release\SampleIME.dll
+          foreach ($name in @("DllGetClassObject", "DllCanUnloadNow", "DllRegisterServer", "DllUnregisterServer")) {
+            if ($exports -notmatch $name) { throw "missing export: $name" }
+          }
+          Write-Host "all four COM exports present"
+
+  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
   #
   # installer (Inno Setup, 決定 0019):
   #   runs-on: windows-latest。`iscc installer/ohagey.iss`。
