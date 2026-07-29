@@ -88,6 +88,7 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `OhageyBuildEngine` | `false` で engine のビルドをスキップ(C++ だけ回すとき) |
 | `OhageyLlamaLibDir` | `llama.lib` のあるディレクトリ。**`LIB` が既に通っていれば不要** |
 | `OhageySwiftScratchPath` | `swift build` の出力先。深いパスで 260 文字制限に当たる場合に指定 |
+| `OhageySwiftExe` | `swift.exe` の絶対パス。既定は PATH 上の `swift` |
 
 ```bat
 rem LIB を設定していない場合
@@ -99,6 +100,10 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 /p:OhageyBuil
 ```
 
 MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `release` に対応する。
+
+> **CI では `OhageySwiftExe` を明示している。** MSBuild の `Exec` は cmd.exe を経由するが、
+> GitHub のランナーでは既に長い PATH の末尾に Swift が追加されるため、cmd から見えなかった。
+> engine ジョブは pwsh から直接 `swift` を呼ぶので当たらない。
 
 > `swift build` の出力は `IgnoreStandardErrorWarningFormat` で MSBuild の警告に
 > 昇格させていない。そうしないと SwiftPM のシンボリックリンク通知(無害。Windows の

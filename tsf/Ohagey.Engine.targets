@@ -23,6 +23,15 @@
                             checkouts are long enough to hit the 260-character
                             limit (see docs/local-setup.md).
 
+    OhageySwiftExe          Full path to swift.exe. Defaults to plain "swift",
+                            found on PATH. Set it where PATH cannot be relied
+                            on: MSBuild's Exec runs through cmd.exe, and on a
+                            build agent whose PATH is already near the length
+                            limit, entries appended late (which is where a
+                            toolchain installed during the build lands) can be
+                            missing by the time cmd sees them. That is exactly
+                            what happened on the GitHub runner.
+
   Example:
 
     msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
@@ -37,6 +46,8 @@
     <OhageyEngineDirectory Condition="'$(OhageyEngineDirectory)' == ''">$(MSBuildThisFileDirectory)..\engine</OhageyEngineDirectory>
 
     <OhageyLlamaLibDir Condition="'$(OhageyLlamaLibDir)' == ''">$(OHAGEY_LLAMA_LIB_DIR)</OhageyLlamaLibDir>
+
+    <OhageySwiftExe Condition="'$(OhageySwiftExe)' == ''">swift</OhageySwiftExe>
 
     <!-- MSBuild's Debug/Release, in the spelling SwiftPM wants. -->
     <OhageySwiftConfiguration Condition="'$(Configuration)' == 'Release'">release</OhageySwiftConfiguration>
@@ -67,7 +78,7 @@
          developer mode is off — see docs/local-setup.md) as a warning, and a
          warning that always fires is one nobody reads. The text still prints,
          and the exit code still fails the build. -->
-    <Exec Command="swift $(_OhageySwiftArgs)"
+    <Exec Command="&quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs)"
           WorkingDirectory="$(OhageyEngineDirectory)"
           IgnoreStandardErrorWarningFormat="true"
           StandardOutputImportance="normal" />
