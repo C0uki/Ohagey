@@ -159,8 +159,9 @@ private:
     // vector reallocation would dangle every range handed out so far.
     std::deque<std::wstring> _candidateStrings;
 
-    // Fills `pCandidateList` from the engine's answer for `reading`.
-    void GetCandidateListFromEngine(const CStringRange& reading,
+    // Resolves `keystrokes` (romaji) to kana and fills `pCandidateList` from
+    // the engine's answer.
+    void GetCandidateListFromEngine(const CStringRange& keystrokes,
                                     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList);
     CStringRange _keystrokeBuffer;
 

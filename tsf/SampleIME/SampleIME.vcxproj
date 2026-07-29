@@ -29,6 +29,7 @@
     <ClInclude Include="Compartment.h" />
     <ClInclude Include="..\Ohagey\OhageyProtocol.h" />
     <ClInclude Include="..\Ohagey\OhageyWire.h" />
+    <ClInclude Include="..\Ohagey\RomajiKana.h" />
     <ClInclude Include="CompositionProcessorEngine.h" />
     <ClInclude Include="define.h" />
     <ClInclude Include="EnumTfCandidates.h" />
@@ -70,6 +71,7 @@
     <ClCompile Include="Composition.cpp" />
     <ClCompile Include="..\Ohagey\OhageyEngineClient.cpp" />
     <ClCompile Include="..\Ohagey\OhageyWire.cpp" />
+    <ClCompile Include="..\Ohagey\RomajiKana.cpp" />
     <ClCompile Include="CompositionProcessorEngine.cpp" />
     <ClCompile Include="EnumTfCandidates.cpp" />
     <ClCompile Include="KeyStateCategory.cpp" />

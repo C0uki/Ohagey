@@ -8,6 +8,7 @@
 // Build and run: tsf/Ohagey/tools/build-and-run.ps1 (engine must be running).
 
 #include "../OhageyProtocol.h"
+#include "../RomajiKana.h"
 
 #include <cstdio>
 #include <string>
@@ -149,6 +150,39 @@ int wmain()
     PingResult ping2;
     r = client.Ping(&ping2);
     Check(r == CallResult::Ok, "connection survived the bad request");
+
+    // ── The path a user actually takes: romaji in, candidates out ──────────
+    //
+    // This is what the TSF layer does on every keystroke: resolve romaji to
+    // kana, then ask the engine. Testing the two halves separately would leave
+    // the seam between them — which is where the reading was wrong until the
+    // converter existed — unchecked.
+    printf("\nromaji -> kana -> engine\n");
+    {
+        struct Case { const wchar_t* romaji; const wchar_t* expectedKana; };
+        const Case cases[] = {
+            { L"henkan",   L"へんかん" },
+            { L"nihongo",  L"にほんご" },
+            { L"sannin",   L"さんにん" },
+            { L"gakkou",   L"がっこう" },
+        };
+
+        for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i)
+        {
+            const std::wstring kana = RomajiToKana(cases[i].romaji);
+            Say("  ", std::wstring(cases[i].romaji) + L" -> " + kana);
+            Check(kana == cases[i].expectedKana, "romaji resolved to the expected kana");
+
+            ConvertResult typed;
+            const CallResult typedResult = client.Convert(kana, 3, L"", &typed);
+            Check(typedResult == CallResult::Ok && !typed.candidates.empty(),
+                  "engine returned candidates for it");
+            if (typedResult == CallResult::Ok && !typed.candidates.empty())
+            {
+                Say("     top: ", typed.candidates[0].text);
+            }
+        }
+    }
 
     printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASSED" : "FAILED",
             g_failures, g_failures == 1 ? "" : "s");

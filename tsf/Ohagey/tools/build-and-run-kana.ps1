@@ -1,11 +1,4 @@
-# Builds and runs the engine round-trip harness (decision 0032).
-#
-# A plain cl.exe invocation rather than a .vcxproj: this is a three-file
-# developer tool, and giving it a project would mean carrying it through every
-# solution-wide build for no benefit.
-#
-# Run from an "x64 Native Tools Command Prompt for VS 2022", or let this script
-# find vcvars64 itself. OhageyEngine must already be running.
+# Builds and runs the romaji -> kana tests. Needs nothing running.
 param([switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
@@ -27,23 +20,14 @@ if (-not $env:VCINSTALLDIR) {
 
 New-Item -ItemType Directory -Force $out | Out-Null
 
-# /utf-8 so the Japanese literals in the harness are read as UTF-8 rather than
-# the system code page. /W4 /WX because this code is the yardstick for the
-# codec — warnings here are not acceptable noise.
-$sources = @(
-    (Join-Path $here "engine-roundtrip.cpp"),
-    (Join-Path $here "..\OhageyEngineClient.cpp"),
-    (Join-Path $here "..\OhageyWire.cpp"),
-    (Join-Path $here "..\RomajiKana.cpp")
-)
-
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi `
-    /Fo"$out\" /Fd"$out\harness.pdb" /Fe"$out\engine-roundtrip.exe" `
-    $sources /link kernel32.lib user32.lib advapi32.lib
+    /Fo"$out\" /Fd"$out\kana.pdb" /Fe"$out\kana-selftest.exe" `
+    (Join-Path $here "kana-selftest.cpp") (Join-Path $here "..\RomajiKana.cpp") `
+    /link kernel32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
-& "$out\engine-roundtrip.exe"
+& "$out\kana-selftest.exe"
 $exit = $LASTEXITCODE
 
 if (-not $KeepIntermediates) {

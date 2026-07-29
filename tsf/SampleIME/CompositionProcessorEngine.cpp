@@ -8,6 +8,7 @@
 #include "Private.h"
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
+#include "../Ohagey/RomajiKana.h"
 #include "TableDictionaryEngine.h"
 #include "DictionarySearch.h"
 #include "TfInputProcessorProfile.h"
@@ -325,16 +326,33 @@ void CCompositionProcessorEngine::RemoveVirtualKey(DWORD_PTR dwIndex)
 //
 //----------------------------------------------------------------------------
 
-void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange& reading,
+void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange& keystrokes,
     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList)
 {
-    if (reading.GetLength() == 0)
+    if (keystrokes.GetLength() == 0)
     {
         return;
     }
 
     // CStringRange is not null-terminated, so build the string from the range.
-    const std::wstring readingText(reading.Get(), static_cast<size_t>(reading.GetLength()));
+    const std::wstring romaji(keystrokes.Get(), static_cast<size_t>(keystrokes.GetLength()));
+
+    // The engine converts readings and expects hiragana, so romaji has to be
+    // resolved before it goes on the wire (ConversionService uses `.direct`
+    // input for exactly this reason).
+    //
+    // Derived here rather than kept alongside the keystroke buffer as a second
+    // piece of state. RemoveVirtualKey can delete from the middle by index, and
+    // keeping a separate converter in step with that is a synchronisation bug
+    // waiting to happen; recomputing from the one buffer that is authoritative
+    // costs nothing at these lengths.
+    const std::wstring readingText = Ohagey::RomajiToKana(romaji);
+    if (readingText.empty())
+    {
+        // Everything typed so far is still mid-syllable — `k`, `ky`. There is
+        // no reading to convert yet.
+        return;
+    }
 
     Ohagey::ConvertResult result;
     // n_best 0 means "engine default" in ohagey.proto. Sending 0 keeps the

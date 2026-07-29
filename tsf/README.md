@@ -101,35 +101,52 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `OhageyProtocol.h` | クライアント API(`EngineClient`)と結果型 |
 | `OhageyWire.{h,cpp}` | Protobuf の wire 形式。**`ohagey.proto` の範囲だけ手書き**(決定 0032) |
 | `OhageyEngineClient.cpp` | 名前付きパイプ接続、フレーミング、リクエスト/レスポンス |
-| `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス** |
+| `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
+| `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
+| `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
 
 `OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
 エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
 
 ```bat
-rem OhageyEngine.exe を起動しておくこと
+rem 変換の往復（OhageyEngine.exe を起動しておくこと）
 powershell -File tsf\Ohagey\tools\build-and-run.ps1
+rem ローマ字→かな（エンジン不要）
+powershell -File tsf\Ohagey\tools\build-and-run-kana.ps1
 ```
+
+## ローマ字 → かな(`RomajiKana`)
+
+エンジンは**ひらがな**の読みを期待している(`ConversionService` は `.direct` 入力方式で
+「TSF 層がローマ字をかなに解決済み」を前提にしている)。SampleIME のキーストローク
+バッファは中国語 Pinyin 用の ASCII なので、その橋渡しがここ。
+
+かなは**キーストロークバッファから変換時に導出する**。変換器を別の状態として並行して
+持たないのは、`RemoveVirtualKey` が添字で途中削除できるため、同期がずれるバグの温床に
+なるから。真実の源はバッファ1つに保つ。
+
+**`nn` の扱いに注意**: `nn` は普通ん1文字だが、後ろに母音か `y` が続くときは
+2つ目の `n` が次の音節の頭になる。`sannin` は さんにん であって さんいん ではない。
+先読みが要るので、1文字ずつ解決するのではなく毎回ローマ字全体を走査している。
 
 ## ステータス
 
 - [x] vendoring(上記コミットから取り込み)
 - [x] x64 でビルドが通る(決定 0018)
 - [x] `CompositionProcessorEngine` の辞書検索 → `EngineClient` に置換
-- [ ] **ローマ字 → かな変換**(下記。これが無いと実際には入力できない)
+- [x] ローマ字 → かな変換
+- [ ] **合成中の表示をかなにする**(下記)
 - [ ] 確定時の学習フィードバック(`Commit`)の配線
 - [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
 - [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
 - [ ] 全エントリポイントを SEH で防御(決定 0017)
 - [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
 
-### ⚠️ 次にやること: ローマ字 → かな
+### ⚠️ 次にやること: 合成中の表示
 
-**現状、エンジンに送っている読みは `_keystrokeBuffer` の生の内容**、つまり
-SampleIME が中国語 Pinyin 用に貯めている **ASCII のキーストローク列**。
-エンジンは**ひらがな**を期待している(`ConversionService` は `.direct` 入力方式で
-「TSF 層がローマ字をかなに解決済み」を前提にしている)。
+変換に送る読みはかなになったが、**画面に表示している合成文字列はまだローマ字のまま**。
+SampleIME の表示経路は `_keystrokeBuffer` をそのまま出しているため、`henkan` と打つと
+画面には `henkan` が出て、候補だけが 変換 / 返還 になる。
 
-したがって配線は通っているが、**このままでは実際の入力は成立しない**。
-`henkan` ではなく `へんかん` を送る必要がある。促音・撥音・待機中の入力の扱いを
-含むテーブル変換の実装が次の作業。
+`RomajiKana::Display()`(かな + 未解決のローマ字)がこのための値で、
+`GetReadingStrings` とその呼び出し側を差し替える必要がある。
