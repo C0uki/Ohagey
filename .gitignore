@@ -43,3 +43,6 @@ _tmp-wcs/
 *.swp
 .DS_Store
 Thumbs.db
+
+# ── tsf/ の開発用ハーネスのビルド出力 ──
+tsf/Ohagey/tools/build/
