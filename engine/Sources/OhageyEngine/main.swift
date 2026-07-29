@@ -31,6 +31,14 @@ enum OhageyEngineMain {
 
         let settings = EngineSettings.load()
         log("settings loaded (learning=\(settings.learningEnabled), backend=\(settings.backend.rawValue))")
+
+        // Called out separately rather than left to be inferred from the path
+        // below: a stray OHAGEY_MODEL_PATH in someone's environment should be
+        // obvious, not something they have to notice.
+        if EnginePaths.honorsModelPathOverride,
+           ProcessInfo.processInfo.environment[EnginePaths.modelPathOverrideVariable] != nil {
+            log("\(EnginePaths.modelPathOverrideVariable) is set — debug builds only, ignored in release")
+        }
         log(EnginePaths.isModelAvailable
             ? "Zenzai model found at \(EnginePaths.modelURL.path)"
             // Not an error: the install is allowed to complete without the

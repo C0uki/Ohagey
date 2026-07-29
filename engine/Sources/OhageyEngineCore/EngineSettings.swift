@@ -78,11 +78,52 @@ public enum EnginePaths {
         return base.appendingPathComponent("Ohagey", isDirectory: true)
     }
 
+    /// Environment variable that relocates the model, for development only.
+    ///
+    /// Exists because the shipped location needs administrator rights to write,
+    /// which means without this nobody can exercise the Zenzai path on a normal
+    /// developer machine. Overriding `ProgramFiles` instead does not work:
+    /// Windows repopulates that variable from the registry for every new
+    /// process, so a child never sees the override.
+    public static let modelPathOverrideVariable = "OHAGEY_MODEL_PATH"
+
+    /// Whether `modelPathOverrideVariable` is honored. **Debug builds only.**
+    ///
+    /// The engine is launched on demand by whichever client connects first
+    /// (decision 0015), which means it inherits *that* application's
+    /// environment. Honoring this in a shipped build would let any app in the
+    /// session choose the model that the engine — shared by every other app —
+    /// loads, and llama.cpp's gguf parser is not a good thing to point at an
+    /// attacker-chosen file. Developers build debug, so nothing is lost by
+    /// confining it there.
+    public static var honorsModelPathOverride: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
+
     /// Machine-wide model location (decision 0008). The weights contain no
     /// user-specific data, so unlike learning data they live under Program
     /// Files and are shared by every user on the machine.
     public static var modelURL: URL {
-        let base = ProcessInfo.processInfo.environment["ProgramFiles"]
+        resolveModelURL(environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// Split out from `modelURL` so both branches can be tested regardless of
+    /// which configuration the tests themselves are built in.
+    static func resolveModelURL(
+        environment: [String: String],
+        honorOverride: Bool = honorsModelPathOverride
+    ) -> URL {
+        if honorOverride,
+           let override = environment[modelPathOverrideVariable],
+           !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
+
+        let base = environment["ProgramFiles"]
             .map { URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: #"C:\Program Files"#)
         return base

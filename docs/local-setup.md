@@ -297,10 +297,64 @@ swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
   **UWP / AppContainer アプリからの実接続は未検証**(`AC` の許可と低整合性ラベルは
   仕様上の挙動から入れており、実機で測ってはいない)。
 - ~~複数クライアントの同時接続~~ → 6クライアント同時で確認済み。
-- **Zenzai 経路は未検証。** `dumpbin /dependents` で `llama.dll` 依存は確認済み
-  (＝ mock ではなく実際にリンクされている)が、**モデル未インストールのため
-  辞書変換フォールバックでしか動かしていない**。
-  `C:\Program Files\Ohagey\models\ggml-model-Q5_K_M.gguf` を置けば検証できる。
+- ~~Zenzai 経路~~ → 検証済み(下記)。
+- **UWP / AppContainer アプリからの実接続は未検証。**
+
+## Zenzai の実測(2026-07)
+
+`Miwa-Keita/zenz-v3.1-small-gguf` の `ggml-model-Q5_K_M.gguf`(70.44 MiB)で確認した。
+
+### 開発時のモデル配置(管理者権限は不要)
+
+実配置先 `%ProgramFiles%\Ohagey\models\` への書き込みには管理者権限が要るが、
+**`OHAGEY_MODEL_PATH` で上書きできる**。好きな場所にモデルを置けばよい:
+
+```bat
+curl -L --create-dirs -o C:\swb\models\ggml-model-Q5_K_M.gguf ^
+  https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/ggml-model-Q5_K_M.gguf
+set OHAGEY_MODEL_PATH=C:\swb\models\ggml-model-Q5_K_M.gguf
+```
+
+**この上書きは debug ビルドでしか効かない**(release では無視される)。理由は決定 0008 を参照。
+効いているかは起動ログで分かる:
+
+```
+OhageyEngine: OHAGEY_MODEL_PATH is set — debug builds only, ignored in release
+OhageyEngine: Zenzai model found at C:/swb/models/ggml-model-Q5_K_M.gguf
+```
+
+> `ProgramFiles` 環境変数を差し替える手は**使えない**。Windows は新規プロセス生成時に
+> この変数をレジストリから再設定するので、子プロセスには元の値しか渡らない(実測)。
+> `OHAGEY_MODEL_PATH` はまさにこれが理由で用意してある。
+
+変換品質は辞書のみとは明確に別物:
+
+| 読み | 結果 |
+|---|---|
+| きょうはいいてんきですね | 今日はいい天気ですね |
+| ひこうきのじかんにまにあった | 飛行機の時間に間に合った |
+| たなかさんにでんわしてください | 田中さんに電話してください |
+
+レイテンシ(release ビルド・CPU バックエンド・`n_best=5`):
+
+| 条件 | p50 | p95 |
+|---|---|---|
+| 未使用の読み・学習 OFF | **68〜95ms** | **86〜142ms** |
+| 接続後の初回リクエスト | 260〜460ms | — |
+
+`zenzaiInferenceLimit` を 1 / 3 / 10 で振ったが、**読みのセット間のばらつきを超える差は出なかった**。
+
+### ⚠️ 計測でハマった点(同じ轍を踏まないこと)
+
+**素朴に測ると1桁速い数字が出るが、それはキャッシュを測っている。**
+実際に3回やり直した。
+
+1. **同じ読みを繰り返さない。** 初回だけ遅く以降が一定になる。変換器が状態を持つため。
+2. **学習を OFF にし、学習データを消してから測る。** 学習が ON だと、一度変換した読みは
+   学習ストアに入って以降速くなる。設定を変えて再測定すると、前の測定の学習が効いて
+   「設定を変えたら速くなった」と誤読する。
+3. **クライアント起動時間を含めない。** 接続を開いたまま往復だけを測る。
+   スクリプトを毎回起動すると 400〜850ms に見えるが、その大半は PowerShell の起動。
 
 > `PipeServer` の WinSDK 呼び出しと実変換は**実クライアントとの往復で検証済み**に
 > なった。何をどこまで確認したかは `docs/roadmap.md` の表を参照。

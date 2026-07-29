@@ -4,17 +4,35 @@
 改造したものを配置します。取り込み元:
 https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/IME/cpp/SampleIME
 
-## vendoring手順(一度だけ実行、再現性のため記録)
-```
-# リポジトリのルートから実行:
-git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-classic-samples.git _tmp-wcs
-cd _tmp-wcs
+## vendoring手順(実施済み・再現性のため記録)
+
+**取り込み元コミット: `77f217b3f89d4dac7864a62cc91ff7b569f26a50`**
+(microsoft/Windows-classic-samples、MIT License)
+
+```bash
+# clone 先は短いパスにすること。ワークツリー配下に置くと、深いパスと相まって
+# Windows の 260 文字制限に当たることがある(docs/local-setup.md 参照)。
+git clone --depth 1 --filter=blob:none --sparse https://github.com/microsoft/Windows-classic-samples.git C:/swb/wcs
+cd C:/swb/wcs
 git sparse-checkout set Samples/IME/cpp/SampleIME
-cp -r Samples/IME/cpp/SampleIME/* ../tsf/SampleIME/
-cd ..
-rm -rf _tmp-wcs
+cp -r Samples/IME/cpp/SampleIME/* <repo>/tsf/SampleIME/
+rm -rf <repo>/tsf/SampleIME/Dictionary      # 下記参照
+cp LICENSE <repo>/tsf/SampleIME/LICENSE-Microsoft.txt
 ```
+
 (sparse checkoutにより、Windows-classic-samples全体をcloneせずに済みます — 決定0021)
+
+### 取り込まなかったもの
+
+- **`Dictionary/SampleIMESimplifiedQuanPin.txt`(1.5MB)** — 簡体字 Pinyin の変換表。
+  おはぎーは日本語 IME で、辞書引きは `engine/` 側に置き換える(決定 0004〜0007)ため、
+  最初から不要。コミットしてから消すだけの 1.5MB なので取り込んでいない。
+  これを読む `TableDictionaryEngine` / `DictionaryParser` 等も置き換え対象。
+
+### ライセンス
+
+Microsoft 版の MIT ライセンス文を `SampleIME/LICENSE-Microsoft.txt` として保持している。
+おはぎー自体も MIT(決定 0022)なので条件は満たせるが、**帰属表示は残すこと**。
 
 ## 本家SampleIMEからの主な改造予定点
 - `CompositionProcessorEngine`/辞書検索 → 名前付きパイプ経由のクライアント(Protobuf)に
@@ -50,6 +68,85 @@ HANDLE pipe = CreateFileW(
 リトライしてください(サーバーは接続を受けた直後に次のインスタンスを作りますが、
 その受け渡しの一瞬だけ空きが無くなります)。
 
+## ビルド
+
+「x64 Native Tools Command Prompt for VS 2022」で:
+
+```bat
+cd tsf\SampleIME
+msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
+```
+
+**Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\SampleIME.dll` が
+生成される**ことを確認済み。COM のエクスポート(`DllGetClassObject` /
+`DllCanUnloadNow` / `DllRegisterServer` / `DllUnregisterServer`)も揃っている。
+
+### 本家からのビルド設定の変更点
+
+| 変更 | 理由 |
+|---|---|
+| `Win32` 構成を削除 | x64 のみ対応(決定 0018)。Debug/Release × x64 の2構成だけにした |
+| `PlatformToolset` を `v110` → `v143` | VS2012 のツールセットは入っていない |
+| `VCTargetsPath11` フォールバックを削除 | VS2012 の名残。現行 MSBuild を存在しないツールセットに向けてしまう |
+| `Windows Kits\8.0` の include/lib 絶対パスを削除 | 2012年の SDK。未インストールで、実効パスの後ろに付いていたため無視されていただけ |
+| Release の `OptimizeReferences` / `EnableCOMDATFolding` の `false` を削除 | `/OPT:NOREF` が `WholeProgramOptimization` の LTCG と衝突する(LNK1295) |
+| Debug の `DebugInformationFormat` を `ProgramDatabase` に | 既定の /ZI が `/INCREMENTAL:NO` で捨てられ、毎回 LNK4075 が出ていた |
+
+## エンジンとの IPC(`../Ohagey/`)
+
+`tsf/Ohagey/` は vendoring したコードではなく**おはぎー自身のコード**。
+
+| ファイル | 役割 |
+|---|---|
+| `OhageyProtocol.h` | クライアント API(`EngineClient`)と結果型 |
+| `OhageyWire.{h,cpp}` | Protobuf の wire 形式。**`ohagey.proto` の範囲だけ手書き**(決定 0032) |
+| `OhageyEngineClient.cpp` | 名前付きパイプ接続、フレーミング、リクエスト/レスポンス |
+| `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
+| `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
+| `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
+
+`OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
+エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。
+
+```bat
+rem 変換の往復（OhageyEngine.exe を起動しておくこと）
+powershell -File tsf\Ohagey\tools\build-and-run.ps1
+rem ローマ字→かな（エンジン不要）
+powershell -File tsf\Ohagey\tools\build-and-run-kana.ps1
+```
+
+## ローマ字 → かな(`RomajiKana`)
+
+エンジンは**ひらがな**の読みを期待している(`ConversionService` は `.direct` 入力方式で
+「TSF 層がローマ字をかなに解決済み」を前提にしている)。SampleIME のキーストローク
+バッファは中国語 Pinyin 用の ASCII なので、その橋渡しがここ。
+
+かなは**キーストロークバッファから変換時に導出する**。変換器を別の状態として並行して
+持たないのは、`RemoveVirtualKey` が添字で途中削除できるため、同期がずれるバグの温床に
+なるから。真実の源はバッファ1つに保つ。
+
+**`nn` の扱いに注意**: `nn` は普通ん1文字だが、後ろに母音か `y` が続くときは
+2つ目の `n` が次の音節の頭になる。`sannin` は さんにん であって さんいん ではない。
+先読みが要るので、1文字ずつ解決するのではなく毎回ローマ字全体を走査している。
+
 ## ステータス
-🚧 まだvendoringしていません。このREADMEは手順の記録です。実装を始める前に上記の
-コマンドを実行し、`tsf/SampleIME/`を実際に取り込んでください。
+
+- [x] vendoring(上記コミットから取り込み)
+- [x] x64 でビルドが通る(決定 0018)
+- [x] `CompositionProcessorEngine` の辞書検索 → `EngineClient` に置換
+- [x] ローマ字 → かな変換
+- [ ] **合成中の表示をかなにする**(下記)
+- [ ] 確定時の学習フィードバック(`Commit`)の配線
+- [ ] エンジンのオンデマンド起動(決定 0015)— インストール先が未確定(フェーズ3)
+- [ ] 候補ウィンドウを DirectWrite/DirectComposition + Fluent Design に書き換え
+- [ ] 全エントリポイントを SEH で防御(決定 0017)
+- [ ] MSBuild と `swift build` の連携(決定 0020)、CI で有効化
+
+### ⚠️ 次にやること: 合成中の表示
+
+変換に送る読みはかなになったが、**画面に表示している合成文字列はまだローマ字のまま**。
+SampleIME の表示経路は `_keystrokeBuffer` をそのまま出しているため、`henkan` と打つと
+画面には `henkan` が出て、候補だけが 変換 / 返還 になる。
+
+`RomajiKana::Display()`(かな + 未解決のローマ字)がこのための値で、
+`GetReadingStrings` とその呼び出し側を差し替える必要がある。
