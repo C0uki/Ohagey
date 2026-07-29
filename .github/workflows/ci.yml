@@ -171,7 +171,11 @@ jobs:
       - name: Check the DLL exports
         working-directory: tsf/SampleIME
         run: |
-          $exports = dumpbin /exports x64\Release\SampleIME.dll
+          # Joined into one string on purpose. dumpbin returns an array of
+          # lines, and `-notmatch` against an array filters it — returning every
+          # line that does not match, which is almost all of them and therefore
+          # truthy. The check then fails whether or not the export is there.
+          $exports = (dumpbin /exports x64\Release\SampleIME.dll) -join "`n"
           foreach ($name in @("DllGetClassObject", "DllCanUnloadNow", "DllRegisterServer", "DllUnregisterServer")) {
             if ($exports -notmatch $name) { throw "missing export: $name" }
           }
