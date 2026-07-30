@@ -1,11 +1,11 @@
-# Renders the candidate window to a PNG so the drawing can be inspected without
-# registering the text service (which needs administrator rights).
+# Renders the candidate window through the real DirectComposition path and
+# writes the composed frame to a PNG (decision 0011).
 param([string]$OutputPng)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $out = Join-Path $here "build"
-if (-not $OutputPng) { $OutputPng = Join-Path $out "candidate-preview.png" }
+if (-not $OutputPng) { $OutputPng = Join-Path $out "dcomp-preview.png" }
 
 if (-not $env:VCINSTALLDIR) {
     $vcvars = "C:\Program Files\Microsoft Visual Studio\2022\Professional\VC\Auxiliary\Build\vcvars64.bat"
@@ -23,17 +23,17 @@ if (-not $env:VCINSTALLDIR) {
 New-Item -ItemType Directory -Force $out | Out-Null
 
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi `
-    /Fo"$out\" /Fd"$out\preview.pdb" /Fe"$out\candidate-preview.exe" `
-    (Join-Path $here "candidate-preview.cpp") `
+    /Fo"$out\" /Fd"$out\dcomp.pdb" /Fe"$out\dcomp-preview.exe" `
+    (Join-Path $here "dcomp-preview.cpp") `
     (Join-Path $here "..\CandidateRenderer.cpp") `
     (Join-Path $here "..\CandidateTheme.cpp") `
     (Join-Path $here "..\CandidateSurface.cpp") `
     /link kernel32.lib user32.lib gdi32.lib advapi32.lib d2d1.lib dwrite.lib dwmapi.lib dcomp.lib d3d11.lib dxgi.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
-$bmp = Join-Path $out "candidate-preview.bmp"
+$bmp = Join-Path $out "dcomp-preview.bmp"
 Write-Host ""
-& "$out\candidate-preview.exe" $bmp
+& "$out\dcomp-preview.exe" $bmp
 if ($LASTEXITCODE -ne 0) { throw "preview failed" }
 
 # BMP out of the harness, PNG for viewing: writing a BMP needs no image library,

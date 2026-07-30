@@ -8,7 +8,7 @@
 
 #pragma once
 
-namespace Ohagey { class CandidateRenderer; }
+namespace Ohagey { class CandidateRenderer; class CandidateSurface; }
 
 #include "private.h"
 #include "BaseWindow.h"
@@ -125,6 +125,14 @@ private:
     // tells those two apart so a failure is not retried on every paint.
     Ohagey::CandidateRenderer* _pRenderer;
     BOOL _rendererUnavailable;
+
+    // DirectComposition surface (decision 0011). Non-null when the window was
+    // created for composition; null when we fell back to the HDC path.
+    //
+    // Built before the window, not after: WS_EX_NOREDIRECTIONBITMAP has to be
+    // decided at CreateWindowEx time, and a window created with it cannot be
+    // drawn to by GDI if composition later turns out not to work.
+    Ohagey::CandidateSurface* _pSurface;
 
     BOOL _dontAdjustOnEmptyItemPage;
     BOOL _isStoreAppMode;

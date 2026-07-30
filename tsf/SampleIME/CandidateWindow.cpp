@@ -10,6 +10,7 @@
 #include "BaseWindow.h"
 #include "CandidateWindow.h"
 #include "../Ohagey/CandidateRenderer.h"
+#include "../Ohagey/CandidateSurface.h"
 
 //+---------------------------------------------------------------------------
 //
@@ -45,6 +46,7 @@ CCandidateWindow::CCandidateWindow(_In_ CANDWNDCALLBACK pfnCallback, _In_ void *
     // [Ohagey] Built lazily on first paint; see _DrawListWithDirectWrite.
     _pRenderer = nullptr;
     _rendererUnavailable = FALSE;
+    _pSurface = nullptr;
 }
 
 //+---------------------------------------------------------------------------
@@ -62,6 +64,8 @@ CCandidateWindow::~CCandidateWindow()
     // [Ohagey] Releases the D2D/DWrite objects it owns.
     delete _pRenderer;
     _pRenderer = nullptr;
+    delete _pSurface;
+    _pSurface = nullptr;
 }
 
 //+---------------------------------------------------------------------------
@@ -104,9 +108,33 @@ BOOL CCandidateWindow::_CreateMainWindow(ATOM atom, _In_opt_ HWND parentWndHandl
 {
     _SetUIWnd(this);
 
+    // [Ohagey] Decide on DirectComposition first (decision 0011).
+    //
+    // WS_EX_NOREDIRECTIONBITMAP has to go on the window at creation, and a
+    // window that carries it cannot be drawn to by GDI. So the device stack is
+    // built before the window exists: if it cannot start, we create an ordinary
+    // window and keep the HDC path rather than ending up with a window neither
+    // path can paint.
+    DWORD exStyle = WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    DWORD style = WS_BORDER | WS_POPUP;
+
+    _pSurface = new (std::nothrow) Ohagey::CandidateSurface();
+    if (_pSurface && _pSurface->Initialize())
+    {
+        exStyle |= WS_EX_NOREDIRECTIONBITMAP;
+        // The border is the frame's, drawn by GDI into a redirection surface
+        // that no longer exists. DWM's rounded corners replace it.
+        style &= ~WS_BORDER;
+    }
+    else
+    {
+        delete _pSurface;
+        _pSurface = nullptr;
+    }
+
     if (!CBaseWindow::_Create(atom,
-        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-        WS_BORDER | WS_POPUP,
+        exStyle,
+        style,
         NULL, 0, 0, parentWndHandle))
     {
         return FALSE;
@@ -116,11 +144,35 @@ BOOL CCandidateWindow::_CreateMainWindow(ATOM atom, _In_opt_ HWND parentWndHandl
     // Windows 11 only; older systems ignore it and keep the plain frame.
     Ohagey::ApplyFluentWindowStyle(_GetWnd());
 
+    if (_pSurface)
+    {
+        RECT client = {};
+        GetClientRect(_GetWnd(), &client);
+        if (!_pSurface->Attach(_GetWnd(),
+                               static_cast<UINT>(client.right - client.left),
+                               static_cast<UINT>(client.bottom - client.top)))
+        {
+            // The window already carries WS_EX_NOREDIRECTIONBITMAP, so there is
+            // no falling back to GDI now. Keep the surface object: the next
+            // paint retries the attach, which is the only way back.
+            _pSurface->Release();
+        }
+    }
+
     return TRUE;
 }
 
 BOOL CCandidateWindow::_CreateBackGroundShadowWindow()
 {
+    // [Ohagey] DWM already draws a shadow around the rounded frame it gives us
+    // (decision 0012). The sample's shadow is a separate layered window with
+    // square corners, so keeping both would put a rectangular shadow behind a
+    // rounded window. Skip it wherever composition is running.
+    if (_pSurface)
+    {
+        return TRUE;
+    }
+
     _pShadowWnd = new (std::nothrow) CShadowWindow(this);
     if (_pShadowWnd == nullptr)
     {
@@ -686,6 +738,31 @@ BOOL CCandidateWindow::_DrawListWithDirectWrite(_In_ HDC dcHandle, _In_ PAINTSTR
 
     RECT client = {};
     GetClientRect(_GetWnd(), &client);
+
+    // Composition when the window was created for it (decision 0011); the HDC
+    // path otherwise. Which one applies was settled at window creation and
+    // cannot change now — see _CreateMainWindow.
+    if (_pSurface)
+    {
+        if (!_pSurface->IsAvailable())
+        {
+            // A previous attach failed, or the device was lost and torn down.
+            // This is the retry: the window cannot use GDI, so there is nothing
+            // else to fall back to.
+            if (!_pSurface->Initialize()) return FALSE;
+            if (!_pSurface->Attach(_GetWnd(),
+                                   static_cast<UINT>(client.right - client.left),
+                                   static_cast<UINT>(client.bottom - client.top)))
+            {
+                return FALSE;
+            }
+        }
+
+        _pSurface->Resize(static_cast<UINT>(client.right - client.left),
+                          static_cast<UINT>(client.bottom - client.top));
+        return _pRenderer->Draw(*_pSurface, rows) ? TRUE : FALSE;
+    }
+
     return _pRenderer->Draw(dcHandle, client, rows) ? TRUE : FALSE;
 }
 

@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "CandidateTheme.h"
+#include "CandidateSurface.h"
 
 namespace Ohagey
 {
@@ -49,8 +50,18 @@ namespace Ohagey
         void Release();
         bool IsAvailable() const { return _dwriteFactory != nullptr && _d2dFactory != nullptr; }
 
-        // Draws the whole window. `bounds` is in pixels, client-relative.
+        // Draws the whole window onto a window DC. `bounds` is in pixels,
+        // client-relative. The fallback path; see CandidateSurface.h.
         bool Draw(HDC dc, const RECT& bounds, const std::vector<CandidateRow>& rows);
+
+        // Draws onto a DirectComposition surface (decision 0011).
+        bool Draw(CandidateSurface& surface, const std::vector<CandidateRow>& rows);
+
+        // Draws into any Direct2D target, which is the whole of what this class
+        // does; the two `Draw` overloads above differ only in where the target
+        // comes from. Public so a harness can point it at its own target.
+        void DrawInto(ID2D1RenderTarget* target, float width,
+                      const std::vector<CandidateRow>& rows, const CandidateTheme& theme);
 
         // Height of one row, in pixels, for the window's sizing and hit
         // testing. Derived from the font's own metrics rather than a constant.
