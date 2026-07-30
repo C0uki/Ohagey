@@ -1,13 +1,12 @@
 {
-  "originHash" : "e7bf7696b14763face50aec7f51719f5cd1eacf45ec344fdb10e6c1f2c80d649",
+  "originHash" : "edf8bd2fa045ba44e8beef8150ee3882a52afd42c38653c008742b3067456753",
   "pins" : [
     {
       "identity" : "azookeykanakanjiconverter",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/azooKey/AzooKeyKanaKanjiConverter",
+      "location" : "https://github.com/C0uki/AzooKeyKanaKanjiConverter",
       "state" : {
-        "revision" : "8278b6b76e534f1a08e4db2a11602f499d754327",
-        "version" : "0.8.5"
+        "revision" : "fdaaa9a1dff92109e7b1d88521fe8993b14df2a3"
       }
     },
     {
@@ -62,6 +61,14 @@
       "state" : {
         "revision" : "4a606f66e0cc4d7d9f0197649e812f7fc86a4c34",
         "version" : "0.0.1"
+      }
+    },
+    {
+      "identity" : "swiftymarisa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/C0uki/SwiftyMarisa",
+      "state" : {
+        "revision" : "3745b5dfa1035bbe52a6474b2dfac4788891a45e"
       }
     }
   ],

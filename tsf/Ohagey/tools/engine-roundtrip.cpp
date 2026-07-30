@@ -232,13 +232,17 @@ int wmain()
 
                 if (before.zenzaiUsed)
                 {
-                    // Expected: Zenzai re-ranks with the neural model and the
-                    // learning store feeds the lattice underneath it, so one
-                    // confirmation does not move the top candidate.
-                    // Personalizing Zenzai itself needs
-                    // ZenzaiMode.PersonalizationMode and its n-gram models,
-                    // which we do not ship yet.
-                    printf("  [ -- ] ranking %s (Zenzai on — learning is not expected to reorder)\n",
+                    // Not asserted either way here. The learning store feeds
+                    // the lattice, which sits underneath the neural model, so
+                    // these three confirmations are not expected to move the
+                    // top candidate on their own.
+                    //
+                    // What *does* reach Zenzai's ranking is the personal
+                    // language model (decision 0034), and it needs a batch of
+                    // commits and a retraining run — too slow and too stateful
+                    // to fold into this harness. It has its own:
+                    // build-and-run-personalization.ps1.
+                    printf("  [ -- ] ranking %s (Zenzai on — see build-and-run-personalization.ps1)\n",
                            promoted ? "changed" : "unchanged");
                 }
                 else

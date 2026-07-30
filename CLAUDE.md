@@ -37,6 +37,12 @@ settings-app/ (WinUI 3) ──registry/設定ファイル(変更通知で自動�
 片方だけ上げるとリンクエラーになる(decision 0028)。pin を変更するときは必ず両方を
 確認し、理由を決定ログに記録すること。
 
+**AzooKeyKanaKanjiConverter は fork をリビジョン固定している**(decision 0034)。
+upstream は Windows で個人化(`EfficientNGram`)を除外しているため。
+fork 点は 0.8.5 タグそのもので、`Package.swift` の2箇所以外に差分はない
+(Windows 除外の解除、`EfficientNGram` の product 公開)。SwiftyMarisa 側の
+fork には実バグ修正が2件入っている。**上の b4846 との一体制約はそのまま。**
+
 また、upstream の `main` と 0.8.5 は API が異なる。README や `main` のソースを参考に
 すると食い違うので、**必ず `.build/checkouts/` の実物か 0.8.5 のタグを見ること**。
 差分表は `docs/local-setup.md` にある。
@@ -60,7 +66,7 @@ settings-app/ (WinUI 3) ──registry/設定ファイル(変更通知で自動�
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- `swift test` **76件パス**
+- `swift test` **107件パス**
 - **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
   `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
 - **6クライアント同時接続** — 全員が自分の `request_id` で正しく応答を受け取る
@@ -74,6 +80,10 @@ settings-app/ (WinUI 3) ──registry/設定ファイル(変更通知で自動�
   (`きょうはいいてんきですね` → 今日はいい天気ですね)。
   release/CPU で **p50 ≈ 70〜95ms、p95 ≈ 90〜140ms**。
   計測方法の落とし穴は `docs/local-setup.md` に記録した(素朴に測るとキャッシュを測ってしまう)
+
+- **Zenzai 有効時の順位に学習が効く**(decision 0034)。`きしゃのきしゃ` で
+  5位の候補を 40 回確定 → **1位に上がり、残り4件の相対順序は保たれる**。
+  `tsf/Ohagey/tools/build-and-run-personalization.ps1`
 
 ### 未検証
 - UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
