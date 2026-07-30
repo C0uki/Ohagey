@@ -1,4 +1,7 @@
-# Builds and runs the engine round-trip harness (decision 0032).
+# Builds and runs the engine launch test (decisions 0015 / 0033).
+#
+# Requires that NO engine is running when it starts: the point is to watch the
+# client start one.
 #
 # A plain cl.exe invocation rather than a .vcxproj: this is a three-file
 # developer tool, and giving it a project would mean carrying it through every
@@ -31,7 +34,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 # the system code page. /W4 /WX because this code is the yardstick for the
 # codec — warnings here are not acceptable noise.
 $sources = @(
-    (Join-Path $here "engine-roundtrip.cpp"),
+    (Join-Path $here "engine-launch.cpp"),
     (Join-Path $here "..\OhageyEngineClient.cpp"),
     (Join-Path $here "..\OhageyWire.cpp"),
     (Join-Path $here "..\RomajiKana.cpp")
@@ -43,12 +46,12 @@ $sources = @(
 # build — it names an executable to run, which is not something an
 # environment variable should decide in an IME.
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi /DOHAGEY_ALLOW_ENGINE_PATH_OVERRIDE `
-    /Fo"$out\" /Fd"$out\harness.pdb" /Fe"$out\engine-roundtrip.exe" `
+    /Fo"$out\" /Fd"$out\launch.pdb" /Fe"$out\engine-launch.exe" `
     $sources /link kernel32.lib user32.lib advapi32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
-& "$out\engine-roundtrip.exe"
+& "$out\engine-launch.exe"
 $exit = $LASTEXITCODE
 
 if (-not $KeepIntermediates) {

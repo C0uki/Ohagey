@@ -37,6 +37,7 @@
 | 0030 | [壊れたリクエスト受信時に接続を切るか](0030-connection-drop-policy.md) | **unservable(`request_id`が取れる)は`failure`を返して接続維持。malformed / framing errorは接続を切る。** 接続はホストアプリ1本につき1本で、切ると合成中の文字列が失われるため |
 | 0031 | [パイプ ACL の確定](0031-pipe-acl.md) | 決定0006の改訂・**セキュリティレビュー完了**。`WD`(Everyone)を現在のユーザーSID + `SY` + `BA` + `AC` に置換。`GRGW`をやめ明示的な`FILE_*`権限に。`PIPE_REJECT_REMOTE_CLIENTS` と(初回のみ)`FILE_FLAG_FIRST_PIPE_INSTANCE`を付与。同一ユーザーのプロセス間は**DACLでは区別できない**ため境界にできない旨も明記 |
 | 0032 | [TSF 側(C++)の Protobuf 実装方法](0032-cpp-protobuf.md) | 決定0007の詳細化。libprotobuf / protobuf-lite / nanopb を使わず、**`ohagey.proto` の範囲だけ手書きする**。DLL は全アプリのプロセスに入るため依存の重さが体験に直結する。担保は**実エンジンとの往復テスト**(相手は swift-protobuf の生成コードなので、こちらが間違えば必ず露見する) |
+| 0033 | [インストール配置とエンジンのオンデマンド起動](0033-install-layout-and-engine-launch.md) | 決定0015の実装に必要だった未確定部分。DLL と `OhageyEngine.exe` を同じディレクトリに置き、**DLL 自身のパスからの相対**でエンジンを解決する(レジストリに絶対パスを書かない)。起動後は待たずに戻り、次の打鍵で再接続する — 打鍵スレッドを止めない |
 
 ## 実装フェーズで詰める残課題
 - ユーザー辞書ファイルの具体的なフォーマット(JSON等) — 実装時に決定
