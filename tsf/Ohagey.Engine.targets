@@ -92,13 +92,22 @@
          output and promoting lines to build warnings. Without it every build
          reports SwiftPM's symlink notice (harmless, and expected when Windows
          developer mode is off — see docs/local-setup.md) as a warning, and a
-         warning that always fires is one nobody reads. The text still prints,
-         and the exit code still fails the build. -->
-    <Exec Command="&quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs)"
+         warning that always fires is one nobody reads. The exit code still
+         fails the build.
+
+         `2>&1` and the high importance are what make a failure diagnosable.
+         Compiler errors go to stderr, and IgnoreStandardErrorWarningFormat
+         demotes stderr to a low-importance message — which `msbuild /v:minimal`
+         (what CI uses) does not print. The result was a build that failed with
+         MSB3073 and five minutes of silence in front of it: the exit code said
+         the engine did not compile and nothing said why. Merging stderr into
+         stdout and asking for high importance costs a few lines on a successful
+         build and is the difference between a diagnosable failure and a guess. -->
+    <Exec Command="&quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs) 2>&amp;1"
           WorkingDirectory="$(OhageyEngineDirectory)"
           EnvironmentVariables="INCLUDE=;EXTERNAL_INCLUDE="
           IgnoreStandardErrorWarningFormat="true"
-          StandardOutputImportance="normal" />
+          StandardOutputImportance="high" />
   </Target>
 
   <!-- Nothing to clean here: `swift package clean` would also throw away the
