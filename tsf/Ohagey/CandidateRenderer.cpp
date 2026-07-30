@@ -191,17 +191,7 @@ namespace Ohagey
         const CandidateTheme theme = CandidateTheme::FromSystem();
 
         _target->BeginDraw();
-        _target->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
-        _target->Clear(theme.background);
-
-        const float width = static_cast<float>(bounds.right - bounds.left);
-        float y = 0.0f;
-        for (size_t i = 0; i < rows.size(); ++i)
-        {
-            const D2D1_RECT_F rowBounds = D2D1::RectF(0.0f, y, width, y + _rowHeight);
-            DrawRow(_target, rows[i], rowBounds, theme);
-            y += _rowHeight;
-        }
+        DrawInto(_target, static_cast<float>(bounds.right - bounds.left), rows, theme);
 
         const HRESULT hr = _target->EndDraw();
         if (hr == D2DERR_RECREATE_TARGET)
@@ -212,6 +202,36 @@ namespace Ohagey
             return false;
         }
         return SUCCEEDED(hr);
+    }
+
+    bool CandidateRenderer::Draw(CandidateSurface& surface, const std::vector<CandidateRow>& rows)
+    {
+        if (!IsAvailable() || !surface.IsAvailable()) return false;
+
+        ID2D1DeviceContext* context = surface.Begin();
+        if (!context) return false;
+
+        DrawInto(context, static_cast<float>(surface.Width()),
+                 rows, CandidateTheme::FromSystem());
+        return surface.End();
+    }
+
+    void CandidateRenderer::DrawInto(ID2D1RenderTarget* target, float width,
+                                     const std::vector<CandidateRow>& rows,
+                                     const CandidateTheme& theme)
+    {
+        if (!target) return;
+
+        target->SetAntialiasMode(D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        target->Clear(theme.background);
+
+        float y = 0.0f;
+        for (size_t i = 0; i < rows.size(); ++i)
+        {
+            const D2D1_RECT_F rowBounds = D2D1::RectF(0.0f, y, width, y + _rowHeight);
+            DrawRow(target, rows[i], rowBounds, theme);
+            y += _rowHeight;
+        }
     }
 
     void CandidateRenderer::DrawRow(ID2D1RenderTarget* target, const CandidateRow& row,

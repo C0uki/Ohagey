@@ -137,11 +137,13 @@ MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `rel
 | `RomajiKana.{h,cpp}` | ローマ字 → かな変換。Windows にも TSF にも依存しない |
 | `CandidateTheme.{h,cpp}` | 候補ウィンドウの配色。ライト/ダークとアクセントを system から読む(決定 0012) |
 | `CandidateRenderer.{h,cpp}` | Direct2D + DirectWrite による候補ウィンドウ描画(決定 0011/0012) |
+| `CandidateSurface.{h,cpp}` | DirectComposition のデバイススタックとスワップチェイン(決定 0011) |
 | `OhageySeh.{h,cpp}` | 構造化例外のフィルタ。ホストアプリを巻き添えにしない(決定 0017) |
 | `tools/engine-roundtrip.cpp` | **実エンジンとの往復ハーネス**(ローマ字→かな→変換の通しを含む) |
 | `tools/kana-selftest.cpp` | ローマ字 → かな変換のテスト(エンジン不要) |
 | `tools/theme-selftest.cpp` | 配色ルールのテスト。**選択行が見えることを保証**(エンジン不要) |
-| `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す。TSF 登録なしで見た目を確認する |
+| `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す(HDC 経路)。TSF 登録なしで見た目を確認する |
+| `tools/dcomp-preview.cpp` | **DirectComposition 経路**で描き、合成バッファを読み戻して画像にする |
 | `tools/seh-selftest.cpp` | SEH ガードのテスト。**実際に落として捕まることを確認**(エンジン不要) |
 | `tools/engine-launch.cpp` | **エンジンのオンデマンド起動**のテスト(決定 0015/0033)。エンジンが動いていない状態で実行する |
 

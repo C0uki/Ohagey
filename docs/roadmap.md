@@ -170,8 +170,10 @@ Zenzai 自体を個人化する仕組みは upstream の `ZenzaiMode.Personaliza
       決定 0033 で確定させた。DLL 自身の隣の `OhageyEngine.exe` を起動する。
       **実機で確認**: エンジン停止状態から、最初の接続は即座に失敗して戻り、
       約1秒後の再試行で接続できる。
-- [x] 候補ウィンドウを GDI から DirectWrite に書き換え(決定 0011/0012)。
-      **DirectComposition 化は未了** — 現状は `ID2D1DCRenderTarget` 経由の中間形。
+- [x] 候補ウィンドウを GDI から **DirectWrite + DirectComposition** に書き換え
+      (決定 0011/0012)。`WS_EX_NOREDIRECTIONBITMAP` + コンポジションスワップチェイン。
+      合成バッファを読み戻すハーネスで描画結果を確認済み。
+      DComp が使えない環境向けに HDC 経路を残してある(判断はウィンドウ生成前)。
 - [x] エントリポイントを SEH で防御(決定 0017)。ウィンドウプロシージャの
       ディスパッチャ(全ウィンドウを1箇所で)・DLL エクスポート4つ・
       キーイベントシンク6つ・その他の COM メソッド 90。
