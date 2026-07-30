@@ -51,7 +51,7 @@ enum OhageyEngineMain {
             let name = PipeServer.pipeName(sessionId: sessionId)
             log("pipe name: \(name)")
 
-            let service = ConversionService(settings: settings)
+            let service = ConversionService(settings: settings, log: log)
             let router = RequestRouter(handler: service)
 
             // Settings arrive by file, not by IPC (decision 0014). Applied on

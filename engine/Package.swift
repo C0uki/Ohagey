@@ -13,11 +13,16 @@ let package = Package(
         .executable(name: "OhageyEngine", targets: ["OhageyEngine"])
     ],
     dependencies: [
-        // AzooKeyKanaKanjiConverter — pinned to avoid minor-version breaking changes,
-        // per upstream's own recommendation (pre-1.0 API).
+        // AzooKeyKanaKanjiConverter — a fork of the 0.8.5 tag, pinned by commit
+        // (decision 0034). Upstream disables personalisation on Windows; the
+        // fork changes only Package.swift, with no source differences at all,
+        // and depends on a fork of SwiftyMarisa carrying two bug fixes. Pinned
+        // by revision rather than branch so the build stays reproducible, and
+        // still tied to llama.cpp b4846 exactly as decision 0028 requires — the
+        // fork point is 0.8.5 itself.
         .package(
-            url: "https://github.com/azooKey/AzooKeyKanaKanjiConverter",
-            .upToNextMinor(from: "0.8.0"),
+            url: "https://github.com/C0uki/AzooKeyKanaKanjiConverter",
+            revision: "fdaaa9a1dff92109e7b1d88521fe8993b14df2a3",
             traits: ["Zenzai"]
         ),
         // Runtime for the types generated from ohagey.proto (decision 0007).
@@ -48,6 +53,10 @@ let package = Package(
             name: "OhageyEngine",
             dependencies: [
                 .product(name: "KanaKanjiConverterModuleWithDefaultDictionary", package: "AzooKeyKanaKanjiConverter"),
+                // trainNGram, for building the personal language model out of
+                // what the user has committed (decision 0034). The converter
+                // takes trained trie files but offers no way to produce them.
+                .product(name: "EfficientNGram", package: "AzooKeyKanaKanjiConverter"),
                 "OhageyEngineCore",
                 "OhageyEngineProto",
             ],

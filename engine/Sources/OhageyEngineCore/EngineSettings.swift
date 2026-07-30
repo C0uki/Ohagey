@@ -25,6 +25,24 @@ public struct EngineSettings: Codable, Sendable, Equatable {
     /// Learning is on by default; the settings app can disable and erase it
     /// for shared machines such as school PCs (decision 0025).
     public var learningEnabled: Bool = true
+    /// Whether what the user commits also re-ranks Zenzai's own output
+    /// (decision 0034).
+    ///
+    /// Separate from `learningEnabled` because it is a different bargain: the
+    /// converter's learning store is an opaque database, while this keeps a
+    /// plain-text corpus of committed phrases on disk in order to retrain from
+    /// it. Switching learning off switches this off too — never the reverse.
+    public var personalizationEnabled: Bool = true
+    /// How hard the personal model is allowed to push Zenzai's ranking.
+    ///
+    /// Upstream defaults to 0.5, but that assumes the base language model it
+    /// ships, whose own probability for a common token cancels most of the
+    /// term. Ohagey cannot ship that model — its licence is unstated — and uses
+    /// a uniform base instead, against which the same alpha is far stronger.
+    /// Measured on a corpus where one continuation dominated: alpha 0.5 moved
+    /// it by +4.0 logits, enough to overrule the neural model outright, while
+    /// 0.15 moved it by +1.2. See decision 0034.
+    public var personalizationAlpha: Double = 0.15
     public var backend: Backend = .cpu
     /// Upper bound on Zenzai inference steps per request. Surfaced here so the
     /// latency/quality tradeoff is tunable without a rebuild.
@@ -53,6 +71,10 @@ public struct EngineSettings: Codable, Sendable, Equatable {
 
         learningEnabled = try container.decodeIfPresent(Bool.self, forKey: .learningEnabled)
             ?? defaults.learningEnabled
+        personalizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizationEnabled)
+            ?? defaults.personalizationEnabled
+        personalizationAlpha = try container.decodeIfPresent(Double.self, forKey: .personalizationAlpha)
+            ?? defaults.personalizationAlpha
         zenzaiInferenceLimit = try container.decodeIfPresent(Int.self, forKey: .zenzaiInferenceLimit)
             ?? defaults.zenzaiInferenceLimit
         idleTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .idleTimeoutSeconds)
@@ -64,6 +86,26 @@ public struct EngineSettings: Codable, Sendable, Equatable {
         // ping response either way.
         backend = (try? container.decodeIfPresent(Backend.self, forKey: .backend))
             .flatMap { $0 } ?? defaults.backend
+    }
+
+    /// Whether committed text should re-rank Zenzai's output.
+    ///
+    /// Personalisation needs a record of what the user typed, so it cannot
+    /// outlive the consent that learning represents (decision 0025). Expressed
+    /// here rather than at each call site so a future caller cannot check only
+    /// half of it.
+    public var personalizationActive: Bool {
+        learningEnabled && personalizationEnabled
+    }
+
+    /// `personalizationAlpha` restricted to a range that cannot do damage.
+    ///
+    /// A settings file is user-editable, and the value goes straight into a
+    /// logit adjustment. Negative would invert the personalisation — confirming
+    /// a candidate would push it *down* — and a large one drowns the neural
+    /// model out entirely, which looks to the user like conversion has broken.
+    public var effectivePersonalizationAlpha: Float {
+        Float(min(max(personalizationAlpha, 0), 1))
     }
 }
 

@@ -23,13 +23,24 @@ import OhageyEngineCore
 final class ConversionService {
     private let converter = KanaKanjiConverter()
     private var settings: EngineSettings
+    private let personalModel: PersonalLanguageModel
 
-    init(settings: EngineSettings) {
+    init(settings: EngineSettings, log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.settings = settings
+        self.personalModel = PersonalLanguageModel(log: log)
+        personalModel.prepare()
     }
 
     func updateSettings(_ newSettings: EngineSettings) {
+        let wasPersonalizing = settings.personalizationActive
         settings = newSettings
+
+        // Switching learning or personalisation off is a request to stop
+        // keeping the record, not just to stop consulting it (decision 0025).
+        // Someone turning it off on a shared machine means the data should go.
+        if wasPersonalizing, !newSettings.personalizationActive {
+            personalModel.erase()
+        }
     }
 
     /// True when neural conversion is active; false means we fell back to the
@@ -77,19 +88,19 @@ final class ConversionService {
     /// sends back only the text (decision 0007), so the match happens here
     /// against what we handed out.
     ///
-    /// ⚠️ **Learning does not visibly reorder candidates while Zenzai is on.**
-    /// Measured, not assumed: with the model absent, confirming the second
-    /// candidate moves it to first on the next conversion; with the model
-    /// present, the ranking does not budge. Zenzai re-ranks with the neural
-    /// model, and the learning store feeds the lattice underneath it.
+    /// Two stores are fed here, because one of them cannot reach Zenzai.
     ///
-    /// Upstream's mechanism for personalizing Zenzai itself is
-    /// `ZenzaiMode.PersonalizationMode`, which wants two n-gram language model
-    /// files (a base and a personal one) — separate artifacts that have to be
-    /// shipped and maintained, not the learning store. We pass `nil` for it in
-    /// `makeZenzaiMode()`. Wiring that up is its own feature; until then the
-    /// commit still runs, so the learning store is being filled and the
-    /// dictionary path does improve.
+    /// `updateLearningData` fills the converter's own learning store, which
+    /// feeds the lattice — and the lattice sits *underneath* the neural model.
+    /// Measured: with the model absent, confirming the second candidate moves
+    /// it to first on the next conversion; with the model present, the ranking
+    /// does not budge.
+    ///
+    /// So the commit is also recorded for the personal language model, which is
+    /// the one thing upstream lets influence Zenzai's own ranking
+    /// (decision 0034). That path is a corpus and a retraining run, not an
+    /// immediate update, so it takes effect after a batch of commits rather
+    /// than the next keystroke.
     func commit(reading: String, text: String, updateLearning: Bool) {
         defer {
             // The composition is over, so drop the converter's state for it.
@@ -103,6 +114,13 @@ final class ConversionService {
         }
 
         guard updateLearning, settings.learningEnabled else { return }
+
+        // Recorded before the candidate lookup below, and independently of it.
+        // The n-gram is trained on text, so unlike `updateLearningData` it does
+        // not need the converter's `Candidate` — and text the client composed
+        // itself is exactly as valid a thing to learn from as a candidate we
+        // offered.
+        personalModel.record(text: text, settings: settings)
 
         guard let remembered = recentCandidates.first(where: { $0.reading == reading }),
               let candidate = remembered.candidates.first(where: { $0.text == text })
@@ -175,8 +193,10 @@ final class ConversionService {
         return .on(
             weight: EnginePaths.modelURL,
             inferenceLimit: settings.zenzaiInferenceLimit,
-            // No default upstream, so it has to be passed explicitly.
-            personalizationMode: nil
+            // No default upstream, so it has to be passed explicitly. nil until
+            // enough has been committed to train on, and whenever the user has
+            // switched personalisation off (decision 0034).
+            personalizationMode: personalModel.personalizationMode(settings: settings)
         )
         // NOTE: `settings.backend` is deliberately not consulted here.
         // `ZenzaiMode` exposes no backend/GPU-offload field, so the compute

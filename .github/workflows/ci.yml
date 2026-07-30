@@ -157,11 +157,25 @@ jobs:
           if (-not $swift) { throw "swift.exe not found; the Swift setup step did not take" }
           Write-Host "swift: $swift"
 
+          # LIB as the Swift setup left it, handed to the engine build so it
+          # links against the same MSVC its clang compiled with. MSBuild
+          # otherwise replaces LIB with the toolset it picked for the C++
+          # project, and this runner has more than one installed — the mismatch
+          # surfaces as `lld-link: error: undefined symbol: __std_rotate`, an
+          # STL helper the headers call and the other toolset's msvcprt.lib
+          # does not export. See tsf/Ohagey.Engine.targets.
+          # Semicolons escaped: msbuild splits /p: values on ';' and would read
+          # a path list as several properties (MSB1006). It unescapes %3B when
+          # the property is expanded, so the targets file sees the real value.
+          $swiftLib = $env:LIB -replace ';', '%3B'
+          Write-Host "LIB (Swift): $env:LIB"
+
           foreach ($config in @("Debug", "Release")) {
             msbuild SampleIME.vcxproj /t:Rebuild `
               /p:Configuration=$config /p:Platform=x64 `
               /p:OhageyLlamaLibDir="$llama" `
               /p:OhageySwiftExe="$swift" `
+              /p:OhageySwiftLib="$swiftLib" `
               /nologo /v:minimal
             if ($LASTEXITCODE -ne 0) { throw "$config build failed" }
           }
