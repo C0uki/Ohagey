@@ -114,6 +114,10 @@ namespace Ohagey
         // engine or its learning data (decision 0006).
         static bool PipeName(std::wstring* out);
 
+        // Full path to OhageyEngine.exe: the directory this DLL was loaded
+        // from (decision 0033). Returns false if it cannot be determined.
+        static bool EnginePath(std::wstring* out);
+
     private:
         // Sends one framed request and reads the framed reply.
         CallResult Exchange(const std::vector<uint8_t>& payload, uint32_t requestId,
@@ -121,9 +125,19 @@ namespace Ohagey
         bool WriteAll(const uint8_t* data, size_t size);
         bool ReadAll(uint8_t* data, size_t size);
 
+        // Starts the engine if nothing is listening (decisions 0015 / 0033).
+        // Returns true if a launch was attempted, false if it was skipped
+        // because one was attempted too recently.
+        bool LaunchEngine();
+
         HANDLE _pipe = INVALID_HANDLE_VALUE;
         uint32_t _nextRequestId = 1;
         StatusCode _lastStatus = StatusCode::Ok;
         std::wstring _lastStatusMessage;
+
+        // When the last launch was attempted, from GetTickCount64. An engine
+        // that dies on startup would otherwise get a fresh process per
+        // keystroke.
+        uint64_t _lastLaunchTick = 0;
     };
 }

@@ -143,6 +143,7 @@ MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `rel
 | `tools/theme-selftest.cpp` | 配色ルールのテスト。**選択行が見えることを保証**(エンジン不要) |
 | `tools/candidate-preview.cpp` | 候補ウィンドウを画像に描き出す。TSF 登録なしで見た目を確認する |
 | `tools/seh-selftest.cpp` | SEH ガードのテスト。**実際に落として捕まることを確認**(エンジン不要) |
+| `tools/engine-launch.cpp` | **エンジンのオンデマンド起動**のテスト(決定 0015/0033)。エンジンが動いていない状態で実行する |
 
 `OhageyWire.cpp` は**生成コードではない**。`ohagey.proto` を変更したら手で追随すること。
 エンジン側は `swift-protobuf` の生成コードなので、食い違えば往復ハーネスで必ず露見する。

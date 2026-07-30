@@ -37,6 +37,23 @@ namespace Ohagey
             FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES |
             SYNCHRONIZE;
 
+        const wchar_t* const kEngineExeName = L"OhageyEngine.exe";
+
+        // Minimum gap between launch attempts (decision 0033). Long enough that
+        // an engine which dies on startup cannot turn every keystroke into a
+        // new process, short enough that a user who fixes the problem does not
+        // have to wait to notice.
+        const uint64_t kLaunchThrottleMs = 5000;
+
+        // How long to wait for the pipe right after launching.
+        //
+        // Deliberately short. The engine loads its dictionary before it
+        // listens, so this will usually not be enough — and that is fine: the
+        // next keystroke reconnects, so the user loses a conversion or two
+        // rather than watching the application freeze. Blocking the thread that
+        // handles typing is the one thing this must not do.
+        const DWORD kPostLaunchWaitMs = 250;
+
         void PutFrameHeader(std::vector<uint8_t>& frame, uint32_t length)
         {
             // Little-endian, matching Framing.swift. Written byte by byte
@@ -78,6 +95,85 @@ namespace Ohagey
         return true;
     }
 
+    bool EngineClient::EnginePath(std::wstring* out)
+    {
+#ifdef OHAGEY_ALLOW_ENGINE_PATH_OVERRIDE
+        // Development only, and compiled out entirely otherwise: this names an
+        // executable to run, and the DLL inherits the environment of whatever
+        // application it was loaded into (decision 0033).
+        wchar_t override[MAX_PATH] = {};
+        const DWORD length = GetEnvironmentVariableW(L"OHAGEY_ENGINE_PATH", override, MAX_PATH);
+        if (length > 0 && length < MAX_PATH)
+        {
+            out->assign(override, length);
+            return true;
+        }
+#endif
+
+        // The engine sits beside this DLL (decision 0033). Asking the module
+        // where it is avoids a registry value that could disagree with where
+        // the files actually ended up.
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                                    | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                reinterpret_cast<LPCWSTR>(&EngineClient::EnginePath),
+                                &self))
+        {
+            return false;
+        }
+
+        wchar_t modulePath[MAX_PATH] = {};
+        const DWORD written = GetModuleFileNameW(self, modulePath, MAX_PATH);
+        if (written == 0 || written >= MAX_PATH) return false;
+
+        std::wstring path(modulePath, written);
+        const size_t slash = path.find_last_of(L'\\');
+        if (slash == std::wstring::npos) return false;
+
+        path.resize(slash + 1);
+        path += kEngineExeName;
+        *out = path;
+        return true;
+    }
+
+    bool EngineClient::LaunchEngine()
+    {
+        const uint64_t now = GetTickCount64();
+        if (_lastLaunchTick != 0 && now - _lastLaunchTick < kLaunchThrottleMs)
+        {
+            return false;
+        }
+        _lastLaunchTick = now;
+
+        std::wstring path;
+        if (!EnginePath(&path)) return false;
+
+        // CreateProcessW may write to the command line buffer, so it cannot be
+        // a string literal or a c_str().
+        std::wstring commandLine = L"\"" + path + L"\"";
+
+        STARTUPINFOW startup = {};
+        startup.cb = sizeof(startup);
+        PROCESS_INFORMATION process = {};
+
+        // No window and no console: this runs behind whatever application the
+        // user is typing in. Handles are not inherited — the engine has no
+        // business holding the host's.
+        const BOOL launched = CreateProcessW(
+            path.c_str(), &commandLine[0], nullptr, nullptr, FALSE,
+            CREATE_NO_WINDOW | DETACHED_PROCESS,
+            nullptr, nullptr, &startup, &process);
+
+        if (!launched) return false;
+
+        // Closed immediately: the engine outlives whoever started it and ends
+        // on its own idle timeout (decision 0015). Holding the handles would
+        // only tie its lifetime to this application's.
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+        return true;
+    }
+
     bool EngineClient::Connect()
     {
         if (IsConnected()) return true;
@@ -94,15 +190,29 @@ namespace Ohagey
                                 OPEN_EXISTING, 0, nullptr);
             if (_pipe != INVALID_HANDLE_VALUE) return true;
 
-            if (GetLastError() != ERROR_PIPE_BUSY) break;
-            if (!WaitNamedPipeW(name.c_str(), 1000)) break;
+            const DWORD error = GetLastError();
+
+            if (error == ERROR_PIPE_BUSY)
+            {
+                if (!WaitNamedPipeW(name.c_str(), 1000)) break;
+                continue;
+            }
+
+            // Nothing is listening: the engine is not running. Start it
+            // (decisions 0015 / 0033) and give the pipe a moment to appear.
+            if (error == ERROR_FILE_NOT_FOUND && attempt == 0)
+            {
+                if (!LaunchEngine()) break;
+                // Usually not long enough — see kPostLaunchWaitMs. Failing here
+                // costs the user a conversion, not a frozen application.
+                WaitNamedPipeW(name.c_str(), kPostLaunchWaitMs);
+                continue;
+            }
+
+            break;
         }
 
         _pipe = INVALID_HANDLE_VALUE;
-        // TODO (decision 0015): when the engine is not running at all
-        // (ERROR_FILE_NOT_FOUND) the client is supposed to launch it. That
-        // needs the installed location, which the installer layout has not
-        // fixed yet (phase 3).
         return false;
     }
 
