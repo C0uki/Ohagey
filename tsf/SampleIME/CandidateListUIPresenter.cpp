@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "SampleIME.h"
 #include "CandidateWindow.h"
 #include "CandidateListUIPresenter.h"
@@ -359,7 +360,7 @@ CCandidateListUIPresenter::~CCandidateListUIPresenter()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CCandidateListUIPresenter::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (CTfTextLayoutSink::QueryInterface(riid, ppvObj) == S_OK)
     {
@@ -437,7 +438,7 @@ STDAPI_(ULONG) CCandidateListUIPresenter::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetDescription(BSTR *pbstr)
+HRESULT CCandidateListUIPresenter::GetDescriptionImpl(BSTR *pbstr)
 {
     if (pbstr)
     {
@@ -452,7 +453,7 @@ STDAPI CCandidateListUIPresenter::GetDescription(BSTR *pbstr)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetGUID(GUID *pguid)
+HRESULT CCandidateListUIPresenter::GetGUIDImpl(GUID *pguid)
 {
     *pguid = Global::SampleIMEGuidCandUIElement;
     return S_OK;
@@ -464,7 +465,7 @@ STDAPI CCandidateListUIPresenter::GetGUID(GUID *pguid)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::Show(BOOL showCandidateWindow)
+HRESULT CCandidateListUIPresenter::ShowImpl(BOOL showCandidateWindow)
 {
     if (showCandidateWindow)
     {
@@ -512,7 +513,7 @@ HRESULT CCandidateListUIPresenter::ToHideCandidateWindow()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::IsShown(BOOL *pIsShow)
+HRESULT CCandidateListUIPresenter::IsShownImpl(BOOL *pIsShow)
 {
     *pIsShow = _pCandidateWnd->_IsWindowVisible();
     return S_OK;
@@ -524,7 +525,7 @@ STDAPI CCandidateListUIPresenter::IsShown(BOOL *pIsShow)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetUpdatedFlags(DWORD *pdwFlags)
+HRESULT CCandidateListUIPresenter::GetUpdatedFlagsImpl(DWORD *pdwFlags)
 {
     *pdwFlags = _updatedFlags;
     return S_OK;
@@ -536,7 +537,7 @@ STDAPI CCandidateListUIPresenter::GetUpdatedFlags(DWORD *pdwFlags)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetDocumentMgr(ITfDocumentMgr **ppdim)
+HRESULT CCandidateListUIPresenter::GetDocumentMgrImpl(ITfDocumentMgr **ppdim)
 {
     *ppdim = nullptr;
 
@@ -549,7 +550,7 @@ STDAPI CCandidateListUIPresenter::GetDocumentMgr(ITfDocumentMgr **ppdim)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetCount(UINT *pCandidateCount)
+HRESULT CCandidateListUIPresenter::GetCountImpl(UINT *pCandidateCount)
 {
     if (_pCandidateWnd)
     {
@@ -568,7 +569,7 @@ STDAPI CCandidateListUIPresenter::GetCount(UINT *pCandidateCount)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetSelection(UINT *pSelectedCandidateIndex)
+HRESULT CCandidateListUIPresenter::GetSelectionImpl(UINT *pSelectedCandidateIndex)
 {
     if (_pCandidateWnd)
     {
@@ -587,7 +588,7 @@ STDAPI CCandidateListUIPresenter::GetSelection(UINT *pSelectedCandidateIndex)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetString(UINT uIndex, BSTR *pbstr)
+HRESULT CCandidateListUIPresenter::GetStringImpl(UINT uIndex, BSTR *pbstr)
 {
     if (!_pCandidateWnd || (uIndex > _pCandidateWnd->_GetCount()))
     {
@@ -610,7 +611,7 @@ STDAPI CCandidateListUIPresenter::GetString(UINT uIndex, BSTR *pbstr)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetPageIndex(UINT *pIndex, UINT uSize, UINT *puPageCnt)
+HRESULT CCandidateListUIPresenter::GetPageIndexImpl(UINT *pIndex, UINT uSize, UINT *puPageCnt)
 {
     if (!_pCandidateWnd)
     {
@@ -630,7 +631,7 @@ STDAPI CCandidateListUIPresenter::GetPageIndex(UINT *pIndex, UINT uSize, UINT *p
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::SetPageIndex(UINT *pIndex, UINT uPageCnt)
+HRESULT CCandidateListUIPresenter::SetPageIndexImpl(UINT *pIndex, UINT uPageCnt)
 {
     if (!_pCandidateWnd)
     {
@@ -645,7 +646,7 @@ STDAPI CCandidateListUIPresenter::SetPageIndex(UINT *pIndex, UINT uPageCnt)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetCurrentPage(UINT *puPage)
+HRESULT CCandidateListUIPresenter::GetCurrentPageImpl(UINT *puPage)
 {
     if (!_pCandidateWnd)
     {
@@ -661,7 +662,7 @@ STDAPI CCandidateListUIPresenter::GetCurrentPage(UINT *puPage)
 // It is related of the mouse clicking behavior upon the suggestion window
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::SetSelection(UINT nIndex)
+HRESULT CCandidateListUIPresenter::SetSelectionImpl(UINT nIndex)
 {
     if (_pCandidateWnd)
     {
@@ -677,7 +678,7 @@ STDAPI CCandidateListUIPresenter::SetSelection(UINT nIndex)
 // It is related of the mouse clicking behavior upon the suggestion window
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::Finalize(void)
+HRESULT CCandidateListUIPresenter::FinalizeImpl(void)
 {
     _CandidateChangeNotification(CAND_ITEM_SELECT);
     return S_OK;
@@ -689,7 +690,7 @@ STDAPI CCandidateListUIPresenter::Finalize(void)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::Abort(void)
+HRESULT CCandidateListUIPresenter::AbortImpl(void)
 {
     return E_NOTIMPL;
 }
@@ -700,7 +701,7 @@ STDAPI CCandidateListUIPresenter::Abort(void)
 // To show candidateNumbers on the suggestion window
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::SetIntegrationStyle(GUID guidIntegrationStyle)
+HRESULT CCandidateListUIPresenter::SetIntegrationStyleImpl(GUID guidIntegrationStyle)
 {
     return (guidIntegrationStyle == GUID_INTEGRATIONSTYLE_SEARCHBOX) ? S_OK : E_NOTIMPL;
 }
@@ -711,7 +712,7 @@ STDAPI CCandidateListUIPresenter::SetIntegrationStyle(GUID guidIntegrationStyle)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::GetSelectionStyle(_Out_ TfIntegratableCandidateListSelectionStyle *ptfSelectionStyle)
+HRESULT CCandidateListUIPresenter::GetSelectionStyleImpl(_Out_ TfIntegratableCandidateListSelectionStyle *ptfSelectionStyle)
 {
     *ptfSelectionStyle = STYLE_ACTIVE_SELECTION;
     return S_OK;
@@ -723,7 +724,7 @@ STDAPI CCandidateListUIPresenter::GetSelectionStyle(_Out_ TfIntegratableCandidat
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::OnKeyDown(_In_ WPARAM wParam, _In_ LPARAM lParam, _Out_ BOOL *pIsEaten)
+HRESULT CCandidateListUIPresenter::OnKeyDownImpl(_In_ WPARAM wParam, _In_ LPARAM lParam, _Out_ BOOL *pIsEaten)
 {
     wParam;
     lParam;
@@ -738,7 +739,7 @@ STDAPI CCandidateListUIPresenter::OnKeyDown(_In_ WPARAM wParam, _In_ LPARAM lPar
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::ShowCandidateNumbers(_Out_ BOOL *pIsShow)
+HRESULT CCandidateListUIPresenter::ShowCandidateNumbersImpl(_Out_ BOOL *pIsShow)
 {
     *pIsShow = TRUE;
     return S_OK;
@@ -750,7 +751,7 @@ STDAPI CCandidateListUIPresenter::ShowCandidateNumbers(_Out_ BOOL *pIsShow)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCandidateListUIPresenter::FinalizeExactCompositionString()
+HRESULT CCandidateListUIPresenter::FinalizeExactCompositionStringImpl()
 {
     return E_NOTIMPL;
 }
@@ -1303,3 +1304,55 @@ void CCandidateListUIPresenter::DisposeCandidateWindow()
     delete _pCandidateWnd;
     _pCandidateWnd = nullptr;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CCandidateListUIPresenter, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetDescription, (BSTR *pbstr), (pbstr))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetGUID, (GUID *pguid), (pguid))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, Show, (BOOL showCandidateWindow), (showCandidateWindow))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, IsShown, (BOOL *pIsShow), (pIsShow))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetUpdatedFlags, (DWORD *pdwFlags), (pdwFlags))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetDocumentMgr, (ITfDocumentMgr **ppdim), (ppdim))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetCount, (UINT *pCandidateCount), (pCandidateCount))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetSelection, (UINT *pSelectedCandidateIndex), (pSelectedCandidateIndex))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetString, (UINT uIndex, BSTR *pbstr), (uIndex, pbstr))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetPageIndex, (UINT *pIndex, UINT uSize, UINT *puPageCnt), (pIndex, uSize, puPageCnt))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, SetPageIndex, (UINT *pIndex, UINT uPageCnt), (pIndex, uPageCnt))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetCurrentPage, (UINT *puPage), (puPage))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, SetSelection, (UINT nIndex), (nIndex))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, Finalize, (void), ())
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, Abort, (void), ())
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, SetIntegrationStyle, (GUID guidIntegrationStyle), (guidIntegrationStyle))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, GetSelectionStyle, (_Out_ TfIntegratableCandidateListSelectionStyle *ptfSelectionStyle), (ptfSelectionStyle))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, OnKeyDown, (_In_ WPARAM wParam, _In_ LPARAM lParam, _Out_ BOOL *pIsEaten), (wParam, lParam, pIsEaten))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, ShowCandidateNumbers, (_Out_ BOOL *pIsShow), (pIsShow))
+
+OHAGEY_SEH_HRESULT(CCandidateListUIPresenter, FinalizeExactCompositionString, (), ())

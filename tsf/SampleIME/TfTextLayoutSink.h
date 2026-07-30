@@ -17,11 +17,13 @@ public:
 
     // IUnknown methods
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // ITfTextLayoutSink
     STDMETHODIMP OnLayoutChange(_In_ ITfContext *pContext, TfLayoutCode lcode, _In_ ITfContextView *pContextView);
+    HRESULT OnLayoutChangeImpl(_In_ ITfContext *pContext, TfLayoutCode lcode, _In_ ITfContextView *pContextView);
 
     HRESULT _StartLayout(_In_ ITfContext *pContextDocument, TfEditCookie ec, _In_ ITfRange *pRangeComposition);
     VOID _EndLayout();

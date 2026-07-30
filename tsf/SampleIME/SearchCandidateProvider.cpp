@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "SearchCandidateProvider.h"
 #include <new>
 #include "SampleIME.h"
@@ -85,7 +86,7 @@ query interface
 (IUnknown method)
 
 ------------------------------------------------------------------------------*/
-STDMETHODIMP CSearchCandidateProvider::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CSearchCandidateProvider::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -140,7 +141,7 @@ STDMETHODIMP_(ULONG) CSearchCandidateProvider::Release()
     return 0;
 }
 
-STDMETHODIMP CSearchCandidateProvider::GetDisplayName(_Out_ BSTR *pbstrName)
+HRESULT CSearchCandidateProvider::GetDisplayNameImpl(_Out_ BSTR *pbstrName)
 {
     if (pbstrName == nullptr)
     {
@@ -151,7 +152,7 @@ STDMETHODIMP CSearchCandidateProvider::GetDisplayName(_Out_ BSTR *pbstrName)
     return  S_OK;
 }
 
-STDMETHODIMP CSearchCandidateProvider::GetSearchCandidates(BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist)
+HRESULT CSearchCandidateProvider::GetSearchCandidatesImpl(BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist)
 {
 	bstrApplicationID;bstrQuery;
     HRESULT hr = E_FAIL;
@@ -201,10 +202,27 @@ set result
 (ITfFnSearchCandidateProvider method)
 
 ------------------------------------------------------------------------------*/
-STDMETHODIMP CSearchCandidateProvider::SetResult(BSTR bstrQuery, BSTR bstrApplicationID, BSTR bstrResult)
+HRESULT CSearchCandidateProvider::SetResultImpl(BSTR bstrQuery, BSTR bstrApplicationID, BSTR bstrResult)
 {
     bstrQuery;bstrApplicationID;bstrResult;
 
     return E_NOTIMPL;
 }
 
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CSearchCandidateProvider, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CSearchCandidateProvider, GetDisplayName, (_Out_ BSTR *pbstrName), (pbstrName))
+
+OHAGEY_SEH_HRESULT_OUT(CSearchCandidateProvider, GetSearchCandidates, (BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist), (bstrQuery, bstrApplicationID, pplist), pplist)
+
+OHAGEY_SEH_HRESULT(CSearchCandidateProvider, SetResult, (BSTR bstrQuery, BSTR bstrApplicationID, BSTR bstrResult), (bstrQuery, bstrApplicationID, bstrResult))

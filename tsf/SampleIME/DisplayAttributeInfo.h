@@ -22,15 +22,21 @@ public:
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // ITfDisplayAttributeInfo
     STDMETHODIMP GetGUID(_Out_ GUID *pguid);
+    HRESULT GetGUIDImpl(_Out_ GUID *pguid);
     STDMETHODIMP GetDescription(_Out_ BSTR *pbstrDesc);
+    HRESULT GetDescriptionImpl(_Out_ BSTR *pbstrDesc);
     STDMETHODIMP GetAttributeInfo(_Out_ TF_DISPLAYATTRIBUTE *pTSFDisplayAttr);
+    HRESULT GetAttributeInfoImpl(_Out_ TF_DISPLAYATTRIBUTE *pTSFDisplayAttr);
     STDMETHODIMP SetAttributeInfo(_In_ const TF_DISPLAYATTRIBUTE *ptfDisplayAttr);
+    HRESULT SetAttributeInfoImpl(_In_ const TF_DISPLAYATTRIBUTE *ptfDisplayAttr);
     STDMETHODIMP Reset();
+    HRESULT ResetImpl();
 
 protected:
     const GUID* _pguid;

@@ -33,6 +33,7 @@ public:
 
     // ITfEditSession
     STDMETHODIMP DoEditSession(TfEditCookie ec);
+    HRESULT DoEditSessionImpl(TfEditCookie ec);
 
 private:
     ITfContextView* _pContextView;

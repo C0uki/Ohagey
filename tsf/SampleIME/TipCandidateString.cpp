@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "TipCandidateString.h"
 
 HRESULT CTipCandidateString::CreateInstance(_Outptr_ CTipCandidateString **ppobj)
@@ -53,7 +54,7 @@ CTipCandidateString::~CTipCandidateString()
 }
 
 // IUnknown methods
-STDMETHODIMP CTipCandidateString::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CTipCandidateString::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -98,13 +99,13 @@ STDMETHODIMP_(ULONG) CTipCandidateString::Release(void)
 }
 
 // ITfCandidateString methods
-STDMETHODIMP CTipCandidateString::GetString(BSTR *pbstr)
+HRESULT CTipCandidateString::GetStringImpl(BSTR *pbstr)
 {
     *pbstr = SysAllocString(_candidateStr.c_str());
     return S_OK;
 }
 
-STDMETHODIMP CTipCandidateString::GetIndex(_Out_ ULONG *pnIndex)
+HRESULT CTipCandidateString::GetIndexImpl(_Out_ ULONG *pnIndex)
 {
     if (pnIndex == nullptr)
     {
@@ -115,14 +116,34 @@ STDMETHODIMP CTipCandidateString::GetIndex(_Out_ ULONG *pnIndex)
     return S_OK;
 }
 
-STDMETHODIMP CTipCandidateString::SetIndex(ULONG uIndex)
+HRESULT CTipCandidateString::SetIndexImpl(ULONG uIndex)
 {
     _index = uIndex;
     return S_OK;
 }
 
-STDMETHODIMP CTipCandidateString::SetString(_In_ const WCHAR *pch, DWORD_PTR length)
+HRESULT CTipCandidateString::SetStringImpl(_In_ const WCHAR *pch, DWORD_PTR length)
 {
     _candidateStr.assign(pch, 0, length);
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CTipCandidateString, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CTipCandidateString, GetString, (BSTR *pbstr), (pbstr))
+
+OHAGEY_SEH_HRESULT(CTipCandidateString, GetIndex, (_Out_ ULONG *pnIndex), (pnIndex))
+
+OHAGEY_SEH_HRESULT(CTipCandidateString, SetIndex, (ULONG uIndex), (uIndex))
+
+OHAGEY_SEH_HRESULT(CTipCandidateString, SetString, (_In_ const WCHAR *pch, DWORD_PTR length), (pch, length))

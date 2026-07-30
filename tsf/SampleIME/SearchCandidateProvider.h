@@ -29,19 +29,23 @@ public:
 
     // IUnknown methods
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // ITfFunction methods
     STDMETHODIMP GetDisplayName(_Out_ BSTR *pbstrName);
+    HRESULT GetDisplayNameImpl(_Out_ BSTR *pbstrName);
 
     // ITfFnSearchCandidateProvider methods
 	//
 	// GetSearchCandidates is responsible for supporting the candidates to caller, search integration
 	// SetResult is not used
 	//
-    STDMETHODIMP GetSearchCandidates(BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist); 
+    STDMETHODIMP GetSearchCandidates(BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist);
+    HRESULT GetSearchCandidatesImpl(BSTR bstrQuery, BSTR bstrApplicationID, _Outptr_result_maybenull_ ITfCandidateList **pplist); 
     STDMETHODIMP SetResult(BSTR bstrQuery, BSTR bstrApplicationID, BSTR bstrResult);
+    HRESULT SetResultImpl(BSTR bstrQuery, BSTR bstrApplicationID, BSTR bstrResult);
 
 private:
     LONG _refCount;

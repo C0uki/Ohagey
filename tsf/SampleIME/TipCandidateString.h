@@ -22,15 +22,20 @@ public:
 
     // IUnknown methods
     virtual STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     virtual STDMETHODIMP_(ULONG) AddRef();
     virtual STDMETHODIMP_(ULONG) Release();
 
     // ITfCandidateString methods
     virtual STDMETHODIMP GetString(BSTR *pbstr);
+    HRESULT GetStringImpl(BSTR *pbstr);
     virtual STDMETHODIMP GetIndex(_Out_ ULONG *pnIndex);
+    HRESULT GetIndexImpl(_Out_ ULONG *pnIndex);
 
     virtual STDMETHODIMP SetIndex(ULONG uIndex);
+    HRESULT SetIndexImpl(ULONG uIndex);
     virtual STDMETHODIMP SetString(_In_ const WCHAR *pch, DWORD_PTR length);
+    HRESULT SetStringImpl(_In_ const WCHAR *pch, DWORD_PTR length);
 
 protected:
     long _refCount;

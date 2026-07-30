@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "globals.h"
 #include "SampleIME.h"
 #include "DisplayAttributeInfo.h"
@@ -42,7 +43,7 @@ CEnumDisplayAttributeInfo::~CEnumDisplayAttributeInfo()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CEnumDisplayAttributeInfo::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CEnumDisplayAttributeInfo::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
         return E_INVALIDARG;
@@ -103,7 +104,7 @@ STDAPI_(ULONG) CEnumDisplayAttributeInfo::Release()
 // Returns a copy of the object.
 //----------------------------------------------------------------------------
 
-STDAPI CEnumDisplayAttributeInfo::Clone(_Out_ IEnumTfDisplayAttributeInfo **ppEnum)
+HRESULT CEnumDisplayAttributeInfo::CloneImpl(_Out_ IEnumTfDisplayAttributeInfo **ppEnum)
 {
     CEnumDisplayAttributeInfo* pClone = nullptr;
 
@@ -137,7 +138,7 @@ STDAPI CEnumDisplayAttributeInfo::Clone(_Out_ IEnumTfDisplayAttributeInfo **ppEn
 
 const int MAX_DISPLAY_ATTRIBUTE_INFO = 2;
 
-STDAPI CEnumDisplayAttributeInfo::Next(ULONG ulCount, __RPC__out_ecount_part(ulCount, *pcFetched) ITfDisplayAttributeInfo **rgInfo, __RPC__out ULONG *pcFetched)
+HRESULT CEnumDisplayAttributeInfo::NextImpl(ULONG ulCount, __RPC__out_ecount_part(ulCount, *pcFetched) ITfDisplayAttributeInfo **rgInfo, __RPC__out ULONG *pcFetched)
 {
     ULONG fetched;
 
@@ -201,7 +202,7 @@ STDAPI CEnumDisplayAttributeInfo::Next(ULONG ulCount, __RPC__out_ecount_part(ulC
 // Resets the enumeration.
 //----------------------------------------------------------------------------
 
-STDAPI CEnumDisplayAttributeInfo::Reset()
+HRESULT CEnumDisplayAttributeInfo::ResetImpl()
 {
     _index = 0;
     return S_OK;
@@ -214,7 +215,7 @@ STDAPI CEnumDisplayAttributeInfo::Reset()
 // Skips past objects in the enumeration.
 //----------------------------------------------------------------------------
 
-STDAPI CEnumDisplayAttributeInfo::Skip(ULONG ulCount)
+HRESULT CEnumDisplayAttributeInfo::SkipImpl(ULONG ulCount)
 {
     if ((ulCount + _index) > MAX_DISPLAY_ATTRIBUTE_INFO || (ulCount + _index) < ulCount)
     {
@@ -224,3 +225,23 @@ STDAPI CEnumDisplayAttributeInfo::Skip(ULONG ulCount)
     _index += ulCount;
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CEnumDisplayAttributeInfo, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CEnumDisplayAttributeInfo, Clone, (_Out_ IEnumTfDisplayAttributeInfo **ppEnum), (ppEnum))
+
+OHAGEY_SEH_HRESULT(CEnumDisplayAttributeInfo, Next, (ULONG ulCount, __RPC__out_ecount_part(ulCount, *pcFetched) ITfDisplayAttributeInfo **rgInfo, __RPC__out ULONG *pcFetched), (ulCount, rgInfo, pcFetched))
+
+OHAGEY_SEH_HRESULT(CEnumDisplayAttributeInfo, Reset, (), ())
+
+OHAGEY_SEH_HRESULT(CEnumDisplayAttributeInfo, Skip, (ULONG ulCount), (ulCount))

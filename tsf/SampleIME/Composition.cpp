@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "Globals.h"
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
@@ -18,7 +19,7 @@
 // someone other than this service ends a composition.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnCompositionTerminated(TfEditCookie ecWrite, _In_ ITfComposition *pComposition)
+HRESULT CSampleIME::OnCompositionTerminatedImpl(TfEditCookie ecWrite, _In_ ITfComposition *pComposition)
 {
     // Clear dummy composition
     _RemoveDummyCompositionForComposing(ecWrite, pComposition);
@@ -375,3 +376,15 @@ BOOL CSampleIME::_SetCompositionLanguage(TfEditCookie ec, _In_ ITfContext *pCont
 Exit:
     return ret;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnCompositionTerminated, (TfEditCookie ecWrite, _In_ ITfComposition *pComposition), (ecWrite, pComposition))

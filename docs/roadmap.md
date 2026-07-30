@@ -169,9 +169,12 @@ Zenzai 自体を個人化する仕組みは upstream の `ZenzaiMode.Personaliza
 - [ ] エンジンのオンデマンド起動(決定 0015)。インストール先が未確定のためフェーズ3待ち。
 - [x] 候補ウィンドウを GDI から DirectWrite に書き換え(決定 0011/0012)。
       **DirectComposition 化は未了** — 現状は `ID2D1DCRenderTarget` 経由の中間形。
-- [x] 主要エントリポイントを SEH で防御(決定 0017)。ウィンドウプロシージャの
-      ディスパッチャ・DLL エクスポート4つ・キーイベントシンク6つ。
-      **COM エントリポイント 112 のうち残り約100は未防御**(`tsf/README.md` の表参照)。
+- [x] エントリポイントを SEH で防御(決定 0017)。ウィンドウプロシージャの
+      ディスパッチャ(全ウィンドウを1箇所で)・DLL エクスポート4つ・
+      キーイベントシンク6つ・その他の COM メソッド 90。
+      **`AddRef` / `Release` の 24 は意図的に非防御** — 参照カウント転送で落ちる時点で
+      `this` が壊れており、でっち上げたカウントは障害を別の場所の use-after-free に
+      化けさせるため(`tsf/README.md` 参照)。
 - [x] MSBuild + `swift build` 連携ターゲット(決定 0020)、CI で MSBuild 有効化。
       `tsf/Ohagey.Engine.targets`。CI では engine ジョブの後に走らせ、
       llama.cpp のキャッシュを共有する。

@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "Globals.h"
 #include "EditSession.h"
 #include "SampleIME.h"
@@ -25,6 +26,7 @@ public:
 
     // ITfEditSession
     STDMETHODIMP DoEditSession(TfEditCookie ec);
+    HRESULT DoEditSessionImpl(TfEditCookie ec);
 };
 
 //+---------------------------------------------------------------------------
@@ -33,7 +35,7 @@ public:
 //
 //----------------------------------------------------------------------------
 
-STDAPI CStartCompositionEditSession::DoEditSession(TfEditCookie ec)
+HRESULT CStartCompositionEditSession::DoEditSessionImpl(TfEditCookie ec)
 {
     ITfInsertAtSelection* pInsertAtSelection = nullptr;
     ITfRange* pRangeInsert = nullptr;
@@ -130,4 +132,16 @@ void CSampleIME::_SaveCompositionContext(_In_ ITfContext *pContext)
 
     pContext->AddRef();
     _pContext = pContext;
-} 
+}
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT(CStartCompositionEditSession, DoEditSession, (TfEditCookie ec), (ec))

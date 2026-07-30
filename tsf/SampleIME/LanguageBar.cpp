@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
 #include "LanguageBar.h"
@@ -200,7 +201,7 @@ void CLangBarItemButton::CleanUp()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CLangBarItemButton::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -267,7 +268,7 @@ STDAPI_(ULONG) CLangBarItemButton::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::GetInfo(_Out_ TF_LANGBARITEMINFO *pInfo)
+HRESULT CLangBarItemButton::GetInfoImpl(_Out_ TF_LANGBARITEMINFO *pInfo)
 {
     _tfLangBarItemInfo.dwStyle |= TF_LBI_STYLE_SHOWNINTRAY;
     *pInfo = _tfLangBarItemInfo;
@@ -280,7 +281,7 @@ STDAPI CLangBarItemButton::GetInfo(_Out_ TF_LANGBARITEMINFO *pInfo)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::GetStatus(_Out_ DWORD *pdwStatus)
+HRESULT CLangBarItemButton::GetStatusImpl(_Out_ DWORD *pdwStatus)
 {
     if (pdwStatus == nullptr)
     {
@@ -332,7 +333,7 @@ void CLangBarItemButton::SetStatus(DWORD dwStatus, BOOL fSet)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::Show(BOOL fShow)
+HRESULT CLangBarItemButton::ShowImpl(BOOL fShow)
 {
 	fShow;
     if (_pLangBarItemSink)
@@ -348,7 +349,7 @@ STDAPI CLangBarItemButton::Show(BOOL fShow)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::GetTooltipString(_Out_ BSTR *pbstrToolTip)
+HRESULT CLangBarItemButton::GetTooltipStringImpl(_Out_ BSTR *pbstrToolTip)
 {
     *pbstrToolTip = SysAllocString(_pTooltipText);
 
@@ -361,7 +362,7 @@ STDAPI CLangBarItemButton::GetTooltipString(_Out_ BSTR *pbstrToolTip)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::OnClick(TfLBIClick click, POINT pt, _In_ const RECT *prcArea)
+HRESULT CLangBarItemButton::OnClickImpl(TfLBIClick click, POINT pt, _In_ const RECT *prcArea)
 {
     click;pt;
     prcArea;
@@ -380,7 +381,7 @@ STDAPI CLangBarItemButton::OnClick(TfLBIClick click, POINT pt, _In_ const RECT *
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::InitMenu(_In_ ITfMenu *pMenu)
+HRESULT CLangBarItemButton::InitMenuImpl(_In_ ITfMenu *pMenu)
 {
     pMenu;
 
@@ -393,7 +394,7 @@ STDAPI CLangBarItemButton::InitMenu(_In_ ITfMenu *pMenu)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::OnMenuSelect(UINT wID)
+HRESULT CLangBarItemButton::OnMenuSelectImpl(UINT wID)
 {
     wID;
 
@@ -406,7 +407,7 @@ STDAPI CLangBarItemButton::OnMenuSelect(UINT wID)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::GetIcon(_Out_ HICON *phIcon)
+HRESULT CLangBarItemButton::GetIconImpl(_Out_ HICON *phIcon)
 {
     BOOL isOn = FALSE;
 
@@ -456,7 +457,7 @@ STDAPI CLangBarItemButton::GetIcon(_Out_ HICON *phIcon)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::GetText(_Out_ BSTR *pbstrText)
+HRESULT CLangBarItemButton::GetTextImpl(_Out_ BSTR *pbstrText)
 {
     *pbstrText = SysAllocString(_tfLangBarItemInfo.szDescription);
 
@@ -469,7 +470,7 @@ STDAPI CLangBarItemButton::GetText(_Out_ BSTR *pbstrText)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::AdviseSink(__RPC__in REFIID riid, __RPC__in_opt IUnknown *punk, __RPC__out DWORD *pdwCookie)
+HRESULT CLangBarItemButton::AdviseSinkImpl(__RPC__in REFIID riid, __RPC__in_opt IUnknown *punk, __RPC__out DWORD *pdwCookie)
 {
     // We allow only ITfLangBarItemSink interface.
     if (!IsEqualIID(IID_ITfLangBarItemSink, riid))
@@ -505,7 +506,7 @@ STDAPI CLangBarItemButton::AdviseSink(__RPC__in REFIID riid, __RPC__in_opt IUnkn
 //
 //----------------------------------------------------------------------------
 
-STDAPI CLangBarItemButton::UnadviseSink(DWORD dwCookie)
+HRESULT CLangBarItemButton::UnadviseSinkImpl(DWORD dwCookie)
 {
     // Check the given cookie.
     if (dwCookie != _cookie)
@@ -660,3 +661,37 @@ HRESULT CLangBarItemButton::_CompartmentCallback(_In_ void *pv, REFGUID guidComp
 
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CLangBarItemButton, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, GetInfo, (_Out_ TF_LANGBARITEMINFO *pInfo), (pInfo))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, GetStatus, (_Out_ DWORD *pdwStatus), (pdwStatus))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, Show, (BOOL fShow), (fShow))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, GetTooltipString, (_Out_ BSTR *pbstrToolTip), (pbstrToolTip))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, OnClick, (TfLBIClick click, POINT pt, _In_ const RECT *prcArea), (click, pt, prcArea))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, InitMenu, (_In_ ITfMenu *pMenu), (pMenu))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, OnMenuSelect, (UINT wID), (wID))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, GetIcon, (_Out_ HICON *phIcon), (phIcon))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, GetText, (_Out_ BSTR *pbstrText), (pbstrText))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, AdviseSink, (__RPC__in REFIID riid, __RPC__in_opt IUnknown *punk, __RPC__out DWORD *pdwCookie), (riid, punk, pdwCookie))
+
+OHAGEY_SEH_HRESULT(CLangBarItemButton, UnadviseSink, (DWORD dwCookie), (dwCookie))
