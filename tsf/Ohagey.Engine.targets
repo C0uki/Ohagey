@@ -23,6 +23,13 @@
                             checkouts are long enough to hit the 260-character
                             limit (see docs/local-setup.md).
 
+    OhageySwiftLib          Value to use for LIB when building the engine,
+                            replacing whatever MSBuild set for the C++ project.
+                            Only needed where the two disagree about which MSVC
+                            toolset to use — see the Exec below. On a developer
+                            machine, where MSBuild and the Swift toolchain
+                            normally resolve to the same MSVC, leave it unset.
+
     OhageySwiftExe          Full path to swift.exe. Defaults to plain "swift",
                             found on PATH. Set it where PATH cannot be relied
                             on: MSBuild's Exec runs through cmd.exe, and on a
@@ -69,21 +76,43 @@
     <Message Importance="high"
              Text="Ohagey: building the Swift engine ($(OhageySwiftConfiguration))" />
 
-    <!-- INCLUDE and EXTERNAL_INCLUDE are cleared for this call on purpose.
-         They describe the C++ headers MSBuild picked for *this* project, and
-         the Swift toolchain does not want them: its clang resolves the MSVC and
-         Windows SDK headers through paths recorded when Swift was installed.
-         When the two disagree the C module build fails in a way that names
-         neither cause — on the CI runner INCLUDE pointed at MSVC 14.51 while
-         Swift's clang used 14.44, and the result was
+    <!-- ── Why this call gets its own MSVC environment ────────────────────
+
+         MSBuild sets INCLUDE and LIB to the MSVC toolset it picked for *this*
+         C++ project. The Swift toolchain has its own opinion, and the two
+         disagree on a machine with more than one toolset installed — which is
+         what the CI runner is. Both halves have to be handled, and they need
+         opposite treatment, because Swift's clang resolves headers and
+         libraries by different routes.
+
+         INCLUDE and EXTERNAL_INCLUDE are cleared. Clang adds its own MSVC
+         include path regardless, so leaving MSBuild's in place means two
+         toolsets' headers in one translation unit. On the runner INCLUDE
+         pointed at one MSVC while clang used 14.44, and the C module build
+         failed naming neither cause:
 
              dispatch/time.h: missing '#include <stdint.h>';
              'uint64_t' must be declared before it is used
              MSVC\14.44.35207\include\stdint.h: declaration here is not visible
 
-         LIB is deliberately left alone: pointing it at llama.lib is what
-         docs/local-setup.md tells people to do, and clearing it would break
-         every local build that relies on that.
+         LIB is *not* cleared, because clang adds no MSVC library path of its
+         own — emptying LIB gets `could not open 'msvcrt.lib'`. But leaving
+         MSBuild's value is what caused the second half of the same bug: clang
+         compiled against its own STL headers and then linked against a
+         different toolset's msvcprt.lib, which does not export every helper
+         those headers call.
+
+             lld-link: error: undefined symbol: __std_rotate
+
+         So OhageySwiftLib exists to say "use this LIB instead", and CI passes
+         the value the Swift setup established — the one that matches the clang
+         doing the compiling. Unset locally, where MSBuild and Swift normally
+         agree, and the value MSBuild computed is already right.
+
+         Set through `set` in the command rather than the EnvironmentVariables
+         attribute: that attribute is a semicolon-delimited list, and LIB is a
+         semicolon-delimited path list, so passing one through it splits into
+         nonsense.
 
          No ContinueOnError: if the engine does not compile, a build that
          claimed to succeed would leave the DLL talking to a stale one.
@@ -103,9 +132,13 @@
          the engine did not compile and nothing said why. Merging stderr into
          stdout and asking for high importance costs a few lines on a successful
          build and is the difference between a diagnosable failure and a guess. -->
-    <Exec Command="&quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs) 2>&amp;1"
+    <PropertyGroup>
+      <_OhageySwiftEnv>set &quot;INCLUDE=&quot; &amp;&amp; set &quot;EXTERNAL_INCLUDE=&quot;</_OhageySwiftEnv>
+      <_OhageySwiftEnv Condition="'$(OhageySwiftLib)' != ''">$(_OhageySwiftEnv) &amp;&amp; set &quot;LIB=$(OhageySwiftLib)&quot;</_OhageySwiftEnv>
+    </PropertyGroup>
+
+    <Exec Command="$(_OhageySwiftEnv) &amp;&amp; &quot;$(OhageySwiftExe)&quot; $(_OhageySwiftArgs) 2>&amp;1"
           WorkingDirectory="$(OhageyEngineDirectory)"
-          EnvironmentVariables="INCLUDE=;EXTERNAL_INCLUDE="
           IgnoreStandardErrorWarningFormat="true"
           StandardOutputImportance="high" />
   </Target>

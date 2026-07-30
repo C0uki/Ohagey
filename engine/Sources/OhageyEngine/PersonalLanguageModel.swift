@@ -201,8 +201,12 @@ final class PersonalLanguageModel {
     /// them; they are named here only so the training run and the inference
     /// side cannot drift apart. A model trained at one order and read at
     /// another silently returns nonsense.
-    private static let ngramOrder = 5
-    private static let discount = 0.75
+    ///
+    /// `nonisolated` because the training run reads them from off the main
+    /// actor. Without it these inherit the type's isolation, which is a warning
+    /// today and an error in the Swift 6 language mode.
+    private nonisolated static let ngramOrder = 5
+    private nonisolated static let discount = 0.75
 
     // MARK: - Recording and training
 
