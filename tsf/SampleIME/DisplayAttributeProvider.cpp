@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "globals.h"
 #include "SampleIME.h"
 #include "DisplayAttributeInfo.h"
@@ -17,7 +18,7 @@
 //
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::EnumDisplayAttributeInfo(__RPC__deref_out_opt IEnumTfDisplayAttributeInfo **ppEnum)
+HRESULT CSampleIME::EnumDisplayAttributeInfoImpl(__RPC__deref_out_opt IEnumTfDisplayAttributeInfo **ppEnum)
 {
     CEnumDisplayAttributeInfo* pAttributeEnum = nullptr;
 
@@ -45,7 +46,7 @@ STDAPI CSampleIME::EnumDisplayAttributeInfo(__RPC__deref_out_opt IEnumTfDisplayA
 //
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::GetDisplayAttributeInfo(__RPC__in REFGUID guidInfo, __RPC__deref_out_opt ITfDisplayAttributeInfo **ppInfo)
+HRESULT CSampleIME::GetDisplayAttributeInfoImpl(__RPC__in REFGUID guidInfo, __RPC__deref_out_opt ITfDisplayAttributeInfo **ppInfo)
 {
     if (ppInfo == nullptr)
     {
@@ -79,3 +80,17 @@ STDAPI CSampleIME::GetDisplayAttributeInfo(__RPC__in REFGUID guidInfo, __RPC__de
 
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT(CSampleIME, EnumDisplayAttributeInfo, (__RPC__deref_out_opt IEnumTfDisplayAttributeInfo **ppEnum), (ppEnum))
+
+OHAGEY_SEH_HRESULT(CSampleIME, GetDisplayAttributeInfo, (__RPC__in REFGUID guidInfo, __RPC__deref_out_opt ITfDisplayAttributeInfo **ppInfo), (guidInfo, ppInfo))

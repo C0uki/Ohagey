@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "TipCandidateList.h"
 #include "EnumTfCandidates.h"
 #include "TipCandidateString.h"
@@ -58,7 +59,7 @@ CTipCandidateList::~CTipCandidateList()
 {
 }
 
-STDMETHODIMP CTipCandidateList::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CTipCandidateList::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -102,12 +103,12 @@ STDMETHODIMP_(ULONG) CTipCandidateList::Release()
     return 0;
 }
 
-STDMETHODIMP CTipCandidateList::EnumCandidates(_Outptr_ IEnumTfCandidates **ppEnum)
+HRESULT CTipCandidateList::EnumCandidatesImpl(_Outptr_ IEnumTfCandidates **ppEnum)
 {
     return CEnumTfCandidates::CreateInstance(IID_IEnumTfCandidates, (void**)ppEnum, _tfCandStrList);
 }
 
-STDMETHODIMP CTipCandidateList::GetCandidate(ULONG nIndex, _Outptr_result_maybenull_ ITfCandidateString **ppCandStr)
+HRESULT CTipCandidateList::GetCandidateImpl(ULONG nIndex, _Outptr_result_maybenull_ ITfCandidateString **ppCandStr)
 {
     if (ppCandStr == nullptr)
     {
@@ -150,7 +151,7 @@ STDMETHODIMP CTipCandidateList::GetCandidate(ULONG nIndex, _Outptr_result_mayben
     return S_OK;
 }
 
-STDMETHODIMP CTipCandidateList::GetCandidateNum(_Out_ ULONG *pnCnt)
+HRESULT CTipCandidateList::GetCandidateNumImpl(_Out_ ULONG *pnCnt)
 {
     if (pnCnt == nullptr)
     {
@@ -161,14 +162,14 @@ STDMETHODIMP CTipCandidateList::GetCandidateNum(_Out_ ULONG *pnCnt)
     return S_OK;
 }
 
-STDMETHODIMP CTipCandidateList::SetResult(ULONG nIndex, TfCandidateResult imcr)
+HRESULT CTipCandidateList::SetResultImpl(ULONG nIndex, TfCandidateResult imcr)
 {
     nIndex;imcr;
 
     return E_NOTIMPL;
 }
 
-STDMETHODIMP CTipCandidateList::SetCandidate(_In_ ITfCandidateString **ppCandStr)
+HRESULT CTipCandidateList::SetCandidateImpl(_In_ ITfCandidateString **ppCandStr)
 {
     if (ppCandStr == nullptr)
     {
@@ -183,3 +184,25 @@ STDMETHODIMP CTipCandidateList::SetCandidate(_In_ ITfCandidateString **ppCandStr
 
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CTipCandidateList, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT_OUT(CTipCandidateList, EnumCandidates, (_Outptr_ IEnumTfCandidates **ppEnum), (ppEnum), ppEnum)
+
+OHAGEY_SEH_HRESULT_OUT(CTipCandidateList, GetCandidate, (ULONG nIndex, _Outptr_result_maybenull_ ITfCandidateString **ppCandStr), (nIndex, ppCandStr), ppCandStr)
+
+OHAGEY_SEH_HRESULT(CTipCandidateList, GetCandidateNum, (_Out_ ULONG *pnCnt), (pnCnt))
+
+OHAGEY_SEH_HRESULT(CTipCandidateList, SetResult, (ULONG nIndex, TfCandidateResult imcr), (nIndex, imcr))
+
+OHAGEY_SEH_HRESULT(CTipCandidateList, SetCandidate, (_In_ ITfCandidateString **ppCandStr), (ppCandStr))

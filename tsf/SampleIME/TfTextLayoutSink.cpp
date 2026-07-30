@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "TfTextLayoutSink.h"
 #include "SampleIME.h"
 #include "GetTextExtentEditSession.h"
@@ -36,7 +37,7 @@ CTfTextLayoutSink::~CTfTextLayoutSink()
     DllRelease();
 }
 
-STDAPI CTfTextLayoutSink::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CTfTextLayoutSink::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -85,7 +86,7 @@ STDAPI_(ULONG) CTfTextLayoutSink::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CTfTextLayoutSink::OnLayoutChange(_In_ ITfContext *pContext, TfLayoutCode lcode, _In_ ITfContextView *pContextView)
+HRESULT CTfTextLayoutSink::OnLayoutChangeImpl(_In_ ITfContext *pContext, TfLayoutCode lcode, _In_ ITfContextView *pContextView)
 {
     // we're interested in only document context.
     if (pContext != _pContextDocument)
@@ -218,3 +219,17 @@ HRESULT CTfTextLayoutSink::_GetTextExt(_Out_ RECT *lpRect)
 
     return S_OK;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CTfTextLayoutSink, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CTfTextLayoutSink, OnLayoutChange, (_In_ ITfContext *pContext, TfLayoutCode lcode, _In_ ITfContextView *pContextView), (pContext, lcode, pContextView))

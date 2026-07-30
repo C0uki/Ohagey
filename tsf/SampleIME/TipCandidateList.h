@@ -25,16 +25,22 @@ public:
 
     // IUnknown methods
     virtual STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     virtual STDMETHODIMP_(ULONG) AddRef();
     virtual STDMETHODIMP_(ULONG) Release();
 
     // ITfCandidateList methods
     virtual STDMETHODIMP EnumCandidates(_Outptr_ IEnumTfCandidates **ppEnum);
+    HRESULT EnumCandidatesImpl(_Outptr_ IEnumTfCandidates **ppEnum);
     virtual STDMETHODIMP GetCandidate(ULONG nIndex, _Outptr_result_maybenull_ ITfCandidateString **ppCandStr);
+    HRESULT GetCandidateImpl(ULONG nIndex, _Outptr_result_maybenull_ ITfCandidateString **ppCandStr);
     virtual STDMETHODIMP GetCandidateNum(_Out_ ULONG *pnCnt);
+    HRESULT GetCandidateNumImpl(_Out_ ULONG *pnCnt);
     virtual STDMETHODIMP SetResult(ULONG nIndex, TfCandidateResult imcr);
+    HRESULT SetResultImpl(ULONG nIndex, TfCandidateResult imcr);
 
     virtual STDMETHODIMP SetCandidate(_In_ ITfCandidateString **ppCandStr);
+    HRESULT SetCandidateImpl(_In_ ITfCandidateString **ppCandStr);
 
 protected:
     long _refCount;

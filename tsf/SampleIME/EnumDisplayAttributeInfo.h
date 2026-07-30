@@ -21,14 +21,19 @@ public:
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // IEnumTfDisplayAttributeInfo
     STDMETHODIMP Clone(_Out_ IEnumTfDisplayAttributeInfo **ppEnum);
+    HRESULT CloneImpl(_Out_ IEnumTfDisplayAttributeInfo **ppEnum);
     STDMETHODIMP Next(ULONG ulCount, __RPC__out_ecount_part(ulCount, *pcFetched) ITfDisplayAttributeInfo **rgInfo, __RPC__out ULONG *pcFetched);
+    HRESULT NextImpl(ULONG ulCount, __RPC__out_ecount_part(ulCount, *pcFetched) ITfDisplayAttributeInfo **rgInfo, __RPC__out ULONG *pcFetched);
     STDMETHODIMP Reset();
+    HRESULT ResetImpl();
     STDMETHODIMP Skip(ULONG ulCount);
+    HRESULT SkipImpl(ULONG ulCount);
 
 private:
     LONG _index;    // next display attribute to enum

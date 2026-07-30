@@ -34,6 +34,7 @@ public:
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
@@ -43,17 +44,25 @@ public:
     }
     // ITfTextInputProcessorEx
     STDMETHODIMP ActivateEx(ITfThreadMgr *pThreadMgr, TfClientId tfClientId, DWORD dwFlags);
+    HRESULT ActivateExImpl(ITfThreadMgr *pThreadMgr, TfClientId tfClientId, DWORD dwFlags);
     STDMETHODIMP Deactivate();
+    HRESULT DeactivateImpl();
 
     // ITfThreadMgrEventSink
     STDMETHODIMP OnInitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr);
+    HRESULT OnInitDocumentMgrImpl(_In_ ITfDocumentMgr *pDocMgr);
     STDMETHODIMP OnUninitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr);
+    HRESULT OnUninitDocumentMgrImpl(_In_ ITfDocumentMgr *pDocMgr);
     STDMETHODIMP OnSetFocus(_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumentMgr *pDocMgrPrevFocus);
+    HRESULT OnSetFocusImpl(_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumentMgr *pDocMgrPrevFocus);
     STDMETHODIMP OnPushContext(_In_ ITfContext *pContext);
+    HRESULT OnPushContextImpl(_In_ ITfContext *pContext);
     STDMETHODIMP OnPopContext(_In_ ITfContext *pContext);
+    HRESULT OnPopContextImpl(_In_ ITfContext *pContext);
 
     // ITfTextEditSink
     STDMETHODIMP OnEndEdit(__RPC__in_opt ITfContext *pContext, TfEditCookie ecReadOnly, __RPC__in_opt ITfEditRecord *pEditRecord);
+    HRESULT OnEndEditImpl(__RPC__in_opt ITfContext *pContext, TfEditCookie ecReadOnly, __RPC__in_opt ITfEditRecord *pEditRecord);
 
     // ITfKeyEventSink
     STDMETHODIMP OnSetFocus(BOOL fForeground);
@@ -71,17 +80,23 @@ public:
 
     // ITfCompositionSink
     STDMETHODIMP OnCompositionTerminated(TfEditCookie ecWrite, _In_ ITfComposition *pComposition);
+    HRESULT OnCompositionTerminatedImpl(TfEditCookie ecWrite, _In_ ITfComposition *pComposition);
 
     // ITfDisplayAttributeProvider
     STDMETHODIMP EnumDisplayAttributeInfo(__RPC__deref_out_opt IEnumTfDisplayAttributeInfo **ppEnum);
+    HRESULT EnumDisplayAttributeInfoImpl(__RPC__deref_out_opt IEnumTfDisplayAttributeInfo **ppEnum);
     STDMETHODIMP GetDisplayAttributeInfo(__RPC__in REFGUID guidInfo, __RPC__deref_out_opt ITfDisplayAttributeInfo **ppInfo);
+    HRESULT GetDisplayAttributeInfoImpl(__RPC__in REFGUID guidInfo, __RPC__deref_out_opt ITfDisplayAttributeInfo **ppInfo);
 
     // ITfActiveLanguageProfileNotifySink
     STDMETHODIMP OnActivated(_In_ REFCLSID clsid, _In_ REFGUID guidProfile, _In_ BOOL isActivated);
+    HRESULT OnActivatedImpl(_In_ REFCLSID clsid, _In_ REFGUID guidProfile, _In_ BOOL isActivated);
 
     // ITfThreadFocusSink
     STDMETHODIMP OnSetThreadFocus();
+    HRESULT OnSetThreadFocusImpl();
     STDMETHODIMP OnKillThreadFocus();
+    HRESULT OnKillThreadFocusImpl();
 
     // ITfFunctionProvider
     STDMETHODIMP GetType(__RPC__out GUID *pguid);

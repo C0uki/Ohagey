@@ -19,25 +19,37 @@ public:
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // ITfLangBarItem
     STDMETHODIMP GetInfo(_Out_ TF_LANGBARITEMINFO *pInfo);
+    HRESULT GetInfoImpl(_Out_ TF_LANGBARITEMINFO *pInfo);
     STDMETHODIMP GetStatus(_Out_ DWORD *pdwStatus);
+    HRESULT GetStatusImpl(_Out_ DWORD *pdwStatus);
     STDMETHODIMP Show(BOOL fShow);
+    HRESULT ShowImpl(BOOL fShow);
     STDMETHODIMP GetTooltipString(_Out_ BSTR *pbstrToolTip);
+    HRESULT GetTooltipStringImpl(_Out_ BSTR *pbstrToolTip);
 
     // ITfLangBarItemButton
     STDMETHODIMP OnClick(TfLBIClick click, POINT pt, _In_ const RECT *prcArea);
+    HRESULT OnClickImpl(TfLBIClick click, POINT pt, _In_ const RECT *prcArea);
     STDMETHODIMP InitMenu(_In_ ITfMenu *pMenu);
+    HRESULT InitMenuImpl(_In_ ITfMenu *pMenu);
     STDMETHODIMP OnMenuSelect(UINT wID);
+    HRESULT OnMenuSelectImpl(UINT wID);
     STDMETHODIMP GetIcon(_Out_ HICON *phIcon);
+    HRESULT GetIconImpl(_Out_ HICON *phIcon);
     STDMETHODIMP GetText(_Out_ BSTR *pbstrText);
+    HRESULT GetTextImpl(_Out_ BSTR *pbstrText);
 
     // ITfSource
     STDMETHODIMP AdviseSink(__RPC__in REFIID riid, __RPC__in_opt IUnknown *punk, __RPC__out DWORD *pdwCookie);
+    HRESULT AdviseSinkImpl(__RPC__in REFIID riid, __RPC__in_opt IUnknown *punk, __RPC__out DWORD *pdwCookie);
     STDMETHODIMP UnadviseSink(DWORD dwCookie);
+    HRESULT UnadviseSinkImpl(DWORD dwCookie);
 
     // Add/Remove languagebar item
     HRESULT _AddItem(_In_ ITfThreadMgr *pThreadMgr);

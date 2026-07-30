@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "EnumTfCandidates.h"
 
 HRESULT CEnumTfCandidates::CreateInstance(_Out_ CEnumTfCandidates **ppobj, _In_ const CSampleImeArray<ITfCandidateString*> &rgelm, UINT currentNum)
@@ -56,7 +57,7 @@ CEnumTfCandidates::~CEnumTfCandidates()
 //
 // IUnknown methods
 //
-STDMETHODIMP CEnumTfCandidates::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CEnumTfCandidates::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -99,7 +100,7 @@ STDMETHODIMP_(ULONG) CEnumTfCandidates::Release()
 //
 // IEnumTfCandidates methods
 //
-STDMETHODIMP CEnumTfCandidates::Next(ULONG ulCount, _Out_ ITfCandidateString **ppObj, _Out_ ULONG *pcFetched)
+HRESULT CEnumTfCandidates::NextImpl(ULONG ulCount, _Out_ ITfCandidateString **ppObj, _Out_ ULONG *pcFetched)
 {
     ULONG fetched = 0;
     if (ppObj == nullptr)
@@ -123,7 +124,7 @@ STDMETHODIMP CEnumTfCandidates::Next(ULONG ulCount, _Out_ ITfCandidateString **p
     return (fetched == ulCount) ? S_OK : S_FALSE;
 }
 
-STDMETHODIMP CEnumTfCandidates::Skip(ULONG ulCount)
+HRESULT CEnumTfCandidates::SkipImpl(ULONG ulCount)
 {
     while ((0 < ulCount) && (_currentCandidateStrIndex < _rgelm.Count()))
     {
@@ -134,13 +135,33 @@ STDMETHODIMP CEnumTfCandidates::Skip(ULONG ulCount)
     return (0 < ulCount) ? S_FALSE : S_OK;
 }
 
-STDMETHODIMP CEnumTfCandidates::Reset()
+HRESULT CEnumTfCandidates::ResetImpl()
 {
     _currentCandidateStrIndex = 0;
     return S_OK;
 }
 
-STDMETHODIMP CEnumTfCandidates::Clone(_Out_ IEnumTfCandidates **ppEnum)
+HRESULT CEnumTfCandidates::CloneImpl(_Out_ IEnumTfCandidates **ppEnum)
 {
     return CreateInstance(__uuidof(IEnumTfCandidates), (void**)ppEnum, _rgelm, _currentCandidateStrIndex);
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CEnumTfCandidates, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CEnumTfCandidates, Next, (ULONG ulCount, _Out_ ITfCandidateString **ppObj, _Out_ ULONG *pcFetched), (ulCount, ppObj, pcFetched))
+
+OHAGEY_SEH_HRESULT(CEnumTfCandidates, Skip, (ULONG ulCount), (ulCount))
+
+OHAGEY_SEH_HRESULT(CEnumTfCandidates, Reset, (), ())
+
+OHAGEY_SEH_HRESULT(CEnumTfCandidates, Clone, (_Out_ IEnumTfCandidates **ppEnum), (ppEnum))

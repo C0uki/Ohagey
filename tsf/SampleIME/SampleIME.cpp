@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "globals.h"
 #include "SampleIME.h"
 #include "CandidateListUIPresenter.h"
@@ -111,7 +112,7 @@ CSampleIME::~CSampleIME()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CSampleIME::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -217,7 +218,7 @@ STDAPI_(ULONG) CSampleIME::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::ActivateEx(ITfThreadMgr *pThreadMgr, TfClientId tfClientId, DWORD dwFlags)
+HRESULT CSampleIME::ActivateExImpl(ITfThreadMgr *pThreadMgr, TfClientId tfClientId, DWORD dwFlags)
 {
     _pThreadMgr = pThreadMgr;
     _pThreadMgr->AddRef();
@@ -280,7 +281,7 @@ ExitError:
 //
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::Deactivate()
+HRESULT CSampleIME::DeactivateImpl()
 {
     if (_pCompositionProcessorEngine)
     {
@@ -430,3 +431,19 @@ HRESULT CSampleIME::GetLayout(_Out_ TKBLayoutType *ptkblayoutType, _Out_ WORD *p
     }
     return hr;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CSampleIME, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CSampleIME, ActivateEx, (ITfThreadMgr *pThreadMgr, TfClientId tfClientId, DWORD dwFlags), (pThreadMgr, tfClientId, dwFlags))
+
+OHAGEY_SEH_HRESULT(CSampleIME, Deactivate, (), ())

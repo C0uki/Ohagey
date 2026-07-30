@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "globals.h"
 #include "DisplayAttributeInfo.h"
 #include "TfInputProcessorProfile.h"
@@ -84,7 +85,7 @@ CDisplayAttributeInfo::~CDisplayAttributeInfo()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CDisplayAttributeInfo::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
         return E_INVALIDARG;
@@ -143,7 +144,7 @@ ULONG CDisplayAttributeInfo::Release(void)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::GetGUID(_Out_ GUID *pguid)
+HRESULT CDisplayAttributeInfo::GetGUIDImpl(_Out_ GUID *pguid)
 {
     if (pguid == nullptr)
         return E_INVALIDARG;
@@ -162,7 +163,7 @@ STDAPI CDisplayAttributeInfo::GetGUID(_Out_ GUID *pguid)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::GetDescription(_Out_ BSTR *pbstrDesc)
+HRESULT CDisplayAttributeInfo::GetDescriptionImpl(_Out_ BSTR *pbstrDesc)
 {
     BSTR tempDesc;
 
@@ -189,7 +190,7 @@ STDAPI CDisplayAttributeInfo::GetDescription(_Out_ BSTR *pbstrDesc)
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::GetAttributeInfo(_Out_ TF_DISPLAYATTRIBUTE *ptfDisplayAttr)
+HRESULT CDisplayAttributeInfo::GetAttributeInfoImpl(_Out_ TF_DISPLAYATTRIBUTE *ptfDisplayAttr)
 {
     if (ptfDisplayAttr == nullptr)
     {
@@ -208,7 +209,7 @@ STDAPI CDisplayAttributeInfo::GetAttributeInfo(_Out_ TF_DISPLAYATTRIBUTE *ptfDis
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::SetAttributeInfo(_In_ const TF_DISPLAYATTRIBUTE *ptfDisplayAttr)
+HRESULT CDisplayAttributeInfo::SetAttributeInfoImpl(_In_ const TF_DISPLAYATTRIBUTE *ptfDisplayAttr)
 {
     ptfDisplayAttr;
 
@@ -221,7 +222,29 @@ STDAPI CDisplayAttributeInfo::SetAttributeInfo(_In_ const TF_DISPLAYATTRIBUTE *p
 //
 //----------------------------------------------------------------------------
 
-STDAPI CDisplayAttributeInfo::Reset()
+HRESULT CDisplayAttributeInfo::ResetImpl()
 {
     return SetAttributeInfo(_pDisplayAttribute);
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CDisplayAttributeInfo, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CDisplayAttributeInfo, GetGUID, (_Out_ GUID *pguid), (pguid))
+
+OHAGEY_SEH_HRESULT(CDisplayAttributeInfo, GetDescription, (_Out_ BSTR *pbstrDesc), (pbstrDesc))
+
+OHAGEY_SEH_HRESULT(CDisplayAttributeInfo, GetAttributeInfo, (_Out_ TF_DISPLAYATTRIBUTE *ptfDisplayAttr), (ptfDisplayAttr))
+
+OHAGEY_SEH_HRESULT(CDisplayAttributeInfo, SetAttributeInfo, (_In_ const TF_DISPLAYATTRIBUTE *ptfDisplayAttr), (ptfDisplayAttr))
+
+OHAGEY_SEH_HRESULT(CDisplayAttributeInfo, Reset, (), ())

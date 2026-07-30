@@ -22,6 +22,7 @@ public:
 
     // ITfEditSession
     STDMETHODIMP DoEditSession(TfEditCookie ec);
+    HRESULT DoEditSessionImpl(TfEditCookie ec);
 
 private:
     UINT _uCode;    // virtual key code

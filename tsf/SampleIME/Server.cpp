@@ -67,12 +67,15 @@ class CClassFactory : public IClassFactory
 public:
     // IUnknown methods
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // IClassFactory methods
     STDMETHODIMP CreateInstance(_In_opt_ IUnknown *pUnkOuter, _In_ REFIID riid, _COM_Outptr_ void **ppvObj);
+    HRESULT CreateInstanceImpl(_In_opt_ IUnknown *pUnkOuter, _In_ REFIID riid, _COM_Outptr_ void **ppvObj);
     STDMETHODIMP LockServer(BOOL fLock);
+    HRESULT LockServerImpl(BOOL fLock);
 
     // Constructor
     CClassFactory(REFCLSID rclsid, HRESULT (*pfnCreateInstance)(IUnknown *pUnkOuter, REFIID riid, void **ppvObj))
@@ -94,7 +97,7 @@ private:
 //
 //----------------------------------------------------------------------------
 
-STDAPI CClassFactory::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CClassFactory::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (IsEqualIID(riid, IID_IClassFactory) || IsEqualIID(riid, IID_IUnknown))
     {
@@ -137,7 +140,7 @@ STDAPI_(ULONG) CClassFactory::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CClassFactory::CreateInstance(_In_opt_ IUnknown *pUnkOuter, _In_ REFIID riid, _COM_Outptr_ void **ppvObj)
+HRESULT CClassFactory::CreateInstanceImpl(_In_opt_ IUnknown *pUnkOuter, _In_ REFIID riid, _COM_Outptr_ void **ppvObj)
 {
     return _pfnCreateInstance(pUnkOuter, riid, ppvObj);
 }
@@ -148,7 +151,7 @@ STDAPI CClassFactory::CreateInstance(_In_opt_ IUnknown *pUnkOuter, _In_ REFIID r
 //
 //----------------------------------------------------------------------------
 
-STDAPI CClassFactory::LockServer(BOOL fLock)
+HRESULT CClassFactory::LockServerImpl(BOOL fLock)
 {
     if (fLock)
     {
@@ -349,3 +352,19 @@ STDAPI DllRegisterServer(void)
         return E_UNEXPECTED;
     }
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CClassFactory, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT_OUT(CClassFactory, CreateInstance, (_In_opt_ IUnknown *pUnkOuter, _In_ REFIID riid, _COM_Outptr_ void **ppvObj), (pUnkOuter, riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CClassFactory, LockServer, (BOOL fLock), (fLock))

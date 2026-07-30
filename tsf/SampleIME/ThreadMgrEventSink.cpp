@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "Globals.h"
 #include "SampleIME.h"
 #include "CandidateListUIPresenter.h"
@@ -18,7 +19,7 @@
 // a document.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnInitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr)
+HRESULT CSampleIME::OnInitDocumentMgrImpl(_In_ ITfDocumentMgr *pDocMgr)
 {
     pDocMgr;
     return E_NOTIMPL;
@@ -32,7 +33,7 @@ STDAPI CSampleIME::OnInitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr)
 // document.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnUninitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr)
+HRESULT CSampleIME::OnUninitDocumentMgrImpl(_In_ ITfDocumentMgr *pDocMgr)
 {
     pDocMgr;
     return E_NOTIMPL;
@@ -47,7 +48,7 @@ STDAPI CSampleIME::OnUninitDocumentMgr(_In_ ITfDocumentMgr *pDocMgr)
 // focus document, or now no document holds the input focus.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnSetFocus(_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumentMgr *pDocMgrPrevFocus)
+HRESULT CSampleIME::OnSetFocusImpl(_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumentMgr *pDocMgrPrevFocus)
 {
     pDocMgrPrevFocus;
 
@@ -101,7 +102,7 @@ STDAPI CSampleIME::OnSetFocus(_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumen
 // Sink called by the framework when a context is pushed.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnPushContext(_In_ ITfContext *pContext)
+HRESULT CSampleIME::OnPushContextImpl(_In_ ITfContext *pContext)
 {
     pContext;
 
@@ -115,7 +116,7 @@ STDAPI CSampleIME::OnPushContext(_In_ ITfContext *pContext)
 // Sink called by the framework when a context is popped.
 //----------------------------------------------------------------------------
 
-STDAPI CSampleIME::OnPopContext(_In_ ITfContext *pContext)
+HRESULT CSampleIME::OnPopContextImpl(_In_ ITfContext *pContext)
 {
     pContext;
 
@@ -176,3 +177,23 @@ void CSampleIME::_UninitThreadMgrEventSink()
 
     _threadMgrEventSinkCookie = TF_INVALID_COOKIE;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnInitDocumentMgr, (_In_ ITfDocumentMgr *pDocMgr), (pDocMgr))
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnUninitDocumentMgr, (_In_ ITfDocumentMgr *pDocMgr), (pDocMgr))
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnSetFocus, (_In_ ITfDocumentMgr *pDocMgrFocus, _In_ ITfDocumentMgr *pDocMgrPrevFocus), (pDocMgrFocus, pDocMgrPrevFocus))
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnPushContext, (_In_ ITfContext *pContext), (pContext))
+
+OHAGEY_SEH_HRESULT(CSampleIME, OnPopContext, (_In_ ITfContext *pContext), (pContext))

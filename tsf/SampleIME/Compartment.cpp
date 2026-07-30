@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "Compartment.h"
 #include "Globals.h"
 
@@ -218,7 +219,7 @@ CCompartmentEventSink::~CCompartmentEventSink()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCompartmentEventSink::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CCompartmentEventSink::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
         return E_INVALIDARG;
@@ -278,7 +279,7 @@ STDAPI_(ULONG) CCompartmentEventSink::Release()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CCompartmentEventSink::OnChange(_In_ REFGUID guidCompartment)
+HRESULT CCompartmentEventSink::OnChangeImpl(_In_ REFGUID guidCompartment)
 {
     return _pfnCallback(_pv, guidCompartment);
 }
@@ -341,3 +342,17 @@ HRESULT CCompartmentEventSink::_Unadvise()
 
     return hr;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CCompartmentEventSink, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)
+
+OHAGEY_SEH_HRESULT(CCompartmentEventSink, OnChange, (_In_ REFGUID guidCompartment), (guidCompartment))

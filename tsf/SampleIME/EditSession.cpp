@@ -6,6 +6,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved
 
 #include "Private.h"
+#include "../Ohagey/OhageySeh.h"
 #include "EditSession.h"
 #include "SampleIME.h"
 
@@ -43,7 +44,7 @@ CEditSessionBase::~CEditSessionBase()
 //
 //----------------------------------------------------------------------------
 
-STDAPI CEditSessionBase::QueryInterface(REFIID riid, _Outptr_ void **ppvObj)
+HRESULT CEditSessionBase::QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj)
 {
     if (ppvObj == nullptr)
     {
@@ -97,3 +98,15 @@ STDAPI_(ULONG) CEditSessionBase::Release(void)
 
     return cr;
 }
+
+//+---------------------------------------------------------------------------
+//
+//  [Ohagey] SEH guards (decision 0017).
+//
+//  One line each; the bodies above are the ...Impl functions they call. See
+//  tsf/Ohagey/OhageySeh.h for why the split is necessary and what is not
+//  guarded (IUnknown's AddRef and Release).
+//
+//----------------------------------------------------------------------------
+
+OHAGEY_SEH_HRESULT_OUT(CEditSessionBase, QueryInterface, (REFIID riid, _Outptr_ void **ppvObj), (riid, ppvObj), ppvObj)

@@ -39,36 +39,57 @@ public:
 
     // IUnknown
     STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     STDMETHODIMP_(ULONG) AddRef(void);
     STDMETHODIMP_(ULONG) Release(void);
 
     // ITfUIElement
     STDMETHODIMP GetDescription(BSTR *pbstr);
+    HRESULT GetDescriptionImpl(BSTR *pbstr);
     STDMETHODIMP GetGUID(GUID *pguid);
+    HRESULT GetGUIDImpl(GUID *pguid);
     STDMETHODIMP Show(BOOL showCandidateWindow);
+    HRESULT ShowImpl(BOOL showCandidateWindow);
     STDMETHODIMP IsShown(BOOL *pIsShow);
+    HRESULT IsShownImpl(BOOL *pIsShow);
 
     // ITfCandidateListUIElement
     STDMETHODIMP GetUpdatedFlags(DWORD *pdwFlags);
+    HRESULT GetUpdatedFlagsImpl(DWORD *pdwFlags);
     STDMETHODIMP GetDocumentMgr(ITfDocumentMgr **ppdim);
+    HRESULT GetDocumentMgrImpl(ITfDocumentMgr **ppdim);
     STDMETHODIMP GetCount(UINT *pCandidateCount);
+    HRESULT GetCountImpl(UINT *pCandidateCount);
     STDMETHODIMP GetSelection(UINT *pSelectedCandidateIndex);
+    HRESULT GetSelectionImpl(UINT *pSelectedCandidateIndex);
     STDMETHODIMP GetString(UINT uIndex, BSTR *pbstr);
+    HRESULT GetStringImpl(UINT uIndex, BSTR *pbstr);
     STDMETHODIMP GetPageIndex(UINT *pIndex, UINT uSize, UINT *puPageCnt);
+    HRESULT GetPageIndexImpl(UINT *pIndex, UINT uSize, UINT *puPageCnt);
     STDMETHODIMP SetPageIndex(UINT *pIndex, UINT uPageCnt);
+    HRESULT SetPageIndexImpl(UINT *pIndex, UINT uPageCnt);
     STDMETHODIMP GetCurrentPage(UINT *puPage);
+    HRESULT GetCurrentPageImpl(UINT *puPage);
 
     // ITfCandidateListUIElementBehavior methods
     STDMETHODIMP SetSelection(UINT nIndex);
+    HRESULT SetSelectionImpl(UINT nIndex);
     STDMETHODIMP Finalize(void);
+    HRESULT FinalizeImpl(void);
     STDMETHODIMP Abort(void);
+    HRESULT AbortImpl(void);
 
     // ITfIntegratableCandidateListUIElement
     STDMETHODIMP SetIntegrationStyle(GUID guidIntegrationStyle);
+    HRESULT SetIntegrationStyleImpl(GUID guidIntegrationStyle);
     STDMETHODIMP GetSelectionStyle(_Out_ TfIntegratableCandidateListSelectionStyle *ptfSelectionStyle);
+    HRESULT GetSelectionStyleImpl(_Out_ TfIntegratableCandidateListSelectionStyle *ptfSelectionStyle);
     STDMETHODIMP OnKeyDown(_In_ WPARAM wParam, _In_ LPARAM lParam, _Out_ BOOL *pIsEaten);
-    STDMETHODIMP ShowCandidateNumbers(_Out_ BOOL *pIsShow); 
+    HRESULT OnKeyDownImpl(_In_ WPARAM wParam, _In_ LPARAM lParam, _Out_ BOOL *pIsEaten);
+    STDMETHODIMP ShowCandidateNumbers(_Out_ BOOL *pIsShow);
+    HRESULT ShowCandidateNumbersImpl(_Out_ BOOL *pIsShow); 
     STDMETHODIMP FinalizeExactCompositionString();
+    HRESULT FinalizeExactCompositionStringImpl();
 
     virtual HRESULT _StartCandidateList(TfClientId tfClientId, _In_ ITfDocumentMgr *pDocumentMgr, _In_ ITfContext *pContextDocument, TfEditCookie ec, _In_ ITfRange *pRangeComposition, UINT wndWidth);
     void _EndCandidateList();

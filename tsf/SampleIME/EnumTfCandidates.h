@@ -24,14 +24,19 @@ public:
 
     // IUnknown methods
     virtual STDMETHODIMP QueryInterface(REFIID riid, _Outptr_ void **ppvObj);
+    HRESULT QueryInterfaceImpl(REFIID riid, _Outptr_ void **ppvObj);
     virtual STDMETHODIMP_(ULONG) AddRef(void);
     virtual STDMETHODIMP_(ULONG) Release(void);
 
     // IEnumTfCandidates methods
     virtual STDMETHODIMP Next(ULONG ulCount, _Out_ ITfCandidateString **ppObj, _Out_ ULONG *pcFetched);
+    HRESULT NextImpl(ULONG ulCount, _Out_ ITfCandidateString **ppObj, _Out_ ULONG *pcFetched);
     virtual STDMETHODIMP Skip(ULONG ulCount);
+    HRESULT SkipImpl(ULONG ulCount);
     virtual STDMETHODIMP Reset();
+    HRESULT ResetImpl();
     virtual STDMETHODIMP Clone(_Out_ IEnumTfCandidates **ppEnum);
+    HRESULT CloneImpl(_Out_ IEnumTfCandidates **ppEnum);
 
 protected:
     LONG _refCount;
