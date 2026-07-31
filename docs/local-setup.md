@@ -181,6 +181,36 @@ module llama [system] {
 1. `llama.lib`(インポートライブラリ、リンク時)
 2. `llama.dll`(実行時)
 
+### ⚠️ upstream の llama.cpp では**モデルが読めない**
+
+`ggml-org/llama.cpp` ではなく **`azooKey/llama.cpp`** を clone すること。同じ `b4846`
+タグでも中身が違う。
+
+upstream の b4846 でビルドすると、**リンクも起動も通り、変換も返ってくる**。しかし
+Zenzai は動いていない:
+
+```
+llama_model_load: error loading model: error loading model vocabulary:
+  unknown pre-tokenizer type: 'gpt2-small-japanese-char'
+llama_model_load_from_file_impl: failed to load model
+```
+
+zenz モデルは日本語 char 単位の pre-tokenizer を使う。これを知っているのは
+azooKey の fork だけで(`src/llama-vocab.cpp`)、upstream には無い。
+
+**症状が出ない形で失敗する**のが厄介なところ。エンジンは辞書変換にフォールバック
+するので候補は返り続け、ログを見ない限り Zenzai が死んでいることに気付けない。
+エンジンはこれを検出して
+
+```
+OhageyEngine: Zenzai model FAILED TO LOAD — converting from the dictionary only. ...
+```
+
+と出すようにしてある(それ以前は、モデル**ファイルの存在**だけを見て
+`zenzai_used=true` を返していた)。
+
+なお、新しい upstream(b4846 より後)を使うと今度はリンク段階で落ちる。下記参照。
+
 ### ⚠️ llama.cpp のバージョンは `b4846` に固定すること
 
 **最新の master を使ってはいけない。** AzooKeyKanaKanjiConverter 0.8.5 は
@@ -205,8 +235,8 @@ lld-link: error: undefined symbol: llama_kv_cache_seq_pos_max
 
 ```bat
 cd C:\src
-git clone https://github.com/ggml-org/llama.cpp.git
-cd llama.cpp
+git clone https://github.com/azooKey/llama.cpp.git azooKey-llama.cpp
+cd azooKey-llama.cpp
 git checkout b4846
 cmake -B build-b4846 -DBUILD_SHARED_LIBS=ON
 cmake --build build-b4846 --config Release

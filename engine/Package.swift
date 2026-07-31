@@ -75,6 +75,27 @@ let package = Package(
                 // import such a module from a compilation that does not enable
                 // it too. This must match upstream or every import fails.
                 .interoperabilityMode(.Cxx)
+            ],
+            linkerSettings: [
+                // Delay-load llama.dll so the engine can choose which backend's
+                // copy to load (decision 0028).
+                //
+                // Without this the DLL is an ordinary static import, resolved
+                // by the loader before any Ohagey code runs — so nothing the
+                // engine does about search paths can matter. Delay-loading
+                // moves the resolution to the first call into llama, which is
+                // after BackendLoader has said where to look.
+                //
+                // `delayimp.lib` provides the stub that performs that load;
+                // /DELAYLOAD without it does not link.
+                //
+                // unsafeFlags is acceptable here because this is a root
+                // package. It would stop anyone depending on the engine as a
+                // library, which nothing does.
+                .unsafeFlags([
+                    "-Xlinker", "/DELAYLOAD:llama.dll",
+                    "-Xlinker", "delayimp.lib",
+                ], .when(platforms: [.windows]))
             ]
         ),
         .target(
