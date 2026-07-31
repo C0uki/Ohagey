@@ -24,11 +24,16 @@ final class ConversionService {
     private let converter = KanaKanjiConverter()
     private var settings: EngineSettings
     private let personalModel: PersonalLanguageModel
+    private let userDictionary: UserDictionaryStore
 
     init(settings: EngineSettings, log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.settings = settings
         self.personalModel = PersonalLanguageModel(log: log)
+        self.userDictionary = UserDictionaryStore(log: log)
         personalModel.prepare()
+
+        userDictionary.reloadIfChanged()
+        userDictionary.apply(to: converter)
     }
 
     func updateSettings(_ newSettings: EngineSettings) {
@@ -49,6 +54,14 @@ final class ConversionService {
 
     /// Converts a hiragana reading into ranked candidates.
     func convert(reading: String, nBest: Int, precedingText: String) -> [EngineCandidate] {
+        // The settings app edits the dictionary file directly (decision 0013),
+        // so changes it made have to be picked up without an engine restart.
+        // A `stat` per conversion is nothing beside the conversion itself, and
+        // it cannot miss a change the way a dropped notification could.
+        if userDictionary.reloadIfChanged() {
+            userDictionary.apply(to: converter)
+        }
+
         var composing = ComposingText()
         // `.direct` — the TSF layer has already resolved romaji to kana, so the
         // engine receives the reading as-is.
@@ -231,15 +244,18 @@ extension ConversionService: EngineRequestHandling {
             commit(reading: reading, text: text, updateLearning: updateLearning)
             return .commit
 
-        case .registerWord:
-            // The user-dictionary file format is still undecided (decision
-            // 0026), so there is nowhere to put the entry. Report it instead of
-            // answering `.registerWord`, which would tell the settings app the
-            // word was saved when it was not.
-            throw EngineError(
-                code: .internalError,
-                message: "user dictionary is not implemented yet (decision 0026)"
+        case .registerWord(let reading, let surface, let partOfSpeech):
+            try userDictionary.register(
+                reading: reading,
+                word: surface,
+                partOfSpeech: partOfSpeech
             )
+            // Straight away, so the word is available on the very next
+            // conversion rather than after the file's timestamp is next
+            // noticed. Registering a word and then finding it does not convert
+            // is indistinguishable from it having failed.
+            userDictionary.apply(to: converter)
+            return .registerWord
 
         case .ping:
             return .ping(

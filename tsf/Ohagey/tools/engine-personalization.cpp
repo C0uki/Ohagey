@@ -103,10 +103,20 @@ int wmain()
 
     // An engine already running was launched with the real LOCALAPPDATA and
     // would train on — and pollute — the profile you actually type with.
+    //
+    // Opening the pipe directly rather than through EngineClient::Connect.
+    // Connect *launches* an engine when nothing is listening (decisions 0015 /
+    // 0033), so using it here — before LOCALAPPDATA is redirected below —
+    // starts one against the real profile, which is the very thing this check
+    // exists to avoid.
     {
-        EngineClient probe;
-        if (probe.Connect())
+        std::wstring pipe;
+        EngineClient::PipeName(&pipe);
+        const HANDLE probe = CreateFileW(pipe.c_str(), GENERIC_READ, 0, nullptr,
+                                         OPEN_EXISTING, 0, nullptr);
+        if (probe != INVALID_HANDLE_VALUE)
         {
+            CloseHandle(probe);
             printf("An engine is already running. Close it first: this harness needs to\n"
                    "start one against a scratch profile so it does not train on your own\n"
                    "typing history.\n");

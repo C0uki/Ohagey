@@ -66,7 +66,7 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- `swift test` **112件パス**
+- `swift test` **136件パス**
 - **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
   `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
 - **6クライアント同時接続** — 全員が自分の `request_id` で正しく応答を受け取る
@@ -88,10 +88,11 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 ### 未検証
 - UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
 
+- **ユーザー辞書**(decision 0026 / 0036)。`registerWord` で登録した語が
+  Zenzai 有効のまま**1位に出る**。`tsf/Ohagey/tools/build-and-run-userdict.ps1`
+
 ### 未着手
-- ユーザー辞書の保存(decision 0026)— `registerWord` は現在エラーを返す
 - バックエンド選択の DLL 検索パス切り替え(decision 0028)
-- `tsf/` の SampleIME vendoring(手順は `tsf/README.md`)
 
 ## ビルドとテスト
 
@@ -117,4 +118,4 @@ swift test
   `FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE`
   を明示すること
 - **Swift 6 言語モードへの移行が保留中。** 現在 `.v5` を明示している(`Package.swift` の TODO)
-- ユーザー辞書のファイルフォーマット(decision 0026)が未確定。設定のレジストリスキーマは **decision 0035 で確定済み**
+- ユーザー辞書のファイルフォーマット(decision 0026)は **decision 0036**、設定のレジストリスキーマ(decision 0014)は **decision 0035** で確定済み
