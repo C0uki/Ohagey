@@ -238,6 +238,12 @@ BOOL CCompositionProcessorEngine::SetupLanguageProfile(LANGID langid, REFGUID gu
     SetupConfiguration();
     SetupDictionaryFile();
 
+    // Start the engine now rather than at the first conversion (decision 0033).
+    // It returns immediately and holds no connection; by the time the user has
+    // typed a reading the engine is listening, so the first conversion works
+    // instead of coming back empty. See EngineClient::Warmup.
+    _engineClient.Warmup();
+
 Exit:
     return ret;
 }

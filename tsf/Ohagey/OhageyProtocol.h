@@ -96,6 +96,21 @@ namespace Ohagey
         void Disconnect();
         bool IsConnected() const { return _pipe != INVALID_HANDLE_VALUE; }
 
+        // Starts the engine if it is not up, without connecting or waiting.
+        //
+        // Call when the text service activates. `Connect` deliberately gives
+        // up ~250ms after launching rather than blocking the thread that
+        // handles typing, and the engine needs a little longer than that to
+        // begin listening — so the first conversion after a cold start always
+        // comes back empty and only the next keystroke works. Starting the
+        // engine at activation closes that gap: the seconds a user spends
+        // typing a reading are more than enough, and nothing has to wait.
+        //
+        // Does not hold a connection. The engine exits on an idle timeout
+        // measured by connections (decision 0015), so a connection opened at
+        // activation and kept would stop it ever going away.
+        void Warmup();
+
         // Each call connects on demand, so callers do not have to.
         CallResult Convert(const std::wstring& reading, uint32_t nBest,
                            const std::wstring& precedingText, ConvertResult* out);
