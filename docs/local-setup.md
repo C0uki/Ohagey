@@ -404,6 +404,8 @@ swift test  --scratch-path C:\swb\<短い名前>
 
 | `call to main actor-isolated initializer 'init()' in a synchronous actor-isolated context` | upstream の `KanaKanjiConverter` は `@MainActor` 隔離されたクラスで、別の `actor` からは所有できない | `ConversionService` を `actor` から `@MainActor final class` に変更 |
 | `lld-link: error: undefined symbol: llama_kv_cache_seq_rm` / `llama_kv_cache_seq_pos_max` | llama.cpp が新しすぎる。KV キャッシュ API がリネームされ旧名が削除された | llama.cpp を **`b4846`** に checkout して再ビルド(上記「バージョンは `b4846` に固定」参照) |
+| `lld-link: error: failed to write output 'OhageyEngine.exe': permission denied` | **エンジンが動いたまま**。`tsf/Ohagey/tools/` のハーネスは実行後にエンジンを残す(アイドルタイムアウトで自分で終わる設計・決定 0015)ので、その直後にエンジンを再ビルドすると実行ファイルを上書きできない | `Get-Process OhageyEngine \| Stop-Process -Force` してから再ビルド |
+| `error: unable to attach DB: … "build.db": database is locked` | 同じ `--scratch-path` に対して `swift build` が2つ走っている。Debug と Release を続けて回したときに前のプロセスが残っていると起きる | 前のビルドの終了を待つ。残っていれば `swift`/`swift-frontend` を止める |
 
 > **設計上の含意**: 変換器が main actor に固定されているため、**エンジンは main actor
 > 実行環境を持ち続ける必要がある**。パイプの accept ループや読み取りは別スレッドで

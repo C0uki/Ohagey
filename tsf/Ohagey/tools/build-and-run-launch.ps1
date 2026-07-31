@@ -1,7 +1,8 @@
 # Builds and runs the engine launch test (decisions 0015 / 0033).
 #
-# Requires that NO engine is running when it starts: the point is to watch the
-# client start one.
+# Both phases need a cold start — the whole point is watching the client start
+# an engine — so this stops any engine that is running, including the one the
+# first phase leaves behind.
 #
 # A plain cl.exe invocation rather than a .vcxproj: this is a three-file
 # developer tool, and giving it a project would mean carrying it through every
@@ -50,9 +51,24 @@ $sources = @(
     $sources /link kernel32.lib user32.lib advapi32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
-Write-Host ""
-& "$out\engine-launch.exe"
-$exit = $LASTEXITCODE
+function Stop-Engine {
+    $running = Get-Process OhageyEngine -ErrorAction SilentlyContinue
+    if ($running) {
+        Write-Host "stopping the engine left over from the previous phase"
+        $running | Stop-Process -Force
+        # The pipe name is held until the process is gone; the next phase
+        # would otherwise see an engine already listening and test nothing.
+        Start-Sleep -Milliseconds 750
+    }
+}
+
+$exit = 0
+foreach ($phase in @("cold", "warm")) {
+    Stop-Engine
+    Write-Host ""
+    & "$out\engine-launch.exe" $phase
+    if ($LASTEXITCODE -ne 0) { $exit = $LASTEXITCODE }
+}
 
 if (-not $KeepIntermediates) {
     Get-ChildItem $out -Filter *.obj -ErrorAction SilentlyContinue | Remove-Item -Force

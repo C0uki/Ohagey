@@ -174,6 +174,28 @@ namespace Ohagey
         return true;
     }
 
+    void EngineClient::Warmup()
+    {
+        if (IsConnected()) return;
+
+        std::wstring name;
+        if (!PipeName(&name)) return;
+
+        // NMPWAIT_NOWAIT asks whether the pipe exists and returns at once. A
+        // zero timeout would mean "use the server's default", which is a wait.
+        if (WaitNamedPipeW(name.c_str(), NMPWAIT_NOWAIT)) return;
+
+        // Anything other than "no such pipe" means an engine is there — busy
+        // serving its other clients, most likely. Launching another would only
+        // produce a process that finds the name taken and exits.
+        if (GetLastError() != ERROR_FILE_NOT_FOUND) return;
+
+        // Ignoring the result: this is speculative work on behalf of a
+        // conversion nobody has asked for yet. If it fails, `Connect` will try
+        // again when one is, exactly as before.
+        LaunchEngine();
+    }
+
     bool EngineClient::Connect()
     {
         if (IsConnected()) return true;

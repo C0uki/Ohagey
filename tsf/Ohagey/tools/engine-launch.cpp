@@ -5,6 +5,15 @@
 // you happened to start a background process by hand, so it is worth exercising
 // rather than reasoning about.
 //
+// Two phases, each needing a cold start, so the script runs this twice and
+// stops the engine in between:
+//
+//   cold   what happens with no warm-up: the first conversion is lost and the
+//          next keystroke recovers. Still reachable — reverse conversion sets
+//          the engine up without a thread manager, so nothing activates.
+//   warm   what the text service actually does now: Warmup at activation, so
+//          the conversion the user asks for connects on the first attempt.
+//
 // Expects NO engine to be running when it starts, and leaves the one it caused
 // to start behind — it exits on its own idle timeout.
 //
@@ -40,9 +49,12 @@ namespace
     }
 }
 
-int wmain()
+int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
+
+    const bool warm = (argc > 1 && std::wstring(argv[1]) == L"warm");
+    printf("phase: %s\n", warm ? "warm (Warmup at activation)" : "cold (no warm-up)");
 
     std::wstring enginePath;
     Check(EngineClient::EnginePath(&enginePath), "resolved the engine path");
@@ -62,31 +74,56 @@ int wmain()
     printf("  no engine running\n");
 
     EngineClient client;
-
-    // The first connect is expected to fail: the engine has been launched but
-    // has to load its dictionary before it listens. Failing fast is the point —
-    // the alternative is freezing the application the user is typing in.
-    const bool firstConnect = client.Connect();
-    printf("\nfirst Connect (launches, does not wait for startup)\n");
-    Check(!firstConnect, "returned promptly without connecting");
-
-    // Retry the way the next keystroke would.
-    printf("\nretrying the way subsequent keystrokes would\n");
     bool connected = false;
-    int attempts = 0;
-    const ULONGLONG deadline = GetTickCount64() + 20000;
-    while (GetTickCount64() < deadline)
+
+    if (warm)
     {
-        ++attempts;
-        if (client.Connect())
-        {
-            connected = true;
-            break;
-        }
-        Sleep(250);
+        // What SetupLanguageProfile does when the text service activates.
+        const ULONGLONG started = GetTickCount64();
+        client.Warmup();
+        const ULONGLONG elapsed = GetTickCount64() - started;
+        printf("\nWarmup at activation\n");
+        printf("  returned in %llums\n", elapsed);
+        // Activation happens on the thread that handles typing, so this has to
+        // be cheap. Launching a process is the only work it does.
+        Check(elapsed < 1000, "returned promptly, without waiting for the engine");
+        Check(!client.IsConnected(), "held no connection, so the idle timeout still applies");
+
+        // The gap between activating the IME and asking for a conversion.
+        // Deliberately conservative: typing even a short reading takes longer
+        // than this, so a real user gives the engine more time than the test.
+        Sleep(500);
+
+        printf("\nthe first conversion a user asks for\n");
+        connected = client.Connect();
+        Check(connected, "connected on the first attempt — no conversion lost");
     }
-    printf("  attempts: %d\n", attempts);
-    Check(connected, "the launched engine accepted a connection");
+    else
+    {
+        // Without a warm-up the first connect is expected to fail: the engine
+        // has been launched but is not listening yet. Failing fast is the
+        // point — the alternative is freezing the application being typed in.
+        const bool firstConnect = client.Connect();
+        printf("\nfirst Connect (launches, does not wait for startup)\n");
+        Check(!firstConnect, "returned promptly without connecting");
+
+        // Retry the way the next keystroke would.
+        printf("\nretrying the way subsequent keystrokes would\n");
+        int attempts = 0;
+        const ULONGLONG deadline = GetTickCount64() + 20000;
+        while (GetTickCount64() < deadline)
+        {
+            ++attempts;
+            if (client.Connect())
+            {
+                connected = true;
+                break;
+            }
+            Sleep(250);
+        }
+        printf("  attempts: %d\n", attempts);
+        Check(connected, "the launched engine accepted a connection");
+    }
 
     if (connected)
     {
