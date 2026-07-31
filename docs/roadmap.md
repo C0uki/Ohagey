@@ -73,8 +73,8 @@ OS 非依存で完結し、後続実装の土台になるもの。
       マッピング層こそ(oneof 不在・sentinel 値・敵対的な入力で)テストが要る場所だから。
       **テスト済み 23 件。**
 - [x] `ConversionService` を `EngineRequestHandling` に適合させる。
-      `registerWord` は決定 0026 未確定のため `internalError` を返す(保存できていないのに
-      成功を返さない)。
+      `registerWord` は**実装済み**(決定 0036)。読みがかなでないときは
+      `INVALID_ARGUMENT` を返して接続は維持する。
 - [x] accept ループ / コネクション毎の読み取りループ(`PipeServer.swift` / `PipeConnection.swift`)。
 - [x] アイドルタイムアウト自己終了(`IdleWatchdog.swift`、決定 0015)。**テスト済み 9 件**
       (スケジューラを注入して実時間を待たずに検証)。
@@ -238,6 +238,6 @@ Windows では upstream が `llama.cpp` を `.systemLibrary` として宣言し�
 
 ## 実装時に確定する残課題(決定ログより)
 
-- ユーザー辞書ファイルの具体フォーマット(JSON 等、決定 0026)。
+- ~~ユーザー辞書ファイルの具体フォーマット(JSON 等、決定 0026)~~ → **決定 0036 で確定**(タブ区切り)。
 - 設定用レジストリスキーマの詳細(決定 0014)。
 - `ohagey.proto` の各メッセージ詳細の最終確定(本初版からの調整)。
