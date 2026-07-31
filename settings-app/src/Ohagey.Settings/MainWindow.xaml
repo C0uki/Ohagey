@@ -1,0 +1,25 @@
+<Window
+    x:Class="Ohagey.Settings.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- No muxc: alias. In WinUI 3 the default XAML namespace already maps to
+         Microsoft.UI.Xaml.Controls; declaring it a second time is a WinUI 2 /
+         UWP idiom and does not belong here. -->
+    <NavigationView
+        x:Name="Navigation"
+        PaneDisplayMode="Left"
+        IsBackButtonVisible="Collapsed"
+        IsSettingsVisible="False"
+        SelectionChanged="OnSectionChanged">
+
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="変換エンジン" Tag="backend" />
+            <NavigationViewItem Content="学習" Tag="learning" />
+            <NavigationViewItem Content="ユーザー辞書" Tag="dictionary" />
+            <NavigationViewItem Content="このソフトウェアについて" Tag="about" />
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="ContentFrame" />
+    </NavigationView>
+</Window>

@@ -1,0 +1,56 @@
+<Page
+    x:Class="Ohagey.Settings.Pages.BackendPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollView>
+        <StackPanel Padding="32" Spacing="20" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="変換エンジン" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="推論バックエンド" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <ComboBox x:Name="BackendChoice" MinWidth="220" SelectionChanged="OnChanged">
+                    <ComboBoxItem Content="CPU" Tag="Cpu" />
+                    <ComboBoxItem Content="CUDA (NVIDIA)" Tag="Cuda" />
+                    <ComboBoxItem Content="Vulkan" Tag="Vulkan" />
+                </ComboBox>
+                <!-- Decision 0028 asks for this to be said in the UI: the engine
+                     picks its backend from the DLL search path at startup, so a
+                     change here does nothing until it restarts. A user who is
+                     not told concludes the setting is broken. -->
+                <InfoBar
+                    x:Name="RestartNotice"
+                    IsOpen="False"
+                    IsClosable="False"
+                    Severity="Informational"
+                    Title="エンジンの再起動が必要です"
+                    Message="変更した項目は、変換エンジンが次に起動したときから有効になります。" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="変換の精度と速さ" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Text="1回の変換にかける推論の上限です。大きいほど候補の質は上がりますが、打鍵ごとの待ち時間が伸びます。"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <!-- Minimum/Maximum/Value are set in code, not here. XAML
+                     assigns attributes in an order it does not promise, and
+                     assigning Minimum="1" while Value is still its default 0
+                     throws: "Failed to assign to property RangeBase.Minimum".
+                     The failure surfaces as a native crash code with no
+                     message, so it is worth not relying on the order. -->
+                <Slider
+                    x:Name="InferenceLimit"
+                    StepFrequency="1"
+                    Width="320"
+                    HorizontalAlignment="Left"
+                    ValueChanged="OnSliderChanged" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="モデル" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock x:Name="ModelStatus" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollView>
+</Page>

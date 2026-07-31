@@ -71,13 +71,58 @@ Code タブでは会話ひとつが**セッション**で、それぞれ独自�
 | **最初に入れる** | **Visual Studio 2022(「C++ によるデスクトップ開発」ワークロード)** | **TSF ヘッダ(`msctf.h` 等)に加え、cmake と MSVC コンパイラが同梱される。llama.cpp のビルドにも必要**(決定 0002/0003) |
 | `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | **6.1 以上が必須**(`Package.swift` が package traits を使うため)。6.3.3 で動作確認 |
 | `engine/`(proto 生成) | `protoc` + `protoc-gen-swift` | 下記「Protobuf の生成」参照 |
-| `settings-app/` | .NET SDK + Windows App SDK(WinUI 3) | 決定 0013 |
+| `settings-app/`(ロジック・テスト) | **.NET SDK 8**(`winget install Microsoft.DotNet.SDK.8`) | 8.0.423 で動作確認。**ランタイムだけでは足りない** |
+| `settings-app/`(WinUI 本体) | 上記 + **Visual Studio の MSBuild**(既にあるもので足りる) | `dotnet build` では建たない。下記参照 |
 | `installer/` | [Inno Setup](https://jrsoftware.org/isinfo.php) | `iscc` でコンパイル |
 | 共通 | Git | — |
 
 Zenzai の GPU バックエンドを試す場合のみ追加で:
 CUDA なら NVIDIA ドライバ + CUDA Toolkit、Vulkan なら Vulkan SDK(決定 0010/0028)。
 **まずは CPU で動かすので必須ではない。**
+
+### ⚠️ WinUI 3 は `dotnet build` では建たない
+
+`settings-app/` のロジック部分(`Ohagey.Settings.Core` とそのテスト)は `dotnet` だけで
+ビルド・テストできる。**WinUI 本体はできない。**
+
+```
+error MSB4062: "Microsoft.Build.Packaging.Pri.Tasks.ExpandPriContent" タスクを
+アセンブリ ...\sdk\8.0.423\Microsoft\VisualStudio\v17.0\AppxPackage\Microsoft.Build.Packaging.Pri.Tasks.dll から読み込めませんでした
+```
+
+PRI(リソースインデックス)を作る MSBuild タスクは **Visual Studio 側**にあり、.NET SDK
+には無い。**追加インストールは要らない** — 既にある VS の MSBuild を使えばよい:
+
+```
+"C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\amd64\MSBuild.exe"
+```
+
+`AppxGeneratePriEnabled=false` で当該ターゲットを飛ばせばビルドは通るが、PRI は
+リソースインデックスそのものなので XAML のリソース解決が実行時に壊れる。採らない。
+
+#### Restore と Build は分けて呼ぶこと
+
+`-t:Restore,Build` を1回で呼ぶと、**クリーン後の初回だけ**失敗する。復元で入った
+ターゲットが、評価済みのプロジェクトには反映されないため。症状は XAML 由来と分からない
+3つのエラー(`Main` が無い / `InitializeComponent` が無い / 名前付き要素が無い)。
+
+```
+msbuild ... -t:Restore
+msbuild ... -t:Build
+```
+
+#### 実機で踏んだ WinUI の落とし穴(記録)
+
+| 症状 | 原因 | 対処 |
+|---|---|---|
+| 起動時に「Windows App Runtime が必要です」ダイアログ。**オンラインでの取得を促す** | unpackaged なアプリはランタイムが要る | `WindowsAppSDKSelfContained=true`。決定 0016(インストール時以外は通信しない)に反するので回避不可 |
+| `ScrollViewer` を置いたページで `0xC0000374`(ヒープ破損)。managed のハンドラにも届かない | Windows App SDK **1.6** の問題 | **1.7 に上げる**。あわせて `ScrollView` を使う |
+| `Slider` を置いたページで同上 | 同上(1.6) | 同上 |
+| `Slider` のあるページで `0xC000027B` | XAML は属性の代入順を保証しない。`Minimum="1"` を既定の `Value`(0) より後に代入できず `Failed to assign to property 'RangeBase.Minimum'` | **範囲はコード側で** Maximum → Minimum → Value の順に設定する |
+
+> ネイティブのクラッシュコードだけが出てメッセージがどこにも無い場合は、`App` の
+> `UnhandledException` で例外をファイルに書き出すと実エラーが取れる。上の
+> `RangeBase.Minimum` はそれで判明した。
 
 ### Visual Studio のどれを入れるか
 

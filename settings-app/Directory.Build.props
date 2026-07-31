@@ -1,0 +1,17 @@
+<Project>
+
+  <!--
+    Shared by every project under settings-app/.
+
+    x64 only, matching decision 0018: the engine and the TSF DLL are x64, and a
+    settings app of a different architecture would be a needless second answer
+    to "which build am I running".
+  -->
+  <PropertyGroup>
+    <Platforms>x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>

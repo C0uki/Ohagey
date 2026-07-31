@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The WinUI 3 shell (decision 0013). Everything it does is in
+    Ohagey.Settings.Core; this project is windows and buttons.
+
+    ⚠️ Build this with Visual Studio's MSBuild, not `dotnet build`.
+
+    WinUI generates a PRI resource index, and the MSBuild task that does it
+    (Microsoft.Build.Packaging.Pri.Tasks.ExpandPriContent) ships with Visual
+    Studio, under MSBuild\Microsoft\VisualStudio\v17.0\AppxPackage\. The .NET
+    SDK has no such directory, so `dotnet build` fails with MSB4062. See
+    docs/local-setup.md.
+
+    Unpackaged (WindowsPackageType None): the installer is Inno Setup
+    (decision 0019) and puts this beside the engine in %ProgramFiles%\Ohagey
+    (decision 0033). An MSIX package would be a second, competing way to
+    install the same thing.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>OhageySettings</AssemblyName>
+    <RootNamespace>Ohagey.Settings</RootNamespace>
+    <EnableMsixTooling>false</EnableMsixTooling>
+    <!--
+      Carries its own copy of the Windows App Runtime.
+
+      Without this an unpackaged app finds no runtime on a clean machine and
+      offers to download one at first launch:
+
+        This application requires the Windows App Runtime Version 1.6
+        Do you want to install a compatible Windows App Runtime now?
+
+      Which is a prompt to go online, in a product that promises to do nothing
+      of the sort outside installation (decision 0016) — and it would appear
+      after the user had already installed Ohagey and thought they were done.
+      Self-contained costs disk space in the installer and nothing else.
+    -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>false</SelfContained>
+    <!-- The engine and the TSF DLL are x64 (decision 0018); a settings app of
+         another architecture would be a second answer to "which build is
+         running". -->
+    <Platform>x64</Platform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250606001" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Ohagey.Settings.Core\Ohagey.Settings.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,51 @@
+<Page
+    x:Class="Ohagey.Settings.Pages.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollView>
+        <StackPanel Padding="32" Spacing="20" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="このソフトウェアについて" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="おはぎー (Ohagey)" Style="{StaticResource SubtitleTextBlockStyle}" />
+                <TextBlock x:Name="VersionText" Style="{StaticResource CaptionTextBlockStyle}" />
+                <TextBlock Text="Windows 向け日本語入力システム" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="ライセンス" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="おはぎー本体は MIT ライセンスで公開されています。&#x0a;Copyright (c) 2026 Ohagey Contributors" />
+            </StackPanel>
+
+            <!-- Decision 0009 requires this attribution wherever the model is
+                 used. CC-BY-SA 4.0 is a share-alike licence and the model is a
+                 separate artefact from Ohagey's MIT code, so the notice has to
+                 be visible in the product, not only in a file in the repo. -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="変換モデル (Zenzai)" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="ニューラル変換には azooKey プロジェクトの zenz モデルを使用しています。&#x0a;モデルは CC BY-SA 4.0 で提供されており、おはぎー本体 (MIT) とは別のライセンスです。" />
+                <HyperlinkButton
+                    Content="azooKey / zenz について"
+                    NavigateUri="https://github.com/azooKey/azooKey" />
+                <HyperlinkButton
+                    Content="CC BY-SA 4.0 の全文"
+                    NavigateUri="https://creativecommons.org/licenses/by-sa/4.0/" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="変換エンジン" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="かな漢字変換には AzooKeyKanaKanjiConverter (MIT) と llama.cpp (MIT) を使用しています。" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="プライバシー" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="入力した内容が外部に送信されることはありません。通信を行うのはインストール時のモデル取得だけです。" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollView>
+</Page>
