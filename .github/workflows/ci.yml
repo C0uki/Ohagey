@@ -189,7 +189,18 @@ jobs:
           # lines, and `-notmatch` against an array filters it — returning every
           # line that does not match, which is almost all of them and therefore
           # truthy. The check then fails whether or not the export is there.
-          $exports = (dumpbin /exports x64\Release\SampleIME.dll) -join "`n"
+          # OhageyTSF.dll, not SampleIME.dll: the project keeps the vendored
+          # name but the artefact is the shipping one (決定 0033). Asserted
+          # rather than globbed so a TargetName that silently stopped applying
+          # fails here instead of shipping under the sample's name.
+          $dll = "x64\Release\OhageyTSF.dll"
+          if (-not (Test-Path $dll)) { throw "expected $dll; found: $((Get-ChildItem x64\Release -Filter *.dll).Name -join ', ')" }
+
+          # Joined into one string on purpose. dumpbin returns an array of
+          # lines, and `-notmatch` against an array filters it — returning every
+          # line that does not match, which is almost all of them and therefore
+          # truthy. The check then fails whether or not the export is there.
+          $exports = (dumpbin /exports $dll) -join "`n"
           foreach ($name in @("DllGetClassObject", "DllCanUnloadNow", "DllRegisterServer", "DllUnregisterServer")) {
             if ($exports -notmatch $name) { throw "missing export: $name" }
           }

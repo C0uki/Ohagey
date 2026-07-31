@@ -33,7 +33,9 @@ PrivilegesRequired=admin
 ; Still commented out: the settings app does not exist yet, and none of this has
 ; been run through iscc. The paths below are the real build outputs.
 ;
-; Source: "..\tsf\SampleIME\x64\Release\SampleIME.dll"; DestDir: "{app}"; DestName: "OhageyTSF.dll"; Flags: regserver 64bit
+; The project directory is still the vendored SampleIME one; the artefact is
+; already the shipping name, so no DestName rename is needed (decision 0033).
+; Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit
 ; Source: "..\engine\.build\release\OhageyEngine.exe"; DestDir: "{app}"
 ; Source: "..\settings-app\bin\x64\Release\OhageySettings.exe"; DestDir: "{app}"
 ;

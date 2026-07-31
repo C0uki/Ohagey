@@ -28,9 +28,18 @@ IDI_PUNCTUATION_OFF     ICON                    "image\\PunctuationOff.ico"
 // Version
 //
 
-IDR_VERSION2 VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
+// 1 is VS_VERSION_INFO, and the sample had this as IDR_VERSION2 (107).
+// GetFileVersionInfo only ever looks at resource 1, so under the sample's id
+// this block was invisible: the properties dialog showed a DLL with no version
+// information at all, and every value below was dead weight.
+//
+// Written as the number rather than the VS_VERSION_INFO macro because this
+// script includes only resource.h — the macro lives in the Windows headers, and
+// rc.exe silently takes an unresolved name here as a *string* resource name
+// instead of an id, which produces the same invisible block as before.
+1 VERSIONINFO
+ FILEVERSION 0,0,1,0
+ PRODUCTVERSION 0,0,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -45,14 +54,20 @@ BEGIN
     BEGIN
         BLOCK "040904b0"
         BEGIN
-            VALUE "CompanyName", "MSFT"
-            VALUE "FileDescription", "The Sample code of Windows 8 IME"
-            VALUE "FileVersion", "1.0.0.1"
-            VALUE "InternalName", "SampleIM.dll"
-            VALUE "LegalCopyright", "Copyright (C)"
-            VALUE "OriginalFilename", "SampleIM.dll"
-            VALUE "ProductName", "SampleIME"
-            VALUE "ProductVersion", "1.0.0.1"
+            // Ohagey's identity, not the sample's. This block is what the file
+            // properties dialog and any allow-listing tool read, and leaving it
+            // saying MSFT would have a shipped Ohagey binary claiming to be
+            // Microsoft sample code. Vendoring is recorded in tsf/README.md and
+            // the licence, which is where attribution belongs (decisions
+            // 0021 / 0022).
+            VALUE "CompanyName", "Ohagey Contributors"
+            VALUE "FileDescription", "Ohagey Japanese IME text service"
+            VALUE "FileVersion", "0.0.1.0"
+            VALUE "InternalName", "OhageyTSF.dll"
+            VALUE "LegalCopyright", "Copyright (c) 2026 Ohagey Contributors. MIT licensed."
+            VALUE "OriginalFilename", "OhageyTSF.dll"
+            VALUE "ProductName", "Ohagey"
+            VALUE "ProductVersion", "0.0.1.0"
         END
     END
     BLOCK "VarFileInfo"

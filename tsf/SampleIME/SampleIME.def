@@ -1,4 +1,8 @@
-LIBRARY SampleIME.dll
+; Must match the built file name (decision 0033): LIBRARY writes the name into
+; the export directory, and a module whose internal name disagrees with the file
+; on disk is the sort of thing that reads as tampering to a signing or
+; allow-listing tool.
+LIBRARY OhageyTSF.dll
 
 EXPORTS
         DllGetClassObject    PRIVATE
