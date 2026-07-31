@@ -152,6 +152,19 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <!--
+      The shipping name (decision 0033). The project, its directory and its
+      GUID keep the vendored SampleIME identity on purpose: renaming those
+      would bury the code changes in a move, and decision 0021 wants the
+      provenance of what was vendored to stay legible. Only the artefact is
+      renamed, which is all the installer and regsvr32 ever see.
+
+      Engine launch does not depend on this: it resolves OhageyEngine.exe from
+      whatever path this module was loaded from, not from a name.
+    -->
+    <TargetName>OhageyTSF</TargetName>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>

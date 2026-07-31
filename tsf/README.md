@@ -110,9 +110,15 @@ MSBuild の `Debug` / `Release` はそれぞれ `swift build` の `debug` / `rel
 > 開発者モードが無効なときに出る)が毎ビルド警告として出る。常に出る警告は読まれなくなる。
 > テキストは出るし、終了コードでビルドは失敗する。
 
-**Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\SampleIME.dll` が
+**Debug / Release とも警告ゼロでビルドが通り、`x64\{Debug,Release}\OhageyTSF.dll` が
 生成される**ことを確認済み。COM のエクスポート(`DllGetClassObject` /
 `DllCanUnloadNow` / `DllRegisterServer` / `DllUnregisterServer`)も揃っている。
+
+> **プロジェクト名は `SampleIME` のまま、出力だけ `OhageyTSF.dll`**(決定 0033)。
+> ディレクトリ・`.vcxproj`・GUID を改名すると、コードの変更が移動に埋もれて
+> vendoring 元との差分が読めなくなる(決定 0021)。出荷物だけ改名すれば、
+> インストーラと `regsvr32` から見えるものは正しくなる。
+> `.def` の `LIBRARY` と `.rc` の `VERSIONINFO` も出荷名に合わせてある。
 
 ### 本家からのビルド設定の変更点
 
