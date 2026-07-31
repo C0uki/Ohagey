@@ -71,13 +71,34 @@ Code タブでは会話ひとつが**セッション**で、それぞれ独自�
 | **最初に入れる** | **Visual Studio 2022(「C++ によるデスクトップ開発」ワークロード)** | **TSF ヘッダ(`msctf.h` 等)に加え、cmake と MSVC コンパイラが同梱される。llama.cpp のビルドにも必要**(決定 0002/0003) |
 | `engine/` | [Swift for Windows](https://www.swift.org/install/windows/) | **6.1 以上が必須**(`Package.swift` が package traits を使うため)。6.3.3 で動作確認 |
 | `engine/`(proto 生成) | `protoc` + `protoc-gen-swift` | 下記「Protobuf の生成」参照 |
-| `settings-app/` | .NET SDK + Windows App SDK(WinUI 3) | 決定 0013 |
+| `settings-app/`(ロジック・テスト) | **.NET SDK 8**(`winget install Microsoft.DotNet.SDK.8`) | 8.0.423 で動作確認。**ランタイムだけでは足りない** |
+| `settings-app/`(WinUI 本体) | 上記に加えて **Visual Studio の「Windows アプリケーション開発」ワークロード** | 下記の注意を参照 |
 | `installer/` | [Inno Setup](https://jrsoftware.org/isinfo.php) | `iscc` でコンパイル |
 | 共通 | Git | — |
 
 Zenzai の GPU バックエンドを試す場合のみ追加で:
 CUDA なら NVIDIA ドライバ + CUDA Toolkit、Vulkan なら Vulkan SDK(決定 0010/0028)。
 **まずは CPU で動かすので必須ではない。**
+
+### ⚠️ WinUI 3 は .NET SDK だけではビルドできない
+
+`settings-app/` のロジック部分(`Ohagey.Settings.Core` とそのテスト)は .NET SDK
+だけでビルド・テストできる。**WinUI 本体はできない。**
+
+```
+error MSB4062: "Microsoft.Build.Packaging.Pri.Tasks.ExpandPriContent" タスクを
+アセンブリ ...\sdk\8.0.423\Microsoft\VisualStudio17.0\AppxPackageMicrosoft.Build.Packaging.Pri.Tasks.dll から読み込めませんでした
+```
+
+PRI(リソースインデックス)を作る MSBuild タスクは **Visual Studio 側**に付いてくる
+もので、.NET SDK には入っていない。Windows App SDK の NuGet パッケージ自体は
+`dotnet restore` で普通に取れるので、足りないのはこのタスクだけ。
+
+`AppxGeneratePriEnabled=false` で当該ターゲットを飛ばせば**ビルドは通る**が、
+**PRI はリソースインデックスそのもの**なので XAML のリソース解決が実行時に壊れる。
+「ビルドが通ること」と「動くこと」は別なので、この回避は採らない。
+
+Visual Studio Installer で「**Windows アプリケーション開発**」ワークロードを追加する。
 
 ### Visual Studio のどれを入れるか
 

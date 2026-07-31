@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Everything the settings app does that is not drawing: the registry schema
+    (decision 0035), the user dictionary file (0036) and erasing learning data
+    (0025 / 0034).
+
+    Separate from the WinUI project on purpose. This half is what a wrong
+    change would actually break for a user, and keeping it out of the UI
+    assembly means it can be unit tested headlessly — including in CI, which
+    has no desktop.
+  -->
+  <PropertyGroup>
+    <!-- net8.0-windows, not net8.0: the settings live in the registry, and
+         Microsoft.Win32.Registry is Windows-only. Ohagey is Windows x64 only
+         anyway (decision 0018). -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

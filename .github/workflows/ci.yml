@@ -206,6 +206,31 @@ jobs:
           }
           Write-Host "all four COM exports present"
 
+  # 設定アプリのロジック部分（決定 0013 / 0035 / 0036）。
+  #
+  # UI ではなくロジックだけを見るジョブ。設定スキーマと辞書フォーマットは
+  # Swift 側と C# 側の二重実装なので、食い違うと「設定を変えても何も起きない」
+  # という壊れ方をする。それを落とすためのテストがここで走る。
+  #
+  # WinUI 本体はまだ含まれていない。デスクトップの要る部分は CI では検証できず、
+  # ここで守れるのは検証できる部分だけ。
+  settings-app:
+    name: settings-app — logic build & test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build and test
+        working-directory: settings-app
+        run: |
+          dotnet test tests/Ohagey.Settings.Core.Tests/Ohagey.Settings.Core.Tests.csproj `
+            -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw "settings-app tests failed" }
+
   # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
   #
   # installer (Inno Setup, 決定 0019):
