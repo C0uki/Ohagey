@@ -12,7 +12,7 @@
 |---|---|
 | `engine/` (Swift) | `Package.swift` + `main.swift`(TODOのみ)+ `ohagey.proto`(本フェーズで追加) |
 | `tsf/` (C++) | READMEのみ。SampleIME未取り込み |
-| `settings-app/` (WinUI 3) | READMEのみ |
+| `settings-app/` (WinUI 3) | ロジック(テスト54件)+ 4画面。実機で起動確認済み |
 | `installer/` (Inno Setup) | `ohagey.iss` 雛形 |
 
 > **実行環境の前提**: 本プロジェクトは Windows 専用(TSF C++ / WinUI 3 / Swift-on-Windows)。
@@ -219,12 +219,16 @@ after:  機者の記者 / 記者の記者 / 汽車の記者 / き者の記者 / 
 
 ## フェーズ3 — 設定アプリ / インストーラ
 
-- [~] `settings-app/`: **ロジック部分は完了**(`Ohagey.Settings.Core` + テスト54件、CI 有効)。
+- [x] `settings-app/`: ロジック(`Ohagey.Settings.Core` + テスト54件、CI 有効)。
       設定スキーマ(0035)と辞書フォーマット(0036)の C# 実装、学習データ消去(0025/0034)。
       **C# が書いた設定を Swift のエンジンが読むところまで実測済み。**
-      **WinUI 本体は未着手** — .NET SDK だけではビルドできず、VS の
-      「Windows アプリケーション開発」ワークロードが要る(`docs/local-setup.md`)。
-- [ ] `settings-app/`: WinUI 3 の画面(決定 0013)。バックエンド選択(0010/0028、**変更時はエンジン再起動が要る旨を UI に明示**)/学習データ管理(0025)/ユーザー辞書(0026)/About(帰属表示 0009)。
+- [x] `settings-app/`: WinUI 3 の画面(決定 0013)。変換エンジン / 学習 /
+      ユーザー辞書 / このソフトウェアについて の4画面。**実機で起動を確認済み**
+      (モデルの実インストール状態まで表示される)。
+      **`dotnet build` では建たない** — PRI 生成のタスクが VS 側にしかない。
+      Restore と Build も分けて呼ぶ必要がある(`docs/local-setup.md`)。
+      Windows App SDK は **1.7**。1.6 では `ScrollViewer` と `Slider` を置いた
+      ページがヒープ破損で落ちた。バックエンド選択(0010/0028、**変更時はエンジン再起動が要る旨を UI に明示**)/学習データ管理(0025)/ユーザー辞書(0026)/About(帰属表示 0009)。
 - [x] レジストリスキーマ確定 + 変更通知連携(決定 0014 → **0035**)。エンジン側は完了。
 - [ ] `installer/ohagey.iss`: `[Files]`/`[Run]` 実装、モデルダウンロードステップ(失敗してもインストール続行、決定 0008)、`backends\{cpu,cuda,vulkan}\` の同梱(決定 0028)、CI で `iscc` パッケージング有効化。
 

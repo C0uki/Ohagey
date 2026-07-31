@@ -1,0 +1,53 @@
+<Page
+    x:Class="Ohagey.Settings.Pages.LearningPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ScrollView>
+        <StackPanel Padding="32" Spacing="20" MaxWidth="720" HorizontalAlignment="Left">
+            <TextBlock Text="学習" Style="{StaticResource TitleTextBlockStyle}" />
+
+            <ToggleSwitch
+                x:Name="LearningSwitch"
+                Header="入力した内容から学習する"
+                OnContent="オン" OffContent="オフ"
+                Toggled="OnToggled" />
+            <TextBlock
+                Text="確定した候補を覚え、次回から選びやすくします。共有のパソコンでは切っておけます。"
+                TextWrapping="Wrap"
+                Style="{StaticResource CaptionTextBlockStyle}" />
+
+            <ToggleSwitch
+                x:Name="PersonalizationSwitch"
+                Header="学習をニューラル変換の候補順にも反映する"
+                OnContent="オン" OffContent="オフ"
+                Toggled="OnToggled" />
+            <TextBlock
+                x:Name="PersonalizationNote"
+                TextWrapping="Wrap"
+                Style="{StaticResource CaptionTextBlockStyle}" />
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="反映の強さ" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <Slider
+                    x:Name="AlphaSlider"
+                    Minimum="0" Maximum="100"
+                    StepFrequency="1"
+                    Width="320"
+                    HorizontalAlignment="Left"
+                    ValueChanged="OnSliderChanged" />
+                <TextBlock
+                    Text="強くしすぎると、学習した語がニューラル変換の判断を押し切ってしまいます。"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+            </StackPanel>
+
+            <StackPanel Spacing="8">
+                <TextBlock Text="学習データの消去" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock x:Name="EraseSummary" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" />
+                <Button x:Name="EraseButton" Content="学習データを消去" Click="OnEraseClicked" />
+                <InfoBar x:Name="EraseResultBar" IsOpen="False" IsClosable="True" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollView>
+</Page>
