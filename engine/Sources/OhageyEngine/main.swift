@@ -29,7 +29,14 @@ enum OhageyEngineMain {
             log("could not create \(EnginePaths.userDataDirectory.path): \(error)")
         }
 
-        let settings = EngineSettings.load()
+        // Settings come from HKCU (decision 0014). Off Windows there is no
+        // registry to read and the engine is only being type-checked, so the
+        // defaults stand in.
+        #if os(Windows)
+        let settings = RegistrySettings.load()
+        #else
+        let settings = EngineSettings.default
+        #endif
         log("settings loaded (learning=\(settings.learningEnabled), backend=\(settings.backend.rawValue))")
 
         // Called out separately rather than left to be inferred from the path
@@ -54,12 +61,11 @@ enum OhageyEngineMain {
             let service = ConversionService(settings: settings, log: log)
             let router = RequestRouter(handler: service)
 
-            // Settings arrive by file, not by IPC (decision 0014). Applied on
-            // the main actor because that is where the converter lives; live
-            // connections are untouched, and the new values take effect on the
-            // next conversion.
+            // Settings arrive through the registry, not by IPC (decision 0014).
+            // Applied on the main actor because that is where the converter
+            // lives; live connections are untouched, and the new values take
+            // effect on the next conversion.
             SettingsWatcher.start(
-                settingsURL: EnginePaths.settingsURL,
                 initial: settings,
                 log: log
             ) { reloaded in

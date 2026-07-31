@@ -216,19 +216,22 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertLessThan(EngineSettings.default.personalizationAlpha, 0.5)
     }
 
-    func testAFileThatPredatesTheseSettingsStillGetsThem() {
-        // The settings app's schema is unsettled (decision 0014), so a file
-        // written before this feature existed has to keep working — and has to
-        // come back with personalisation on rather than silently off.
-        let json = #"{"learningEnabled": true, "backend": "cpu"}"#
-        let settings = try! JSONDecoder().decode(EngineSettings.self, from: Data(json.utf8))
+    func testAStoreThatPredatesTheseSettingsStillGetsThem() {
+        // A settings app older than this feature writes neither value, and the
+        // user has to come back with personalisation on rather than silently
+        // off (decision 0014's leniency rule).
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(1),
+            SettingsSchema.Key.backend: .text("cpu"),
+        ])
         XCTAssertTrue(settings.personalizationActive)
         XCTAssertEqual(settings.personalizationAlpha, EngineSettings.default.personalizationAlpha)
     }
 
-    func testAFileThatTurnsLearningOffDoesNotGetPersonalisationAnyway() {
-        let json = #"{"learningEnabled": false}"#
-        let settings = try! JSONDecoder().decode(EngineSettings.self, from: Data(json.utf8))
+    func testAStoreThatTurnsLearningOffDoesNotGetPersonalisationAnyway() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(0)
+        ])
         XCTAssertFalse(settings.personalizationActive)
     }
 

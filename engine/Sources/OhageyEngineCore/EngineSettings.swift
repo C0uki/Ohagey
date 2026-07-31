@@ -1,8 +1,10 @@
 // Engine settings and on-disk locations (decisions 0008 / 0010 / 0014 / 0024 / 0025).
 //
-// Settings are written by the WinUI 3 settings app into the registry / a
-// settings file; the engine reads them and watches for changes rather than
-// receiving push notifications over IPC (decision 0014).
+// Settings are written by the WinUI 3 settings app into HKCU, and the engine
+// reads them and watches the key for changes rather than receiving push
+// notifications over IPC (decision 0014). The value names and how raw values
+// become settings are in SettingsSchema.swift; reading the registry is
+// RegistrySettings.swift in the executable target.
 
 import Foundation
 
@@ -11,7 +13,7 @@ import Foundation
 /// `Sendable` because it travels inside `EngineResponse.ping`, which crosses
 /// isolation boundaries: conversion runs on the main actor while connections
 /// are served off it.
-public enum Backend: String, Codable, Sendable {
+public enum Backend: String, Sendable {
     case cpu
     case cuda
     case vulkan
@@ -21,7 +23,7 @@ public enum Backend: String, Codable, Sendable {
 ///
 /// `Sendable` for the same reason as `Backend`: settings are read on one actor
 /// and applied on another when a hot-reload lands (decision 0014).
-public struct EngineSettings: Codable, Sendable, Equatable {
+public struct EngineSettings: Sendable, Equatable {
     /// Learning is on by default; the settings app can disable and erase it
     /// for shared machines such as school PCs (decision 0025).
     public var learningEnabled: Bool = true
@@ -54,39 +56,6 @@ public struct EngineSettings: Codable, Sendable, Equatable {
     public init() {}
 
     public static let `default` = EngineSettings()
-
-    /// Decodes leniently, keeping the default for anything the file does not
-    /// mention.
-    ///
-    /// Written by hand because the synthesized `Codable` does the opposite: a
-    /// missing key throws `keyNotFound`, which would fail the whole file. That
-    /// failure is not contained — `load` answers it with *all* defaults, so a
-    /// user whose file said only `{"learningEnabled": false}` would silently
-    /// get learning switched back on (decision 0025). The settings app's schema
-    /// is still unsettled (decision 0014), so a file written by a different
-    /// version of it has to remain readable.
-    public init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let defaults = EngineSettings()
-
-        learningEnabled = try container.decodeIfPresent(Bool.self, forKey: .learningEnabled)
-            ?? defaults.learningEnabled
-        personalizationEnabled = try container.decodeIfPresent(Bool.self, forKey: .personalizationEnabled)
-            ?? defaults.personalizationEnabled
-        personalizationAlpha = try container.decodeIfPresent(Double.self, forKey: .personalizationAlpha)
-            ?? defaults.personalizationAlpha
-        zenzaiInferenceLimit = try container.decodeIfPresent(Int.self, forKey: .zenzaiInferenceLimit)
-            ?? defaults.zenzaiInferenceLimit
-        idleTimeoutSeconds = try container.decodeIfPresent(Int.self, forKey: .idleTimeoutSeconds)
-            ?? defaults.idleTimeoutSeconds
-
-        // A backend name this build does not know is a newer settings app, not
-        // a corrupt file. Falling back to the default beats discarding every
-        // other setting alongside it; the effective backend is visible in the
-        // ping response either way.
-        backend = (try? container.decodeIfPresent(Backend.self, forKey: .backend))
-            .flatMap { $0 } ?? defaults.backend
-    }
 
     /// Whether committed text should re-rank Zenzai's output.
     ///
@@ -174,11 +143,6 @@ public enum EnginePaths {
             .appendingPathComponent("ggml-model-Q5_K_M.gguf")
     }
 
-    /// Settings file, written by the settings app (decision 0014).
-    public static var settingsURL: URL {
-        userDataDirectory.appendingPathComponent("settings.json")
-    }
-
     /// The model download is allowed to fail at install time (decision 0008);
     /// when it is missing the engine falls back to dictionary-only conversion
     /// rather than refusing to start.
@@ -195,24 +159,6 @@ public enum EnginePaths {
 }
 
 extension EngineSettings {
-    /// Reads settings, throwing if the file is missing or does not parse.
-    ///
-    /// Hot-reload needs this rather than `load`. A settings file caught
-    /// mid-write does not parse, and quietly substituting defaults at that
-    /// moment would silently turn learning back on for a user who had just
-    /// switched it off (decision 0025) — the one thing this setting exists to
-    /// prevent. The caller keeps the settings it already has instead.
-    public static func decode(from url: URL = EnginePaths.settingsURL) throws -> EngineSettings {
-        try JSONDecoder().decode(EngineSettings.self, from: Data(contentsOf: url))
-    }
-
-    /// Loads settings, falling back to defaults when the file is absent or
-    /// unreadable. A malformed settings file must never stop the IME from
-    /// starting — the user would be left unable to type.
-    public static func load(from url: URL = EnginePaths.settingsURL) -> EngineSettings {
-        (try? decode(from: url)) ?? .default
-    }
-
     /// Names of the settings that changed but cannot take effect until the
     /// engine restarts.
     ///

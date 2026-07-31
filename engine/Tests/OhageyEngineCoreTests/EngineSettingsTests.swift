@@ -1,132 +1,198 @@
-// Tests for settings loading and hot-reload support (decisions 0014 / 0025).
+// Tests for reading settings out of the store (decisions 0014 / 0025).
 //
-// The behaviour worth pinning is the difference between the two read paths.
-// At startup a bad file must not stop the engine — the user would be unable to
-// type. During hot-reload the same fallback would be a privacy bug: a file
-// caught mid-write parses as nothing, and substituting defaults would turn
-// learning back on for someone who had just switched it off.
+// The store is the registry, but nothing here touches it: `SettingsSchema`
+// splits the Windows API calls (RegistrySettings.swift, in the executable
+// target) from the decisions about what the values mean, and those decisions
+// are what a user would notice going wrong.
+//
+// The behaviour worth pinning: a value that is missing, of the wrong type, or
+// out of range must never take the *other* settings down with it. The one that
+// matters most is learning — someone who switched it off must not get it back
+// because an unrelated value was malformed (decision 0025).
 
 import XCTest
 @testable import OhageyEngineCore
 
 final class EngineSettingsTests: XCTestCase {
-    private var directory: URL!
+    // MARK: - Reading values
 
-    override func setUpWithError() throws {
-        directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ohagey-settings-tests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    }
-
-    override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: directory)
-    }
-
-    private func write(_ contents: String) throws -> URL {
-        let url = directory.appendingPathComponent("settings.json")
-        try contents.write(to: url, atomically: true, encoding: .utf8)
-        return url
-    }
-
-    // MARK: - Round trip
-
-    func testDecodesEveryField() throws {
-        let url = try write("""
-        {"learningEnabled":false,"backend":"cuda","zenzaiInferenceLimit":3,"idleTimeoutSeconds":60}
-        """)
-
-        let settings = try EngineSettings.decode(from: url)
+    func testReadsEveryField() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(0),
+            SettingsSchema.Key.personalizationEnabled: .number(0),
+            SettingsSchema.Key.personalizationAlphaPercent: .number(25),
+            SettingsSchema.Key.backend: .text("cuda"),
+            SettingsSchema.Key.zenzaiInferenceLimit: .number(3),
+            SettingsSchema.Key.idleTimeoutSeconds: .number(60),
+        ])
 
         XCTAssertFalse(settings.learningEnabled)
+        XCTAssertFalse(settings.personalizationEnabled)
+        XCTAssertEqual(settings.personalizationAlpha, 0.25, accuracy: 1e-9)
         XCTAssertEqual(settings.backend, .cuda)
         XCTAssertEqual(settings.zenzaiInferenceLimit, 3)
         XCTAssertEqual(settings.idleTimeoutSeconds, 60)
     }
 
-    /// The settings app may be written against an older schema, or a user may
-    /// hand-edit a partial file. Missing keys must keep their defaults rather
-    /// than failing the whole read — the synthesized `Codable` would throw
-    /// `keyNotFound` here, and `load` would answer that by resetting
-    /// *everything*, learning included.
-    func testMissingFieldsKeepTheirDefaults() throws {
-        let url = try write(#"{"learningEnabled":false}"#)
+    func testAnEmptyStoreIsAllDefaults() {
+        XCTAssertEqual(EngineSettings(values: [:]), .default)
+    }
 
-        let settings = try EngineSettings.decode(from: url)
+    /// The settings app may be older than this build, or a user may have
+    /// created a couple of values by hand. Absent values keep their defaults
+    /// rather than failing the whole read.
+    func testMissingValuesKeepTheirDefaults() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(0)
+        ])
 
         XCTAssertFalse(settings.learningEnabled)
         XCTAssertEqual(settings.backend, EngineSettings.default.backend)
         XCTAssertEqual(settings.idleTimeoutSeconds, EngineSettings.default.idleTimeoutSeconds)
     }
 
-    /// The regression that motivates the hand-written decoder: a partial file
-    /// must not hand back defaults for the one setting it does specify.
-    func testPartialFileDoesNotReenableLearning() throws {
-        let url = try write(#"{"learningEnabled":false}"#)
-        XCTAssertFalse(EngineSettings.load(from: url).learningEnabled)
+    /// Booleans are DWORDs, and anything non-zero is true — the settings app
+    /// writes 1, but a hand-edited 2 should not read as false.
+    func testAnyNonZeroIsTrue() {
+        for raw in [1, 2, -1] {
+            let settings = EngineSettings(values: [
+                SettingsSchema.Key.learningEnabled: .number(raw)
+            ])
+            XCTAssertTrue(settings.learningEnabled, "\(raw) should read as true")
+        }
     }
 
-    /// An unfamiliar backend means a newer settings app, not a corrupt file.
-    func testUnknownBackendFallsBackWithoutDiscardingOtherSettings() throws {
-        let url = try write("""
-        {"learningEnabled":false,"backend":"metal","idleTimeoutSeconds":42}
-        """)
+    /// A value of the wrong type is not something to guess at: a REG_SZ where a
+    /// DWORD belongs means the writer and this build disagree, and the default
+    /// is the only answer that cannot be wrong in a new way.
+    func testAValueOfTheWrongTypeFallsBackToItsDefault() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .text("false"),
+            SettingsSchema.Key.backend: .number(2),
+            SettingsSchema.Key.idleTimeoutSeconds: .number(42),
+        ])
 
-        let settings = try EngineSettings.decode(from: url)
+        XCTAssertEqual(settings.learningEnabled, EngineSettings.default.learningEnabled)
+        XCTAssertEqual(settings.backend, EngineSettings.default.backend)
+        XCTAssertEqual(settings.idleTimeoutSeconds, 42, "the rest must survive")
+    }
+
+    /// The regression this decoder exists for: one bad value must not reset the
+    /// setting the user actually cares about.
+    func testOneBadValueCannotReenableLearning() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(0),
+            SettingsSchema.Key.backend: .text("metal"),
+            SettingsSchema.Key.zenzaiInferenceLimit: .text("lots"),
+        ])
+
+        XCTAssertFalse(settings.learningEnabled)
+    }
+
+    /// An unfamiliar backend means a newer settings app, not a corrupt store.
+    func testUnknownBackendFallsBackWithoutDiscardingOtherSettings() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(0),
+            SettingsSchema.Key.backend: .text("metal"),
+            SettingsSchema.Key.idleTimeoutSeconds: .number(42),
+        ])
 
         XCTAssertEqual(settings.backend, EngineSettings.default.backend)
-        XCTAssertFalse(settings.learningEnabled, "the rest of the file must survive")
+        XCTAssertFalse(settings.learningEnabled, "the rest of the store must survive")
         XCTAssertEqual(settings.idleTimeoutSeconds, 42)
     }
 
-    func testEmptyObjectIsAllDefaults() throws {
-        XCTAssertEqual(try EngineSettings.decode(from: try write("{}")), .default)
+    func testBackendNameIsCaseInsensitive() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.backend: .text("CUDA")
+        ])
+        XCTAssertEqual(settings.backend, .cuda)
     }
 
-    func testEncodedSettingsRoundTrip() throws {
-        var original = EngineSettings.default
-        original.learningEnabled = false
-        original.backend = .vulkan
-        original.zenzaiInferenceLimit = 2
-        original.idleTimeoutSeconds = 15
+    // MARK: - Ranges
 
-        let url = directory.appendingPathComponent("settings.json")
-        try JSONEncoder().encode(original).write(to: url)
+    /// Out of range clamps rather than falling back. Someone who typed 9999
+    /// meant "as good as it goes", and 100 delivers that; resetting to 10 would
+    /// look like the setting had been ignored.
+    func testInferenceLimitIsClampedToItsRange() {
+        let tooBig = EngineSettings(values: [
+            SettingsSchema.Key.zenzaiInferenceLimit: .number(9999)
+        ])
+        XCTAssertEqual(tooBig.zenzaiInferenceLimit, SettingsSchema.inferenceLimitRange.upperBound)
 
-        XCTAssertEqual(try EngineSettings.decode(from: url), original)
+        // Zero would mean "Zenzai is on but does no inference", which is not a
+        // state the rest of the engine is written for.
+        for raw in [0, -5] {
+            let tooSmall = EngineSettings(values: [
+                SettingsSchema.Key.zenzaiInferenceLimit: .number(raw)
+            ])
+            XCTAssertEqual(tooSmall.zenzaiInferenceLimit, SettingsSchema.inferenceLimitRange.lowerBound)
+        }
     }
 
-    // MARK: - The two read paths
+    func testAlphaIsClampedToItsRange() {
+        let tooBig = EngineSettings(values: [
+            SettingsSchema.Key.personalizationAlphaPercent: .number(500)
+        ])
+        XCTAssertEqual(tooBig.personalizationAlpha, 1.0, accuracy: 1e-9)
 
-    func testLoadFallsBackToDefaultsWhenTheFileIsMissing() {
-        let missing = directory.appendingPathComponent("nope.json")
-        XCTAssertEqual(EngineSettings.load(from: missing), .default)
+        // Negative would invert personalisation: confirming a candidate would
+        // push it *down* the list (decision 0034).
+        let negative = EngineSettings(values: [
+            SettingsSchema.Key.personalizationAlphaPercent: .number(-30)
+        ])
+        XCTAssertEqual(negative.personalizationAlpha, 0.0, accuracy: 1e-9)
     }
 
-    func testLoadFallsBackToDefaultsWhenTheFileIsMalformed() throws {
-        let url = try write("{ this is not json")
-        XCTAssertEqual(EngineSettings.load(from: url), .default)
+    /// Zero is meaningful here — it turns the watchdog off for someone who
+    /// would rather pay the memory than the first-conversion latency
+    /// (decision 0015) — so it must survive clamping.
+    func testAnIdleTimeoutOfZeroIsKept() {
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.idleTimeoutSeconds: .number(0)
+        ])
+        XCTAssertEqual(settings.idleTimeoutSeconds, 0)
     }
 
-    /// A half-written file must be distinguishable from "the user wants
-    /// defaults", or hot-reload will quietly undo their choices.
-    func testDecodeThrowsWhereLoadWouldSubstituteDefaults() throws {
-        let malformed = try write("{ this is not json")
-        XCTAssertThrowsError(try EngineSettings.decode(from: malformed))
-
-        let missing = directory.appendingPathComponent("nope.json")
-        XCTAssertThrowsError(try EngineSettings.decode(from: missing))
+    func testIdleTimeoutIsClampedToItsRange() {
+        let tooBig = EngineSettings(values: [
+            SettingsSchema.Key.idleTimeoutSeconds: .number(Int.max)
+        ])
+        XCTAssertEqual(tooBig.idleTimeoutSeconds, SettingsSchema.idleTimeoutRange.upperBound)
     }
 
-    /// The specific regression: learning off on disk must never come back on
-    /// through a failed reload.
-    func testFailedReloadCannotSilentlyReenableLearning() throws {
-        var current = EngineSettings.default
-        current.learningEnabled = false
+    /// Percent, not a fraction, so the default has to survive the conversion —
+    /// a schema that stored 15 and read back 15.0 would be a silent 15x.
+    func testTheDefaultAlphaSurvivesTheStoreRoundTrip() {
+        let percent = Int((EngineSettings.default.personalizationAlpha * 100).rounded())
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.personalizationAlphaPercent: .number(percent)
+        ])
+        XCTAssertEqual(
+            settings.personalizationAlpha,
+            EngineSettings.default.personalizationAlpha,
+            accuracy: 1e-9
+        )
+    }
 
-        let url = try write("{ truncated mid-wri")
-        let reloaded = (try? EngineSettings.decode(from: url)) ?? current
+    // MARK: - Schema version
 
-        XCTAssertFalse(reloaded.learningEnabled)
+    func testAStoreWithNoVersionIsTreatedAsTheCurrentOne() {
+        XCTAssertEqual(EngineSettings.schemaVersion(in: [:]), SettingsSchema.currentVersion)
+    }
+
+    /// A newer settings app is read for what this build understands rather than
+    /// refused. Refusing would leave the user with an IME ignoring every
+    /// setting they had chosen.
+    func testAFutureSchemaVersionStillYieldsUsableSettings() {
+        let values: [String: SettingsValue] = [
+            SettingsSchema.Key.schemaVersion: .number(99),
+            SettingsSchema.Key.learningEnabled: .number(0),
+            "SomethingThisBuildHasNeverHeardOf": .number(7),
+        ]
+
+        XCTAssertEqual(EngineSettings.schemaVersion(in: values), 99)
+        XCTAssertFalse(EngineSettings(values: values).learningEnabled)
     }
 
     // MARK: - What a running engine can apply
