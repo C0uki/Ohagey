@@ -91,16 +91,27 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 - **ユーザー辞書**(decision 0026 / 0036)。`registerWord` で登録した語が
   Zenzai 有効のまま**1位に出る**。`tsf/Ohagey/tools/build-and-run-userdict.ps1`
 
+- **バックエンド選択**(decision 0028)。`backends\<name>\` の DLL 検索パス切り替えと、
+  `tools/fetch-backends.ps1` による `azooKey/llama.cpp` のプレビルド取得。
+  CPU で `swift build` / `swift test` 136件パスを確認
+
 ### 未着手
-- バックエンド選択の DLL 検索パス切り替え(decision 0028)
+- CUDA / Vulkan バックエンドの実機動作(プレビルドの取得までは確認済み)
 
 ## ビルドとテスト
 
-「x64 Native Tools Command Prompt for VS 2022」で、以下を設定してから実行する:
+まず llama.cpp を取ってくる(**ビルドしない**。`azooKey/llama.cpp` が b4846 の
+Windows バイナリをバックエンド別に公開している):
+
+```powershell
+.\tools\fetch-backends.ps1
+```
+
+その上で「x64 Native Tools Command Prompt for VS 2022」から:
 
 ```bat
-set LIB=<llama.cpp>\build-b4846\src\Release;%LIB%
-set PATH=<llama.cpp>\build-b4846\bin\Release;%PATH%
+set LIB=<repo>\backends;%LIB%
+set PATH=<repo>\backends\cpu;%PATH%
 
 cd engine
 swift build
@@ -109,6 +120,10 @@ swift test
 
 `LIB` はリンク時(`llama.lib`)、`PATH` は実行時(`llama.dll`)。**どちらか一方では足りない。**
 詳細は `docs/local-setup.md`。
+
+**取得元を `ggml-org/llama.cpp` に変えてはいけない。** 同じ `b4846` タグでも zenz の
+日本語 pre-tokenizer が無く、**リンクも起動も変換も通ったまま Zenzai だけが黙って
+無効になる**(決定 0034 で実際に踏んだ)。
 
 ## 未解決の課題(着手前に確認)
 

@@ -53,12 +53,25 @@ enum OhageyEngineMain {
             : "Zenzai model missing — falling back to dictionary-only conversion")
 
         #if os(Windows)
+        // Before anything can call into llama: the DLL is delay-loaded, and
+        // this decides which backend's copy that resolves to (decision 0028).
+        // Doing it after a client could connect would be a race with the first
+        // conversion.
+        let selected = BackendLoader.select(settings.backend, log: log)
+
         do {
             let sessionId = try PipeServer.currentSessionId()
             let name = PipeServer.pipeName(sessionId: sessionId)
             log("pipe name: \(name)")
 
-            let service = ConversionService(settings: settings, log: log)
+            // The effective backend, not the requested one: if CUDA was asked
+            // for and is not installed, `ping` has to say cpu or the settings
+            // app will show something the engine is not doing.
+            let service = ConversionService(
+                settings: settings,
+                effectiveBackend: selected?.backend ?? settings.backend,
+                log: log
+            )
             let router = RequestRouter(handler: service)
 
             // Settings arrive through the registry, not by IPC (decision 0014).
@@ -143,7 +156,5 @@ enum OhageyEngineMain {
 MainActor.assumeIsolated { OhageyEngineMain.main() }
 
 // TODO (implementation phase, tracked in docs/roadmap.md):
-//  1. Settings hot-reload via file/registry watching (decision 0014).
-//  2. User-dictionary storage, so registerWord stops returning an error
-//     (decision 0026).
-//  3. Backend selection via the DLL search path at startup (decision 0028).
+//  1. Report the effective backend in the settings app's UI, not just `ping`,
+//     so a fallback to CPU is visible where the choice was made (decision 0028).

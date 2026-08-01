@@ -79,7 +79,7 @@ public enum SettingsSchema {
     public static let inferenceLimitRange = 1 ... 100
 
     /// How hard the personal model may push Zenzai's ranking, in percent.
-    public static let alphaPercentRange = 0 ... 100
+    public static let alphaPercentRange = 0 ... 150
 
     /// Idle seconds before the engine exits (decision 0015).
     ///

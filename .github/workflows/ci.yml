@@ -35,16 +35,26 @@ jobs:
   #
   # Zenzai trait が有効なので llama.cpp のリンクが必要で、`swift test` は
   # パッケージ全体をビルドする（＝ライブラリのテストだけを llama.cpp 抜きで
-  # 回すことはできない）。そのため llama.cpp をここでビルドしてキャッシュする。
+  # 回すことはできない）。
+  #
+  # llama.cpp は**ビルドせず、azooKey/llama.cpp のリリースから取る**
+  # (tools/fetch-backends.ps1)。理由は2つあり、2つ目の方が重い:
+  #
+  #   1. 速い。cmake で 10 分以上かけていたものが 17MB のダウンロードになり、
+  #      キャッシュも要らなくなる。
+  #   2. **fork が正しくなる。** ここは以前 ggml-org/llama.cpp をビルドしていたが、
+  #      upstream には zenz モデルが要る日本語プレトークナイザ
+  #      (`gpt2-small-japanese-char`) が無い。リンクも起動も変換も通り、
+  #      ただ Zenzai だけが黙って無効になる（決定 0034 で実機で踏んだ）。
+  #      CI にモデルは無いのでここでは表面化しないが、正しくない物を基準に
+  #      ビルドを緑にしても意味がない。
   #
   # llama.cpp のバージョンは AzooKeyKanaKanjiConverter と独立には動かせない
   # （決定 0028）。ここを変えるときは engine/Package.swift の pin も必ず一緒に
-  # 確認すること。キャッシュキーもこのバージョンで切ってある。
+  # 確認すること。
   engine:
     name: engine — swift build & test (Windows x64)
     runs-on: windows-latest
-    env:
-      LLAMA_CPP_TAG: b4846
     steps:
       - uses: actions/checkout@v4
 
@@ -68,48 +78,33 @@ jobs:
           branch: swift-6.3.3-release
           tag: 6.3.3-RELEASE
 
-      - name: Cache llama.cpp
-        id: cache-llama
-        uses: actions/cache@v4
-        with:
-          path: llama.cpp/build-${{ env.LLAMA_CPP_TAG }}
-          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}-windows-x64-shared
-
-      - name: Build llama.cpp
-        if: steps.cache-llama.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 --branch $env:LLAMA_CPP_TAG https://github.com/ggml-org/llama.cpp.git
-          cd llama.cpp
-          # BUILD_SHARED_LIBS=ON で llama.lib / llama.dll を出す（決定 0028）。
-          cmake -B build-$env:LLAMA_CPP_TAG -DBUILD_SHARED_LIBS=ON
-          cmake --build build-$env:LLAMA_CPP_TAG --config Release
+      - name: Fetch llama.cpp backends
+        run: ./tools/fetch-backends.ps1 -Backends cpu
 
       # LIB はリンク時（llama.lib）、PATH は実行時（llama.dll）。
-      # どちらか一方では足りない。
+      # どちらか一方では足りない。テスト自体は Zenzai を触らないが、
+      # 実行可能ターゲットのリンクと起動は通る必要がある。
       - name: Build and test
         working-directory: engine
         run: |
-          $llama = "${{ github.workspace }}\llama.cpp\build-$env:LLAMA_CPP_TAG"
-          $env:LIB = "$llama\src\Release;$env:LIB"
-          $env:PATH = "$llama\bin\Release;$env:PATH"
+          $backends = "${{ github.workspace }}\backends"
+          $env:LIB = "$backends;$env:LIB"
+          $env:PATH = "$backends\cpu;$env:PATH"
           swift build
           swift test
 
   # TSF テキストサービス (C++ / MSBuild, 決定 0002 / 0003 / 0018 / 0020)。
   #
-  # engine ジョブの後に走らせる。MSBuild は決定 0020 の連携ターゲット経由で
-  # `swift build` も呼ぶため llama.cpp が要るが、engine ジョブが同じキーで
-  # キャッシュを温めてくれる。並列にすると初回に llama.cpp を2回ビルドすることに
-  # なるので、待つ方を選んだ。
+  # MSBuild は決定 0020 の連携ターゲット経由で `swift build` も呼ぶため
+  # llama.cpp が要る。以前は engine ジョブが llama.cpp をビルドしてキャッシュに
+  # 入れるのを待っていた（`needs: engine`）が、ビルドをやめてダウンロードにした
+  # ので待つ理由が無くなり、engine と並列に走る。
   #
   # ここで engine のビルドを切らずに通しているのは、**連携そのものを検証する**ため。
   # 誰も実行しないビルド統合は壊れたまま気づかれない。
   tsf:
     name: tsf — MSBuild x64 (+ engine 連携)
     runs-on: windows-latest
-    needs: engine
-    env:
-      LLAMA_CPP_TAG: b4846
     steps:
       - uses: actions/checkout@v4
 
@@ -127,26 +122,13 @@ jobs:
           branch: swift-6.3.3-release
           tag: 6.3.3-RELEASE
 
-      # engine ジョブが保存済み。ここではミスするはずがないが、するなら
-      # llama.cpp をビルドし直すのではなく落としたい（同じものを2度ビルドしても
-      # 得るものが無い）。
-      - name: Restore llama.cpp
-        id: cache-llama
-        uses: actions/cache/restore@v4
-        with:
-          path: llama.cpp/build-${{ env.LLAMA_CPP_TAG }}
-          key: llama-cpp-${{ env.LLAMA_CPP_TAG }}-windows-x64-shared
-
-      - name: Fail if llama.cpp was not cached
-        if: steps.cache-llama.outputs.cache-hit != 'true'
-        run: |
-          Write-Error "llama.cpp のキャッシュが見つからない。engine ジョブが保存に失敗している可能性がある"
-          exit 1
+      - name: Fetch llama.cpp backends
+        run: ./tools/fetch-backends.ps1 -Backends cpu
 
       - name: Build (Debug and Release)
         working-directory: tsf/SampleIME
         run: |
-          $llama = "${{ github.workspace }}\llama.cpp\build-$env:LLAMA_CPP_TAG\src\Release"
+          $llama = "${{ github.workspace }}\backends"
 
           # swift.exe by absolute path rather than trusting PATH. MSBuild's Exec
           # goes through cmd.exe, and on this runner the Swift toolchain — added

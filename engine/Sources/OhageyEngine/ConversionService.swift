@@ -26,8 +26,30 @@ final class ConversionService {
     private let personalModel: PersonalLanguageModel
     private let userDictionary: UserDictionaryStore
 
-    init(settings: EngineSettings, log: @escaping @Sendable (String) -> Void = { _ in }) {
+    /// The backend whose DLLs the process actually loaded (decision 0028).
+    ///
+    /// Not `settings.backend`: that is what the user asked for, and it can
+    /// differ when the chosen backend is not installed. Reporting the request
+    /// rather than the reality would have the settings app showing CUDA while
+    /// the engine runs on CPU.
+    private let effectiveBackend: Backend
+    private let log: @Sendable (String) -> Void
+
+    /// Whether llama actually loaded the model, once that is known.
+    ///
+    /// nil until the first conversion has been through the converter, because
+    /// upstream loads the weights lazily — there is nothing to report before
+    /// then.
+    private var zenzaiModelLoaded: Bool?
+
+    init(
+        settings: EngineSettings,
+        effectiveBackend: Backend? = nil,
+        log: @escaping @Sendable (String) -> Void = { _ in }
+    ) {
         self.settings = settings
+        self.effectiveBackend = effectiveBackend ?? settings.backend
+        self.log = log
         self.personalModel = PersonalLanguageModel(log: log)
         self.userDictionary = UserDictionaryStore(log: log)
         personalModel.prepare()
@@ -48,9 +70,41 @@ final class ConversionService {
         }
     }
 
-    /// True when neural conversion is active; false means we fell back to the
-    /// dictionary-only path because the model is not installed (decision 0008).
-    var isZenzaiActive: Bool { EnginePaths.isModelAvailable }
+    /// True when neural conversion is actually happening.
+    ///
+    /// The file being present is not enough, and assuming it was hid a real
+    /// failure for a long time: with the wrong llama.cpp build the weights are
+    /// found, rejected, and every conversion quietly comes from the dictionary
+    /// — while this reported Zenzai as active. `zenzaiUsed` on the wire is what
+    /// the harnesses assert on, so a flag that means "the file exists" makes
+    /// those assertions worthless.
+    ///
+    /// Before the first conversion there is nothing to know, so the intent
+    /// stands in.
+    var isZenzaiActive: Bool { zenzaiModelLoaded ?? EnginePaths.isModelAvailable }
+
+    /// Reads upstream's load status once, after a conversion has had a chance
+    /// to trigger it.
+    ///
+    /// `zenzStatus` is a display string, not a result: empty before any
+    /// attempt, `"load <url>"` on success, and the same with the error appended
+    /// on failure. Parsing it is unpleasant, but it is the only signal upstream
+    /// offers, and the alternative is not noticing that Zenzai is off.
+    private func noteZenzaiStatus() {
+        guard zenzaiModelLoaded == nil, EnginePaths.isModelAvailable else { return }
+        let status = converter.zenzStatus
+        guard !status.isEmpty else { return }
+
+        let loaded = status.hasPrefix("load ") && !status.contains("    ")
+        zenzaiModelLoaded = loaded
+        if loaded {
+            log("Zenzai model loaded")
+        } else {
+            // Loud, because everything still appears to work: conversion keeps
+            // returning candidates, just dictionary ones.
+            log("Zenzai model FAILED TO LOAD — converting from the dictionary only. \(status)")
+        }
+    }
 
     /// Converts a hiragana reading into ranked candidates.
     func convert(reading: String, nBest: Int, precedingText: String) -> [EngineCandidate] {
@@ -73,6 +127,8 @@ final class ConversionService {
         // romaji and single-character forms) appended after the ranked ones.
         // Verified against 0.8.5: a request for 5 came back with ~60. The
         // schema promises `n_best` is a maximum, so the cap is applied here.
+        noteZenzaiStatus()
+
         let offered = Array(results.mainResults.prefix(nBest))
 
         // Remembered so a later commit can be matched back to one of these.
@@ -261,7 +317,7 @@ extension ConversionService: EngineRequestHandling {
             return .ping(
                 engineVersion: OhageyEngineVersion.string,
                 modelLoaded: isZenzaiActive,
-                backend: settings.backend
+                backend: effectiveBackend
             )
         }
     }

@@ -10,8 +10,9 @@
     OhageyBuildEngine       true (default) to build engine/ alongside the DLL.
                             Set false for a C++-only iteration.
 
-    OhageyLlamaLibDir       Directory holding llama.lib, normally
-                            <llama.cpp>\build-b4846\src\Release (decision 0028).
+    OhageyLlamaLibDir       Directory holding llama.lib, normally the `backends`
+                            directory tools/fetch-backends.ps1 fills in
+                            (decision 0028).
                             Optional: if LIB already points there — which is what
                             docs/local-setup.md tells you to do — leave it unset
                             and the linker finds it on its own.
@@ -42,7 +43,7 @@
   Example:
 
     msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
-            /p:OhageyLlamaLibDir=C:\src\llama.cpp\build-b4846\src\Release
+            /p:OhageyLlamaLibDir=C:\src\Ohagey\backends
 -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 

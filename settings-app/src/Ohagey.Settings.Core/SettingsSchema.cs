@@ -64,7 +64,8 @@ public static class SettingsSchema
     public const int MinimumInferenceLimit = 1;
     public const int MaximumInferenceLimit = 100;
     public const int MinimumAlphaPercent = 0;
-    public const int MaximumAlphaPercent = 100;
+    /// <summary>azooKey-Desktop's strongest setting is 1.5.</summary>
+    public const int MaximumAlphaPercent = 150;
     public const int MinimumIdleTimeoutSeconds = 0;
     public const int MaximumIdleTimeoutSeconds = 86_400;
 
@@ -104,10 +105,13 @@ public sealed record EngineSettings
     /// the conversion happens in exactly one place — see
     /// <see cref="SettingsSchema.PersonalizationAlphaPercent"/>.
     ///
-    /// The default is well below upstream's 0.5 because Ohagey ships no base
-    /// language model; see decision 0034 for the measurements.
+    /// azooKey-Desktop, which ships the same converter and the same base
+    /// language model, offers 50 / 100 / 150 and defaults to 100. Ohagey
+    /// follows it. An earlier default of 15 was reasoned out rather than
+    /// measured, and did nothing at all once Zenzai was genuinely running —
+    /// see decision 0034.
     /// </remarks>
-    public int PersonalizationAlphaPercent { get; init; } = 15;
+    public int PersonalizationAlphaPercent { get; init; } = 100;
 
     public Backend Backend { get; init; } = Backend.Cpu;
     public int ZenzaiInferenceLimit { get; init; } = 10;

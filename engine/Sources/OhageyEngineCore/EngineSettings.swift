@@ -37,14 +37,17 @@ public struct EngineSettings: Sendable, Equatable {
     public var personalizationEnabled: Bool = true
     /// How hard the personal model is allowed to push Zenzai's ranking.
     ///
-    /// Upstream defaults to 0.5, but that assumes the base language model it
-    /// ships, whose own probability for a common token cancels most of the
-    /// term. Ohagey cannot ship that model — its licence is unstated — and uses
-    /// a uniform base instead, against which the same alpha is far stronger.
-    /// Measured on a corpus where one continuation dominated: alpha 0.5 moved
-    /// it by +4.0 logits, enough to overrule the neural model outright, while
-    /// 0.15 moved it by +1.2. See decision 0034.
-    public var personalizationAlpha: Double = 0.15
+    /// azooKey-Desktop, which ships the same converter and the same base
+    /// language model, offers 0.5 / 1.0 / 1.5 and defaults to 1.0. Ohagey
+    /// follows it.
+    ///
+    /// An earlier default of 0.15 was reasoned out rather than measured: with
+    /// no base model the mixing term does not cancel, so a smaller alpha
+    /// looked safer. Measuring it once Zenzai was genuinely running showed the
+    /// opposite — 0.15 moved an ordinary correction not at all, while a
+    /// heavily repeated one wrecked the whole candidate list. The problem was
+    /// the missing base, not the size of alpha. See decision 0034.
+    public var personalizationAlpha: Double = 1.0
     public var backend: Backend = .cpu
     /// Upper bound on Zenzai inference steps per request. Surfaced here so the
     /// latency/quality tradeoff is tunable without a rebuild.
@@ -74,8 +77,15 @@ public struct EngineSettings: Sendable, Equatable {
     /// a candidate would push it *down* — and a large one drowns the neural
     /// model out entirely, which looks to the user like conversion has broken.
     public var effectivePersonalizationAlpha: Float {
-        Float(min(max(personalizationAlpha, 0), 1))
+        Float(min(max(personalizationAlpha, 0), Self.maximumPersonalizationAlpha))
     }
+
+    /// Upper bound on alpha.
+    ///
+    /// azooKey-Desktop's strongest setting is 1.5, so that is the top of the
+    /// range rather than 1.0 — clamping at 1.0 would silently cap the value
+    /// its own UI calls "hard".
+    public static let maximumPersonalizationAlpha = 1.5
 }
 
 /// Filesystem locations the engine uses.
@@ -134,13 +144,65 @@ public enum EnginePaths {
             return URL(fileURLWithPath: override)
         }
 
+        return modelDirectory(environment: environment)
+            .appendingPathComponent("ggml-model-Q5_K_M.gguf")
+    }
+
+    /// Machine-wide directory holding the Zenzai weights and the base language
+    /// model (decisions 0008 / 0034).
+    static func modelDirectory(environment: [String: String]) -> URL {
         let base = environment["ProgramFiles"]
             .map { URL(fileURLWithPath: $0) }
             ?? URL(fileURLWithPath: #"C:\Program Files"#)
         return base
             .appendingPathComponent("Ohagey", isDirectory: true)
             .appendingPathComponent("models", isDirectory: true)
-            .appendingPathComponent("ggml-model-Q5_K_M.gguf")
+    }
+
+    /// Path prefix of the base n-gram language model (decision 0034).
+    ///
+    /// Beside the Zenzai weights and treated the same way: machine-wide,
+    /// containing nothing user-specific, and **fetched at install time rather
+    /// than redistributed** — its licence is not stated at its source
+    /// (huggingface.co/Miwa-Keita/base_n5_lm), which is exactly the position
+    /// decision 0008 already puts the model weights in.
+    ///
+    /// `EfficientNGram` appends `_c_abc.marisa` and friends, so this stops
+    /// before the underscore.
+    public static var baseLanguageModelPrefix: String {
+        resolveBaseLanguageModelPrefix(environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// Development override for the base model, on the same terms as
+    /// `OHAGEY_MODEL_PATH` — debug builds only, for the same reason.
+    public static let baseLanguageModelOverrideVariable = "OHAGEY_BASE_LM_PATH"
+
+    static func resolveBaseLanguageModelPrefix(
+        environment: [String: String],
+        honorOverride: Bool = honorsModelPathOverride
+    ) -> String {
+        if honorOverride,
+           let override = environment[baseLanguageModelOverrideVariable],
+           !override.isEmpty {
+            return override
+        }
+        return modelDirectory(environment: environment)
+            .appendingPathComponent("lm").path
+    }
+
+    /// Files the base model consists of.
+    ///
+    /// Four, not five: the published model has no `_c_bc`, which only a
+    /// resumed *training* run needs. Requiring it would reject a perfectly
+    /// good model.
+    public static let baseLanguageModelSuffixes = ["_c_abc", "_r_xbx", "_u_abx", "_u_xbc"]
+
+    /// Whether the base model is installed.
+    public static var isBaseLanguageModelAvailable: Bool {
+        let prefix = baseLanguageModelPrefix
+        return baseLanguageModelSuffixes.allSatisfy {
+            FileManager.default.fileExists(atPath: "\(prefix)\($0).marisa")
+        }
     }
 
     /// The model download is allowed to fail at install time (decision 0008);
