@@ -19,6 +19,8 @@ param(
     # settings app offers; 0 is included as the control — it should promote
     # nothing, and a run that promotes at 0 means something else is doing it.
     [int[]]$AlphaPercent = @(0, 25, 50, 75, 100, 125, 150),
+    # One reading is not a measurement — see decision 0034's addenda.
+    [string]$Reading = "",
     [switch]$KeepIntermediates
 )
 
@@ -53,7 +55,7 @@ try {
             Start-Sleep -Milliseconds 400
         }
 
-        $output = & (Join-Path $here "build-and-run-personalization.ps1") 2>&1 | Out-String
+        $output = & (Join-Path $here "build-and-run-personalization.ps1") -Reading $Reading 2>&1 | Out-String
         $rank = [regex]::Match($output, "target: rank (\d+) -> (\d+)")
         $collateral = [regex]::Match($output, "collateral: (\d+) of (\d+)")
 
