@@ -160,15 +160,35 @@ int wmain(int argc, wchar_t** argv)
     {
         for (int i = 0; i < commits; ++i) client.Commit(reading, target, true);
 
-        ConvertResult after;
-        if (client.Convert(reading, 5, L"", &after) != CallResult::Ok) continue;
-
         const int total = (commits == 3) ? 3 : 40;
-        printf("\n  after %d confirmations:\n", total);
-        PrintRanking("", after);
-        printf("    target rank: %d -> %d\n", RankOf(before, target) + 1, RankOf(after, target) + 1);
-        printf("    other original candidates still present: %d of %zu\n",
-               Survivors(before, after, target), before.candidates.size() - 1);
+
+        // Measured twice, immediately and again after a pause.
+        //
+        // This harness used to take only the immediate reading, and that is how
+        // it came to disagree with build-and-run-personalization.ps1 about the
+        // same reading and the same target: one said the confirmed candidate
+        // never moved, the other said it reached first. The personalisation
+        // harness polls for up to thirty seconds, so whatever takes effect late
+        // was visible to it and not to this.
+        //
+        // Both numbers are printed rather than one replacing the other, because
+        // the difference between them is itself the finding — an IME that needs
+        // fifteen seconds to reflect a correction behaves very differently from
+        // one that reflects it on the next keystroke.
+        for (const wchar_t* when : { L"immediately", L"after 15s" })
+        {
+            if (when[0] == L'a') Sleep(15000);
+
+            ConvertResult after;
+            if (client.Convert(reading, 5, L"", &after) != CallResult::Ok) continue;
+
+            printf("\n  after %d confirmations, ", total);
+            Say("", when);
+            PrintRanking("", after);
+            printf("    target rank: %d -> %d\n", RankOf(before, target) + 1, RankOf(after, target) + 1);
+            printf("    other original candidates still present: %d of %zu\n",
+                   Survivors(before, after, target), before.candidates.size() - 1);
+        }
     }
 
     RemoveTree(scratch);

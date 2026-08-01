@@ -104,7 +104,7 @@ namespace
     }
 }
 
-int wmain()
+int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
 
@@ -200,7 +200,12 @@ int wmain()
     // full-length candidate below the top was the reading passed straight
     // through, and promoting that proves very little about a language model
     // trained on exactly it.
-    const uint32_t nBest = 20;
+    //
+    // Overridable because it is not just a display count: the engine passes it
+    // to the converter as `N_best`, which steers the lattice search itself. Two
+    // harnesses asking for different numbers can therefore disagree about the
+    // same reading — and `build-and-run-learning.ps1` asks for 5.
+    const uint32_t nBest = argc > 1 ? static_cast<uint32_t>(_wtoi(argv[1])) : 20;
 
     ConvertResult before;
     Check(client.Convert(reading, nBest, L"", &before) == CallResult::Ok, "converted before any training");
