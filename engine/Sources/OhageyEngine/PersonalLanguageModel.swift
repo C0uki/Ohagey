@@ -43,6 +43,14 @@ final class PersonalLanguageModel {
     /// empty stand-in.
     private var usesRealBaseModel = false
 
+    /// Surfaces of the words the user registered, as of the last update.
+    ///
+    /// Held here rather than read from the dictionary at training time so that
+    /// this type keeps its one job — the corpus, the training runs, and which
+    /// generation is published — and does not also have to know the dictionary's
+    /// file format.
+    private var registeredWords: [String] = []
+
     /// Corpus lines as of the last time they were counted.
     ///
     /// Kept rather than read back on every commit: the threshold depends on it,
@@ -192,7 +200,12 @@ final class PersonalLanguageModel {
     func personalizationMode(
         settings: EngineSettings
     ) -> ConvertRequestOptions.ZenzaiMode.PersonalizationMode? {
-        guard settings.personalizationActive,
+        // Registered words keep this on even when personalisation is off. The
+        // model is then trained from the dictionary alone — nothing about what
+        // the user typed is in it, which is what decision 0025 asks for — but it
+        // still has to be handed over, because it is the only route by which an
+        // explicitly registered word reaches Zenzai's ranking (decision 0036).
+        guard settings.personalizationActive || !registeredWords.isEmpty,
               baseIsReady,
               let generation = publishedGeneration
         else { return nil }
@@ -237,7 +250,7 @@ final class PersonalLanguageModel {
         // longer someone uses the IME. See `commitsPerTrainingRun`.
         let threshold = PersonalizationLayout.commitsPerTrainingRun(corpusLines: corpusLines)
         guard unlearnedCommits >= threshold, !isTraining else { return }
-        startTraining()
+        startTraining(settings: settings)
     }
 
     private func appendToCorpus(_ line: String) {
@@ -271,11 +284,29 @@ final class PersonalLanguageModel {
         return trimmed
     }
 
-    private func startTraining() {
-        let lines = readCorpus()
+    /// Takes the current registered words and retrains if they changed.
+    ///
+    /// Called whenever the dictionary is loaded or edited. Retraining on every
+    /// call would rebuild the model on each conversion, since the dictionary is
+    /// stat-ed that often (see `ConversionService.convert`).
+    func updateRegisteredWords(_ words: [String], settings: EngineSettings) {
+        guard words != registeredWords else { return }
+        registeredWords = words
+        guard baseIsReady, !isTraining else { return }
+        startTraining(settings: settings)
+    }
+
+    private func startTraining(settings: EngineSettings) {
+        // The corpus only when it is allowed to exist. Registered words are
+        // always included: they are an explicit instruction rather than a
+        // record of what someone typed, so switching learning off must not
+        // switch them off too (decisions 0025 / 0036).
+        let corpus = settings.personalizationActive ? readCorpus() : []
         // The authoritative count, which also picks up any trimming the read
         // just did — the running tally cannot know about that.
-        corpusLines = lines.count
+        corpusLines = corpus.count
+
+        let lines = PersonalizationLayout.trainingLines(forRegisteredWords: registeredWords) + corpus
         guard !lines.isEmpty else {
             unlearnedCommits = 0
             return
@@ -384,7 +415,7 @@ final class PersonalLanguageModel {
     /// The base model is left alone: it is derived from nothing and contains
     /// nothing about the user, and keeping it avoids rebuilding it on the next
     /// start.
-    func erase() {
+    func erase(settings: EngineSettings) {
         let names = (try? fileManager.contentsOfDirectory(
             atPath: PersonalizationLayout.directory.path
         )) ?? []
@@ -404,5 +435,14 @@ final class PersonalLanguageModel {
         // waiting 20 commits for the first retrain.
         corpusLines = 0
         log("personalisation: learning data erased")
+
+        // The words the user registered are not learning data and did not go
+        // anywhere, but the model that carried them into Zenzai's ranking has
+        // just been deleted along with everything else. Rebuild it from the
+        // dictionary alone, or erasing the typing history would silently take
+        // the user dictionary down with it (decision 0036).
+        if baseIsReady, !registeredWords.isEmpty, !isTraining {
+            startTraining(settings: settings)
+        }
     }
 }

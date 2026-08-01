@@ -169,6 +169,12 @@ final class UserDictionaryStore {
 
     var isEmpty: Bool { entries.isEmpty }
 
+    /// Surface forms of the registered words.
+    ///
+    /// For the personal language model, which is what carries them past Zenzai's
+    /// re-ranking — the lattice cost alone does not (decision 0036).
+    var words: [String] { entries.map(\.word) }
+
     private static func dicdataElement(for entry: UserDictionaryEntry) -> DicdataElement {
         let ids = partOfSpeechIDs(entry.partOfSpeech)
         return DicdataElement(

@@ -208,6 +208,50 @@ public enum PersonalizationLayout {
         return min(maximumCommitsPerTrainingRun, max(minimumCommitsPerTrainingRun, scaled))
     }
 
+    // MARK: - Registered words
+
+    /// How many times a registered word is repeated in the training input.
+    ///
+    /// ── Why the user dictionary has to go through here at all ──────────────
+    ///
+    /// A registered word is given a lattice cost that beats every dictionary
+    /// entry (decision 0036), and that is enough — right up until Zenzai is
+    /// loaded. Zenzai re-ranks above the lattice, so the cost stops deciding the
+    /// order, which is the same wall the converter's learning store hit and
+    /// decision 0034 was written to get past. Measured: with Zenzai off the
+    /// registered word ranks 1st, with Zenzai on it ranks 3rd, behind the
+    /// reading passed straight through.
+    ///
+    /// So the word is also written into the training input for the personal
+    /// n-gram, which is the one mechanism that does reach Zenzai's ranking.
+    ///
+    /// ── Why more than once ────────────────────────────────────────────────
+    ///
+    /// The n-gram is trained by frequency, and one line among a corpus of
+    /// thousands is noise. Registering a word is not a hint — it is the user
+    /// stating what they want, and it should outweigh what they happened to
+    /// type. Forty is what a confirmed candidate needed to climb from 20th to
+    /// 1st (decision 0034), which makes it the measured price of certainty
+    /// rather than a guess.
+    public static let registeredWordWeight = 40
+
+    /// Training lines for the words a user registered explicitly.
+    ///
+    /// Kept separate from the corpus rather than appended to it. Two reasons,
+    /// and the second is the one that matters:
+    ///
+    ///   1. The corpus is bounded and trimmed oldest-first, so a registered
+    ///      word would eventually fall out of a dictionary it never left.
+    ///   2. The corpus is a record of what someone typed and exists only with
+    ///      their consent (decision 0025). A word they typed into a dictionary
+    ///      editor on purpose is not that, and must keep working when they have
+    ///      switched learning off.
+    public static func trainingLines(forRegisteredWords words: [String]) -> [String] {
+        words
+            .compactMap(corpusLine(for:))
+            .flatMap { Array(repeating: $0, count: registeredWordWeight) }
+    }
+
     /// Splits a corpus file back into the lines it was written as.
     ///
     /// ── Why this is not `split(separator: "\n")` ────────────────────────────

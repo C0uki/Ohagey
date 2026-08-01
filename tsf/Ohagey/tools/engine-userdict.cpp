@@ -147,17 +147,37 @@ int wmain()
     Check(client.RegisterWord(reading, word, L"propernoun") == CallResult::Ok,
           "the engine accepted the word");
 
+    // Immediately, with no waiting: the lattice cost takes effect on the very
+    // next conversion, and a word that did not show up at all would be
+    // indistinguishable from the registration having failed.
     ConvertResult after;
     Check(client.Convert(reading, 5, L"", &after) == CallResult::Ok, "converted again");
-    PrintRanking("  after:", after);
+    PrintRanking("  right away:", after);
+    Check(RankOf(after, word) >= 0, "the registered word is a candidate straight away");
 
-    const int rank = RankOf(after, word);
+    // Reaching *first* is a second mechanism, and it is not instant.
+    //
+    // Upstream's dynamic user dictionary uses a cost of -10 against built-in
+    // candidates at -14.5 and below, so in the lattice the registered word
+    // wins. With Zenzai loaded that stops deciding the order: the neural model
+    // re-ranks above the lattice, and the word lands wherever it puts it —
+    // measured at 3rd, behind the reading passed straight through. It is the
+    // same wall the learning store hit, and the way past it is the same: the
+    // word goes into the personal n-gram (decisions 0034 / 0036).
+    //
+    // That training runs off the main actor and publishes when it finishes, so
+    // this polls rather than sleeping a fixed amount — a slow machine should
+    // not fail the check, and a fast one should not wait.
+    int rank = RankOf(after, word);
+    for (int attempt = 0; attempt < 60 && rank != 0; ++attempt)
+    {
+        Sleep(500);
+        if (client.Convert(reading, 5, L"", &after) != CallResult::Ok) continue;
+        rank = RankOf(after, word);
+    }
+    PrintRanking("  after the model retrained:", after);
     printf("  rank of the registered word: %d\n", rank + 1);
-    Check(rank >= 0, "the registered word is now a candidate");
-    // Upstream's own dynamic user dictionary uses a cost of -10 against
-    // built-in candidates at -14.5 and below, so an explicitly registered word
-    // is meant to win. If it does not, the cost or the ids are wrong.
-    Check(rank == 0, "and it is ranked first — a word you registered should beat a guess");
+    Check(rank == 0, "and it reaches first — a word you registered should beat a guess");
 
     // ── Persistence ─────────────────────────────────────────────────────────
 
