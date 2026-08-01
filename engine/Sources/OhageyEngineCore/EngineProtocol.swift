@@ -52,6 +52,37 @@ public struct EngineCandidate: Equatable, Sendable {
         self.reading = reading
         self.score = score
     }
+
+    /// The part of a request's reading that a candidate actually converts.
+    ///
+    /// ── Why a candidate's reading is not the request's ─────────────────────
+    ///
+    /// Not every candidate consumes the whole composition. Converting
+    /// `きしゃのきしゃ` offers `きしゃ` and `期しゃ` alongside the full-length
+    /// ones, which is ordinary Japanese IME behaviour — the user may want to
+    /// settle the first phrase and carry on. Upstream reports how much each one
+    /// covers as `Candidate.correspondingCount`, in characters of the input.
+    ///
+    /// Reporting the request's whole reading for those is wrong in a way that
+    /// matters: `ohagey.proto` says this field is what a partial commit and
+    /// relearning are keyed on, so a client acting on it would consume a
+    /// composition the candidate never converted, and learning would be told
+    /// that `きしゃのきしゃ` reads as `期しゃ`. Measured — a harness doing
+    /// exactly that taught the model to answer `記社之記社`.
+    ///
+    /// The engine composes with `.direct` (the TSF layer has already made kana),
+    /// so one input element is one character and a prefix is exact.
+    public static func reading(
+        ofRequest reading: String,
+        correspondingCount: Int
+    ) -> String {
+        // Out of range means upstream and this disagree about what is being
+        // counted. The whole reading is the safe answer: it is what the field
+        // meant before this existed, and it never claims a candidate covers
+        // less than it does.
+        guard correspondingCount > 0, correspondingCount < reading.count else { return reading }
+        return String(reading.prefix(correspondingCount))
+    }
 }
 
 /// Why a request could not be served. Mirrors `Status.Code` in ohagey.proto.

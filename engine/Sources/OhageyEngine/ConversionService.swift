@@ -140,7 +140,16 @@ final class ConversionService {
             // `score` is left at its default: upstream ranks `mainResults`
             // already, and its own value is not on a scale the client could
             // interpret. Order carries the ranking.
-            EngineCandidate(text: $0.text, reading: reading)
+            EngineCandidate(
+                text: $0.text,
+                // Not `reading`: `mainResults` mixes in candidates that convert
+                // only part of the composition, and saying otherwise breaks the
+                // two things this field exists for. See the helper.
+                reading: EngineCandidate.reading(
+                    ofRequest: reading,
+                    correspondingCount: $0.correspondingCount
+                )
+            )
         }
         // TODO: map per-bunsetsu segments so the client can support segment-wise
         // reconversion (`Candidate.segments` in ohagey.proto). Requires checking

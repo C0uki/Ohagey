@@ -101,3 +101,56 @@ final class RequestRouterTests: XCTestCase {
         XCTAssertEqual(response.requestID, 9)
     }
 }
+
+// MARK: - What reading a candidate reports
+
+/// `mainResults` mixes candidates that convert the whole composition with ones
+/// that convert only its start. `ohagey.proto` says `Candidate.reading` is what
+/// a partial commit and relearning key on, so getting this wrong is not a
+/// cosmetic problem — a harness that trusted the old behaviour taught the model
+/// that `きしゃのきしゃ` reads as `期しゃ`, and it started answering `記社之記社`.
+final class CandidateReadingTests: XCTestCase {
+    func testAFullLengthCandidateReportsTheWholeReading() {
+        XCTAssertEqual(
+            EngineCandidate.reading(ofRequest: "きしゃのきしゃ", correspondingCount: 7),
+            "きしゃのきしゃ"
+        )
+    }
+
+    func testAPartialCandidateReportsOnlyWhatItConverts() {
+        // `きしゃ` out of `きしゃのきしゃ`: three characters consumed, four left
+        // for the user to carry on composing.
+        XCTAssertEqual(
+            EngineCandidate.reading(ofRequest: "きしゃのきしゃ", correspondingCount: 3),
+            "きしゃ"
+        )
+    }
+
+    func testACountOutsideTheReadingFallsBackToTheWholeThing() {
+        // Means upstream and this disagree about what is being counted. The
+        // whole reading is the safe answer: it never claims a candidate covers
+        // less of the composition than it does, so a client acting on it
+        // consumes too much rather than leaving a fragment behind.
+        for count in [-1, 0, 8, 99] {
+            XCTAssertEqual(
+                EngineCandidate.reading(ofRequest: "きしゃのきしゃ", correspondingCount: count),
+                "きしゃのきしゃ",
+                "correspondingCount \(count)"
+            )
+        }
+    }
+
+    func testAnEmptyReadingStaysEmpty() {
+        XCTAssertEqual(EngineCandidate.reading(ofRequest: "", correspondingCount: 3), "")
+    }
+
+    func testCountingIsInCharactersRatherThanUnicodeScalars() {
+        // The engine composes with `.direct`, so one input element is one
+        // Character. A reading written with a combining dakuten would shift
+        // every candidate's boundary if this counted scalars instead.
+        XCTAssertEqual(
+            EngineCandidate.reading(ofRequest: "がっこう", correspondingCount: 2),
+            "がっ"
+        )
+    }
+}
