@@ -66,7 +66,7 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- `swift test` **136件パス**
+- `swift test` **156件パス**
 - **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
   `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
 - **6クライアント同時接続** — 全員が自分の `request_id` で正しく応答を受け取る
@@ -93,7 +93,11 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 
 - **バックエンド選択**(decision 0028)。`backends\<name>\` の DLL 検索パス切り替えと、
   `tools/fetch-backends.ps1` による `azooKey/llama.cpp` のプレビルド取得。
-  CPU で `swift build` / `swift test` 136件パスを確認
+- **読み込めないバックエンドからの CPU フォールバック**(decision 0028)。
+  `tsf/Ohagey/tools/check-backend-fallback.ps1` で3ケース確認
+  (正常 / ディレクトリ無し / `llama.dll` はあるが依存が無い→126)。
+  フォールバック後もそのまま Zenzai が変換できる。状態は
+  `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
 
 ### 未着手
 - CUDA / Vulkan バックエンドの実機動作(プレビルドの取得までは確認済み)

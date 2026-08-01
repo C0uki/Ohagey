@@ -25,6 +25,17 @@
                     Severity="Informational"
                     Title="エンジンの再起動が必要です"
                     Message="変更した項目は、変換エンジンが次に起動したときから有効になります。" />
+
+                <!-- Decision 0028 also asks that a backend which failed to load
+                     and fell back to CPU be visible here. The engine records
+                     what it actually loaded; without this the user has a
+                     setting that says CUDA and a machine that is not using it,
+                     with nothing to connect the two. -->
+                <InfoBar
+                    x:Name="BackendStatusNotice"
+                    IsOpen="True"
+                    IsClosable="False"
+                    Severity="Informational" />
             </StackPanel>
 
             <StackPanel Spacing="8">
