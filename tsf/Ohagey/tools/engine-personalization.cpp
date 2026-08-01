@@ -115,6 +115,11 @@ int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
 
+    // argv[1] n_best, argv[2] reading, argv[3] a corpus file to start from.
+    // Read here rather than beside each use because the seeding below happens
+    // before anything else — it has to be in place before the engine starts.
+    const wchar_t* seedCorpus = argc > 3 ? argv[3] : nullptr;
+
     // An engine already running was launched with the real LOCALAPPDATA and
     // would train on — and pollute — the profile you actually type with.
     //
@@ -147,6 +152,30 @@ int wmain(int argc, wchar_t** argv)
     // ends up with a profile of its own.
     SetEnvironmentVariableW(L"LOCALAPPDATA", scratch.c_str());
     Say("scratch profile: ", scratch);
+
+    // ── Optionally start from a corpus that looks like someone's ───────────
+    //
+    // Without this the model is trained on forty copies of one phrase and
+    // nothing else, and an n-gram that knows one sentence pulls everything
+    // toward it. That measured as damage to unrelated readings at the default
+    // alpha — a real result, but an upper bound rather than a prediction, since
+    // no real profile looks like that.
+    //
+    // Seeded before the engine starts, so the very first training run already
+    // sees it. The file is copied rather than referenced: the engine trims and
+    // rewrites its corpus, and it must not do that to something in the repo.
+    if (seedCorpus != nullptr && seedCorpus[0] != L'\0')
+    {
+        const std::wstring personal = scratch + L"\\Ohagey\\personal";
+        CreateDirectoryW((scratch + L"\\Ohagey").c_str(), nullptr);
+        CreateDirectoryW(personal.c_str(), nullptr);
+        if (!CopyFileW(seedCorpus, (personal + L"\\corpus.txt").c_str(), FALSE))
+        {
+            printf("could not read the seed corpus (error %lu)\n", GetLastError());
+            return 1;
+        }
+        Say("seed corpus: ", seedCorpus);
+    }
 
     EngineClient client;
 
@@ -273,10 +302,23 @@ int wmain(int argc, wchar_t** argv)
     // everything they did not. A personal n-gram trained on one phrase can
     // perfectly well reorder an unrelated one, and no amount of measuring the
     // trained reading would show it.
-    const std::wstring controlReading = L"あしたのてんき";
-    ConvertResult controlBefore;
-    const bool haveControl =
-        client.Convert(controlReading, nBest, L"", &controlBefore) == CallResult::Ok;
+    // Several of them, not one. A single control reading is one coin flip, and
+    // this project has repeatedly drawn a conclusion from a single measurement
+    // and had to take it back. Chosen to be ordinary and unrelated to the
+    // trained phrase: a sentence, a compound noun, and a short everyday one.
+    const std::vector<std::wstring> controlReadings = {
+        L"あしたのてんき",
+        L"かいぎのしりょう",
+        L"でんしゃがおくれた",
+    };
+    std::vector<std::vector<std::wstring>> controlBefore;
+    for (const auto& control : controlReadings)
+    {
+        ConvertResult result;
+        if (client.Convert(control, nBest, L"", &result) != CallResult::Ok) break;
+        controlBefore.push_back(TextsOf(result));
+    }
+    const bool haveControl = controlBefore.size() == controlReadings.size();
 
     // Past the engine's retraining threshold, with room to spare: the model is
     // rebuilt after a batch of commits, not on each one.
@@ -355,24 +397,34 @@ int wmain(int argc, wchar_t** argv)
 
     if (haveControl)
     {
-        ConvertResult controlAfter;
-        if (client.Convert(controlReading, nBest, L"", &controlAfter) == CallResult::Ok)
+        // Printed in full when one moves, because "reordered" on its own cannot
+        // be judged. Personalisation nudging an unrelated reading toward
+        // something the user writes is arguably the feature working; nudging it
+        // toward nonsense is the feature leaking. Only the two lists side by
+        // side tell those apart — and this is the number that decides whether
+        // alpha can be raised, because the same-reading collateral above reads
+        // 0 at every alpha and makes it look free.
+        //
+        // Reported rather than asserted, on the same grounds as that
+        // collateral: it is a property of the mechanism, tracked in the
+        // roadmap, and a permanently red check is one nobody reads.
+        size_t movedReadings = 0;
+        for (size_t r = 0; r < controlReadings.size(); ++r)
         {
-            const std::vector<std::wstring> was = TextsOf(controlBefore);
-            const std::vector<std::wstring> now = TextsOf(controlAfter);
-            printf("  untrained reading: %s\n", was == now ? "unchanged" : "REORDERED");
+            ConvertResult controlAfter;
+            if (client.Convert(controlReadings[r], nBest, L"", &controlAfter) != CallResult::Ok) continue;
 
-            // Printed in full when it moves, because "reordered" on its own
-            // cannot be judged. Personalisation nudging an unrelated reading
-            // toward something the user writes is arguably the feature working;
-            // nudging it toward nonsense is the feature leaking. Only the two
-            // lists side by side tell those apart, and this is the number that
-            // decides whether alpha can be raised — the same-reading collateral
-            // above says 0 at every alpha, which makes it look free.
-            //
-            // Reported rather than asserted, on the same grounds as that
-            // collateral: it is a property of the mechanism, tracked in the
-            // roadmap, and a permanently red check is one nobody reads.
+            const std::vector<std::wstring>& was = controlBefore[r];
+            const std::vector<std::wstring> now = TextsOf(controlAfter);
+            const bool changed = was != now;
+            if (changed) ++movedReadings;
+
+            printf("  untrained ");
+            std::wstring header = controlReadings[r];
+            header += changed ? L": REORDERED" : L": unchanged";
+            Say("", header);
+            if (!changed) continue;
+
             for (size_t i = 0; i < was.size() && i < now.size() && i < 3; ++i)
             {
                 std::wstring line = was[i];
@@ -382,6 +434,8 @@ int wmain(int argc, wchar_t** argv)
                 Say("", line);
             }
         }
+        printf("  untrained readings disturbed: %zu of %zu\n",
+               movedReadings, controlReadings.size());
     }
 
     if (othersBefore == othersAfter)

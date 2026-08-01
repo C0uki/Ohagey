@@ -21,6 +21,9 @@ param(
     [int[]]$AlphaPercent = @(0, 25, 50, 75, 100, 125, 150),
     # One reading is not a measurement — see decision 0034's addenda.
     [string]$Reading = "",
+    # A corpus file to start from, so the model is not trained on one phrase
+    # alone. corpus-sample.txt beside this script is 82 everyday lines.
+    [string]$SeedCorpus = "",
     [switch]$KeepIntermediates
 )
 
@@ -55,7 +58,7 @@ try {
             Start-Sleep -Milliseconds 400
         }
 
-        $output = & (Join-Path $here "build-and-run-personalization.ps1") -Reading $Reading 2>&1 | Out-String
+        $output = & (Join-Path $here "build-and-run-personalization.ps1") -Reading $Reading -SeedCorpus $SeedCorpus 2>&1 | Out-String
         $rank = [regex]::Match($output, "target: rank (\d+) -> (\d+)")
         $collateral = [regex]::Match($output, "collateral: (\d+) of (\d+)")
 
