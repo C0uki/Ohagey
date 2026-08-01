@@ -54,6 +54,13 @@ namespace
         printf("\n");
     }
 
+    std::vector<std::wstring> TextsOf(const ConvertResult& result)
+    {
+        std::vector<std::wstring> texts;
+        for (const auto& candidate : result.candidates) texts.push_back(candidate.text);
+        return texts;
+    }
+
     // Position of a candidate in a result, or -1.
     int RankOf(const ConvertResult& result, const std::wstring& text)
     {
@@ -191,7 +198,11 @@ int wmain(int argc, wchar_t** argv)
     // forty confirmations, and only personalisation moves it to 1st. That A/B
     // is `build-and-run-learning.ps1`, and it is what makes this reading the
     // right one — a weaker-looking number that is actually about personalisation.
-    const std::wstring reading = L"きしゃのきしゃ";
+    //
+    // Overridable, because one reading is not a measurement. Twice in this
+    // file's history a conclusion drawn from a single reading turned out to be
+    // about something else — see the note above and decision 0034's addenda.
+    const std::wstring reading = argc > 2 ? argv[2] : L"きしゃのきしゃ";
 
     // More than the five that get printed. `mainResults` spends its first few
     // places on the full-length conversions and then on forms that are not
@@ -253,6 +264,19 @@ int wmain(int argc, wchar_t** argv)
     const int rankBefore = RankOf(before, target);
     printf("  target: rank %d\n", rankBefore + 1);
     Say("          ", target);
+
+    // ── A reading that has nothing to do with any of this ──────────────────
+    //
+    // "collateral" below counts only the other candidates for the *same*
+    // reading, and that is the cheap half of the question. Turning alpha up
+    // promotes what the user confirmed; what it costs is whatever it does to
+    // everything they did not. A personal n-gram trained on one phrase can
+    // perfectly well reorder an unrelated one, and no amount of measuring the
+    // trained reading would show it.
+    const std::wstring controlReading = L"あしたのてんき";
+    ConvertResult controlBefore;
+    const bool haveControl =
+        client.Convert(controlReading, nBest, L"", &controlBefore) == CallResult::Ok;
 
     // Past the engine's retraining threshold, with room to spare: the model is
     // rebuilt after a batch of commits, not on each one.
@@ -328,6 +352,37 @@ int wmain(int argc, wchar_t** argv)
         if (!same) ++displaced;
     }
     printf("  collateral: %zu of %zu other candidates moved\n", displaced, othersBefore.size());
+
+    if (haveControl)
+    {
+        ConvertResult controlAfter;
+        if (client.Convert(controlReading, nBest, L"", &controlAfter) == CallResult::Ok)
+        {
+            const std::vector<std::wstring> was = TextsOf(controlBefore);
+            const std::vector<std::wstring> now = TextsOf(controlAfter);
+            printf("  untrained reading: %s\n", was == now ? "unchanged" : "REORDERED");
+
+            // Printed in full when it moves, because "reordered" on its own
+            // cannot be judged. Personalisation nudging an unrelated reading
+            // toward something the user writes is arguably the feature working;
+            // nudging it toward nonsense is the feature leaking. Only the two
+            // lists side by side tell those apart, and this is the number that
+            // decides whether alpha can be raised — the same-reading collateral
+            // above says 0 at every alpha, which makes it look free.
+            //
+            // Reported rather than asserted, on the same grounds as that
+            // collateral: it is a property of the mechanism, tracked in the
+            // roadmap, and a permanently red check is one nobody reads.
+            for (size_t i = 0; i < was.size() && i < now.size() && i < 3; ++i)
+            {
+                std::wstring line = was[i];
+                line += (was[i] == now[i]) ? L"   =   " : L"   ->  ";
+                line += now[i];
+                printf("    %zu. ", i + 1);
+                Say("", line);
+            }
+        }
+    }
 
     if (othersBefore == othersAfter)
     {

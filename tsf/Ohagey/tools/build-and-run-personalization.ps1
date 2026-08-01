@@ -6,7 +6,7 @@
 #
 # The Zenzai model has to be installed, or set OHAGEY_MODEL_PATH first (debug
 # builds only) — there is no neural ranking to personalise without it.
-param([int]$NBest = 20, [switch]$KeepIntermediates)
+param([int]$NBest = 20, [string]$Reading = "", [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -39,7 +39,11 @@ $sources = @(
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
-& "$out\engine-personalization.exe" $NBest
+# The reading is omitted rather than passed empty: the harness treats any
+# argument as a reading, and an empty one converts nothing.
+$harnessArgs = @($NBest)
+if ($Reading) { $harnessArgs += $Reading }
+& "$out\engine-personalization.exe" @harnessArgs
 $exit = $LASTEXITCODE
 
 if (-not $KeepIntermediates) {
