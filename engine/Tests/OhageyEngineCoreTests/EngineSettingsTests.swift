@@ -134,7 +134,12 @@ final class EngineSettingsTests: XCTestCase {
         let tooBig = EngineSettings(values: [
             SettingsSchema.Key.personalizationAlphaPercent: .number(500)
         ])
-        XCTAssertEqual(tooBig.personalizationAlpha, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(
+            tooBig.personalizationAlpha,
+            Double(SettingsSchema.alphaPercentRange.upperBound) / 100,
+            accuracy: 1e-9,
+            "the ceiling follows azooKey-Desktop's strongest setting (1.5)"
+        )
 
         // Negative would invert personalisation: confirming a candidate would
         // push it *down* the list (decision 0034).

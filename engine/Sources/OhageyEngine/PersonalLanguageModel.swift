@@ -39,6 +39,10 @@ final class PersonalLanguageModel {
     /// the process down rather than failing.
     private var baseIsReady = false
 
+    /// True when the installed base model is in use rather than the generated
+    /// empty stand-in.
+    private var usesRealBaseModel = false
+
     /// How many commits to gather before retraining.
     ///
     /// A compromise. Retraining per commit would spend a second of CPU on every
@@ -86,26 +90,31 @@ final class PersonalLanguageModel {
         }
     }
 
-    /// Creates the base model if it is not there, and reports whether it is now.
+    /// Makes sure some base model is usable, and reports whether it is.
     ///
-    /// Ohagey ships no base language model. Upstream's is published but carries
-    /// no stated licence, so it cannot be redistributed, and it is not
-    /// something the engine may go and fetch either — decision 0016 rules out
-    /// network access outside installation.
+    /// The real one ships beside the Zenzai weights and is fetched at install
+    /// time (decision 0008's route, because its licence is unstated at source).
+    /// When it is there, nothing is generated — that model is what makes the
+    /// mixing mean anything.
     ///
-    /// A base trained on nothing takes its place. That is not a degradation of
-    /// the mixing so much as a change of meaning: `ZenzContext` adds
-    /// `alpha * (log p_personal - log p_base)` to each logit, so a base that
-    /// scores every token identically contributes the same constant everywhere.
-    /// Candidates the user has never typed keep exactly the order Zenzai gave
-    /// them, and only the learned ones are lifted out of it. Verified: an empty
-    /// base returns 1/6000 for all 6000 tokens, spread 0.0.
-    ///
-    /// What it does cost is calibration. Without a real base to cancel against,
-    /// a given alpha pushes much harder — hence the lower default in
-    /// `EngineSettings.personalizationAlpha`.
+    /// When it is missing, an empty base is generated so personalisation still
+    /// runs rather than being switched off entirely. That is a much weaker
+    /// arrangement and it is worth being clear why: `ZenzContext` adds
+    /// `alpha * (log p_personal - log p_base)`, and a base that scores every
+    /// token identically leaves the personal model pushing against nothing. It
+    /// was measured as ineffective for an ordinary correction and destructive
+    /// for a heavily repeated one — see decision 0034. It is a fallback, not a
+    /// design.
     private func ensureBaseModel() throws -> Bool {
+        if EnginePaths.isBaseLanguageModelAvailable {
+            usesRealBaseModel = true
+            log("personalisation: using the installed base language model")
+            return true
+        }
+        usesRealBaseModel = false
+
         if baseModelExists() { return true }
+        log("personalisation: no base language model installed — falling back to an empty one, which is much weaker (decision 0034)")
 
         log("personalisation: building the empty base model")
         let staging = PersonalizationLayout.directory
@@ -187,7 +196,9 @@ final class PersonalLanguageModel {
         else { return nil }
 
         return .init(
-            baseNgramLanguageModel: PersonalizationLayout.basePrefix,
+            baseNgramLanguageModel: usesRealBaseModel
+                ? EnginePaths.baseLanguageModelPrefix
+                : PersonalizationLayout.basePrefix,
             personalNgramLanguageModel: PersonalizationLayout.modelPrefix(generation: generation),
             n: Self.ngramOrder,
             d: Self.discount,

@@ -202,18 +202,23 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertEqual(settings.effectivePersonalizationAlpha, 0)
 
         settings.personalizationAlpha = 42
-        XCTAssertEqual(settings.effectivePersonalizationAlpha, 1)
+        XCTAssertEqual(
+            settings.effectivePersonalizationAlpha,
+            Float(EngineSettings.maximumPersonalizationAlpha)
+        )
 
         settings.personalizationAlpha = 0.15
         XCTAssertEqual(settings.effectivePersonalizationAlpha, 0.15, accuracy: 1e-6)
     }
 
-    func testTheDefaultAlphaIsWellBelowUpstreams() {
-        // Upstream defaults to 0.5, which assumes the base language model it
-        // ships. Ohagey uses a uniform base instead, against which 0.5 moved a
-        // heavily-typed continuation by +4.0 logits — enough to overrule the
-        // neural model outright. See decision 0034.
-        XCTAssertLessThan(EngineSettings.default.personalizationAlpha, 0.5)
+    func testTheDefaultAlphaMatchesAzooKeyDesktops() {
+        // azooKey-Desktop ships the same converter and the same base language
+        // model, and offers 0.5 / 1.0 / 1.5 with 1.0 as the default. Following
+        // it beats inventing a number: an earlier default of 0.15 was reasoned
+        // out rather than measured, and once Zenzai was genuinely running it
+        // turned out to do nothing at all (decision 0034).
+        XCTAssertEqual(EngineSettings.default.personalizationAlpha, 1.0, accuracy: 1e-9)
+        XCTAssertEqual(EngineSettings.maximumPersonalizationAlpha, 1.5, accuracy: 1e-9)
     }
 
     func testAStoreThatPredatesTheseSettingsStillGetsThem() {

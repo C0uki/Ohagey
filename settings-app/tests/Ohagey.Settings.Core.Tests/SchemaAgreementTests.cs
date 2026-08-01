@@ -46,7 +46,7 @@ public class SchemaAgreementTests
         Assert.Equal(1, SettingsSchema.MinimumInferenceLimit);
         Assert.Equal(100, SettingsSchema.MaximumInferenceLimit);
         Assert.Equal(0, SettingsSchema.MinimumAlphaPercent);
-        Assert.Equal(100, SettingsSchema.MaximumAlphaPercent);
+        Assert.Equal(150, SettingsSchema.MaximumAlphaPercent);
         Assert.Equal(0, SettingsSchema.MinimumIdleTimeoutSeconds);
         Assert.Equal(86_400, SettingsSchema.MaximumIdleTimeoutSeconds);
     }
@@ -70,7 +70,7 @@ public class SchemaAgreementTests
         var defaults = EngineSettings.Default;
         Assert.True(defaults.LearningEnabled);
         Assert.True(defaults.PersonalizationEnabled);
-        Assert.Equal(15, defaults.PersonalizationAlphaPercent);
+        Assert.Equal(100, defaults.PersonalizationAlphaPercent);
         Assert.Equal(Backend.Cpu, defaults.Backend);
         Assert.Equal(10, defaults.ZenzaiInferenceLimit);
         Assert.Equal(300, defaults.IdleTimeoutSeconds);
@@ -79,10 +79,10 @@ public class SchemaAgreementTests
     [Fact]
     public void AlphaIsPercentAndNotAFraction()
     {
-        // The engine's model holds 0.15. Writing 0.15 here instead of 15 would
-        // be a silent hundredfold error that no type would catch, so the
-        // default is asserted in the unit the registry actually stores.
-        Assert.Equal(15, EngineSettings.Default.PersonalizationAlphaPercent);
+        // The engine's model holds 1.0. Writing 1 here instead of 100 would be
+        // a silent hundredfold error that no type would catch, so the default
+        // is asserted in the unit the registry actually stores.
+        Assert.Equal(100, EngineSettings.Default.PersonalizationAlphaPercent);
         Assert.InRange(
             EngineSettings.Default.PersonalizationAlphaPercent,
             SettingsSchema.MinimumAlphaPercent,
