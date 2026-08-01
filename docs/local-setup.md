@@ -51,8 +51,8 @@ Code タブでは会話ひとつが**セッション**で、それぞれ独自�
 
   | 変数 | 追加する値 |
   |---|---|
-  | `LIB` | `C:\path\to\llama.cpp\build-b4846\src\Release` |
-  | `PATH` | `C:\path\to\llama.cpp\build-b4846\bin\Release` |
+  | `LIB` | `C:\src\Ohagey\backends` |
+  | `PATH` | `C:\src\Ohagey\backends\cpu` |
 
   ただし MSVC 自体のパス(`cl.exe` や Windows SDK)は Native Tools プロンプトが
   設定するものなので、**リンクエラーが出る場合は Native Tools プロンプトで
@@ -229,9 +229,54 @@ lld-link: error: undefined symbol: llama_kv_cache_seq_pos_max
 **AzooKeyKanaKanjiConverter の pin を上げるときは、llama.cpp 側の対応バージョンも
 必ず確認し直すこと**(決定 0028 の「ビルド構成を記録する」に該当)。
 
-### 手順(CPU 版・最初の一歩)
+### 手順 — プレビルドを取ってくる(推奨)
 
-**「x64 Native Tools Command Prompt for VS 2022」で実行すること**(上記参照)。
+**自前でビルドする必要はない。** `azooKey/llama.cpp` は `b4846` の Windows x64
+バイナリをバックエンド別に公開しているので、それを取ってくる:
+
+```powershell
+.\tools\fetch-backends.ps1                        # CPU のみ(17MB)
+.\tools\fetch-backends.ps1 -Backends cpu,cuda     # CUDA も(192MB)
+```
+
+リポジトリ直下の `backends\` に、決定 0028 のレイアウトそのままで展開される:
+
+```
+backends\llama.lib          リンク時。3バックエンド共通(ABI 互換なので1つで足りる)
+backends\cpu\*.dll          実行時。llama.dll / ggml*.dll / llava_shared.dll
+backends\cuda\*.dll
+backends\vulkan\*.dll
+```
+
+`backends\` は `.gitignore` 済み。ビルドはこう:
+
+```powershell
+$env:LIB  = "C:\src\Ohagey\backends;$env:LIB"       # llama.lib
+$env:PATH = "C:\src\Ohagey\backends\cpu;$env:PATH"  # llama.dll
+cd engine
+swift build
+```
+
+取得元は `fkunn1326/llama.cpp`(azooKey-Windows が使っている個人の fork)ではなく
+**`azooKey/llama.cpp` にしてある**。中身は同じだが、この DLL は
+**ユーザーが文字を打つあらゆるアプリのプロセスに入る**ので、変換器と同じ組織が
+出しているものを使う。
+
+どのビルドを取っているか:
+
+| バックエンド | アセット | 備考 |
+|---|---|---|
+| `cpu` | `llama-b4846-bin-win-avx-x64.zip` | avx2/avx512 ではなく **avx**。速いより、動かない機械が無い方を取る |
+| `cuda` | `llama-b4846-bin-win-cuda-cu12.4-x64.zip` | 192MB。cu11.7 版もある |
+| `vulkan` | `llama-b4846-bin-win-vulkan-x64.zip` | |
+
+プレビルドにも日本語 pre-tokenizer が入っていることは確認済み
+(`llama.dll` に `gpt2-small-japanese-char` の文字列がある。上記
+「upstream の llama.cpp ではモデルが読めない」参照)。
+
+### 手順 — 自分でビルドする場合
+
+fork に手を入れて試すときだけ必要。**「x64 Native Tools Command Prompt for VS 2022」で**:
 
 ```bat
 cd C:\src
@@ -242,32 +287,18 @@ cmake -B build-b4846 -DBUILD_SHARED_LIBS=ON
 cmake --build build-b4846 --config Release
 ```
 
-ビルドディレクトリにバージョンを含めておくと、複数バージョンを試すときに
-CMake キャッシュの衝突を避けられる。
+`ggml-org/llama.cpp` ではなく `azooKey/llama.cpp` であることを確認すること
+(前節の通り、間違えても**エラーは出ず Zenzai だけが黙って無効になる**)。
 
-ビルドが終わったら `llama.lib` の場所を確認する(cmake の設定により出力先が変わるため、
-決め打ちにせず探すのが確実):
-
-```bat
-dir /s /b build\*.lib
-dir /s /b build\*.dll
-```
-
-`llama.lib` があるディレクトリを控えて、エンジンのビルド時にリンカへ渡す。
-おはぎー本体もローカルに clone されている必要がある:
+出力先は cmake の設定で変わるので、決め打ちにせず探す:
 
 ```bat
-cd C:\src
-git clone https://github.com/C0uki/Ohagey.git
-cd Ohagey\engine
-swift build -Xlinker -LC:\src\llama.cpp\build\bin\Release
+dir /s /b build-b4846\*.lib
+dir /s /b build-b4846\*.dll
 ```
 
-最後の `-L` に続くパスは、上の `dir` で見つけた `llama.lib` の実際の場所に置き換える
-(`C:\src\...` は例)。実行時には `llama.dll` にも PATH が通っている必要がある。
-
-CUDA / Vulkan 版は `-DGGML_CUDA=ON` / `-DGGML_VULKAN=ON` を付けて別ディレクトリに
-ビルドし、決定 0028 の `backends\{cpu,cuda,vulkan}\` へ配置する。
+CUDA / Vulkan 版は `-DGGML_CUDA=ON` / `-DGGML_VULKAN=ON` を付けて別ディレクトリへ。
+いずれも `backends\{cpu,cuda,vulkan}\` へ配置すればプレビルドと同じように使える。
 **バージョンとビルドフラグは再現性のため必ず記録すること**(決定 0028)。
 
 > **リスク**: upstream の README が動作確認対象として挙げているのは
@@ -297,9 +328,9 @@ bash engine/Scripts/generate-proto.sh
 ## ビルド
 
 ```powershell
-# エンジン（llama.lib のあるディレクトリを指定。上記「llama.cpp の用意」参照）
+# エンジン（先に .\tools\fetch-backends.ps1 を実行しておくこと）
 cd engine
-swift build -Xlinker -L<llama.lib のあるディレクトリ>
+swift build -Xlinker -L..\backends
 
 # TSF（tsf/README.md の手順で SampleIME を vendoring した後）
 # msbuild tsf\Ohagey.sln /p:Configuration=Release /p:Platform=x64
@@ -320,7 +351,7 @@ TSF テキストサービスの登録(`regsvr32` 相当)には**管理者権限*
 | Visual Studio | 2022 Professional 17.14(MSVC 19.44) |
 | Swift for Windows | 6.3.3 |
 | AzooKeyKanaKanjiConverter | 0.8.5(`.upToNextMinor(from: "0.8.0")` が解決) |
-| llama.cpp | **`b4846`**、`-DBUILD_SHARED_LIBS=ON`、CPU バックエンド(AVX512) |
+| llama.cpp | **`b4846`**、`azooKey/llama.cpp` の `llama-b4846-bin-win-avx-x64.zip`(プレビルド) |
 
 ### ビルドと実行(環境変数を使う方法・おすすめ)
 
@@ -333,9 +364,9 @@ lld-link は MSVC 互換で `LIB` 環境変数を参照するので、**セッ�
 
 ```bat
 rem リンク時: llama.lib の場所
-set LIB=C:\path\to\llama.cpp\build-b4846\src\Release;%LIB%
+set LIB=C:\src\Ohagey\backends;%LIB%
 rem 実行時: llama.dll / ggml*.dll の場所
-set PATH=C:\path\to\llama.cpp\build-b4846\bin\Release;%PATH%
+set PATH=C:\src\Ohagey\backends\cpu;%PATH%
 
 swift build
 swift run
@@ -355,8 +386,8 @@ swift test
 フラグで明示したい場合は、**両方のコマンドに**付ける:
 
 ```bat
-swift build -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
-swift run   -Xlinker -LC:\path\to\llama.cpp\build-b4846\src\Release
+swift build -Xlinker -LC:\src\Ohagey\backends
+swift run   -Xlinker -LC:\src\Ohagey\backends
 ```
 
 `LIB` はリンク時、`PATH` は実行時と役割が違うので、**どちらか一方では足りない**。
@@ -501,10 +532,13 @@ swift test  --scratch-path C:\swb\<短い名前>
 | `found 2 file(s) which are unhandled`(`ohagey.proto` / `README.md`) | ビルド入力でないファイルがターゲット配下にある | `Package.swift` の `OhageyEngineProto` に `exclude:` を追加 |
 | `lld-link: error: could not open 'llama.lib': no such file or directory`(`swift build` は通ったのに `swift run` で出る) | `-Xlinker -L...` はコマンドごとの指定。`swift run` も再リンクするため、フラグを渡さないと `llama.lib` を見失う | 両方のコマンドにフラグを渡すか、`LIB` 環境変数を設定する(上記「ビルドと実行」参照) |
 
-llama.cpp のビルド成果物の位置(cmake 既定):
+`tools/fetch-backends.ps1` を使った場合の位置:
 
-- `llama.lib`(リンク時)→ `build-b4846\src\Release\`
-- `llama.dll`(実行時)→ `build-b4846\bin\Release\` ※ `ggml*.dll` 等の依存 DLL も同じ場所
+- `llama.lib`(リンク時)→ `backends\`
+- `llama.dll`(実行時)→ `backends\cpu\` ※ `ggml*.dll` 等の依存 DLL も同じ場所
+
+自分で cmake ビルドした場合は `build-b4846\src\Release\` と
+`build-b4846\bin\Release\`(cmake 既定)。
 
 tools-version を 6.x にすると既定の言語モードが Swift 6(strict concurrency)になり、
 まだ一度も動かしていないコードに大量の Sendable エラーが出るため、当面は
@@ -513,7 +547,7 @@ tools-version を 6.x にすると既定の言語モードが Swift 6(strict con
 
 ### 推奨する着手順(手戻りを減らす順序)
 
-1. **llama.cpp(CPU 版)をビルドし、`swift build` を通す。**
+1. **`tools/fetch-backends.ps1` で llama.cpp を取得し、`swift build` を通す。**
    最大の未知数がここなので最初に潰す。この時点では変換の中身は動かなくてよい。
 2. 型エラーを潰す。特に `ConvertRequestOptions` の引数を**ピン留めしている 0.8.0 系の
    実際のシグネチャ**に合わせる(必要なら `Package.resolved` で解決済みバージョンを確認)。

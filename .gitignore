@@ -30,6 +30,11 @@ x64/
 *.exe
 *.lib
 
+# ── llama.cpp のプレビルド (tools/fetch-backends.ps1 が取ってくる) ──
+# 上の *.dll / *.lib で既に落ちるが、他人のリリース成果物を大量に置く場所なので
+# 明示しておく。取り直せるものはコミットしない。
+backends/
+
 # ── Inno Setup (installer/) ──
 Output/
 *.iss.bak

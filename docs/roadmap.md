@@ -87,9 +87,10 @@ OS 非依存で完結し、後続実装の土台になるもの。
       `load()` が**全設定を既定値に戻していた**(= 学習が勝手に ON に戻る、決定 0025 違反)。
       この「壊れた値はその項目だけ倒す」規則は決定 0035 に引き継いである。
 - [x] `swift build` を通す。
-- [x] CI(windows-latest)で有効化。llama.cpp `b4846` をビルドしてキャッシュし、
-      `swift build` + `swift test` を回す。`swift test` はパッケージ全体をビルドするため、
-      ライブラリのテストだけを llama.cpp 抜きで回すことはできない。
+- [x] CI(windows-latest)で有効化。llama.cpp `b4846` を `azooKey/llama.cpp` の
+      リリースから取得し、`swift build` + `swift test` を回す。`swift test` は
+      パッケージ全体をビルドするため、ライブラリのテストだけを llama.cpp 抜きで
+      回すことはできない。
 
 #### 実機で検証済み(実クライアントを繋いでの往復)
 
@@ -215,10 +216,20 @@ after:  機者の記者 / 記者の記者 / 汽車の記者 / き者の記者 / 
 
 ### 先行実装から取り込むべきこと(azooKey-Windows / azooKey-Desktop)
 
-- [ ] **llama.cpp の自前ビルドをやめる。** azooKey-Windows は
-      `fkunn1326/llama.cpp` の `b4846` リリースからバックエンド別のプレビルドを
-      取得している(avx / cuda-cu12.4 / vulkan)。リンクは CPU の `llama.lib` 一つでよい。
-      これで決定 0028 の CUDA / Vulkan が現実的になる
+- [x] **llama.cpp の自前ビルドをやめた。** `tools/fetch-backends.ps1` が
+      **`azooKey/llama.cpp`** の `b4846` リリースからバックエンド別のプレビルドを
+      取得する(avx / cuda-cu12.4 / vulkan)。リンクは `llama.lib` 一つでよい。
+      azooKey-Windows は `fkunn1326/llama.cpp` から取っているが、この DLL は
+      全アプリのプロセスに入るので**変換器と同じ組織のリリース**を選んだ。
+      副産物として **CI が llama.cpp をビルドしなくなり**(cmake 10分超 → 17MB の
+      ダウンロード)、キャッシュ共有のために `tsf` が `engine` を待つ必要も無くなった。
+      さらに **CI がビルドしていたのは `ggml-org/llama.cpp`(pre-tokenizer の無い方)
+      だった**のも同時に直っている。決定 0028 の追記を参照
+  - [ ] **CUDA 版に CUDA ランタイムが同梱されているか未確認。** upstream は
+        `cudart-llama-bin-win-*` を別アセットで出しているが、azooKey のリリースには
+        無い。同梱されているのか、CUDA 導入済みの機械を前提にしているのかで、
+        インストーラーが CUDA を提供できるかが決まる。**CUDA を配布物に入れる前に確定**
+        (アセット自体は 183.7MB、URL は疎通確認済み)
 - [ ] **バックエンド切り替えは launcher でもよい。** 向こうは launcher が PATH に
       バックエンドのディレクトリを足してからサーバーを起動している。
       Ohagey は遅延ロードで解決済みだが、単純さでは向こうが上
@@ -254,8 +265,8 @@ after:  機者の記者 / 記者の記者 / 汽車の記者 / き者の記者 / 
       `this` が壊れており、でっち上げたカウントは障害を別の場所の use-after-free に
       化けさせるため(`tsf/README.md` 参照)。
 - [x] MSBuild + `swift build` 連携ターゲット(決定 0020)、CI で MSBuild 有効化。
-      `tsf/Ohagey.Engine.targets`。CI では engine ジョブの後に走らせ、
-      llama.cpp のキャッシュを共有する。
+      `tsf/Ohagey.Engine.targets`。llama.cpp をビルドしなくなったので、CI では
+      engine ジョブと並列に走る(以前はキャッシュ共有のために待たせていた)。
 
 > **TSF の実登録には管理者権限が必要**なため、メモ帳等で実際に打っての確認は未実施。
 > 検証できているのはビルドと、`tsf/Ohagey/tools/` のハーネスによる

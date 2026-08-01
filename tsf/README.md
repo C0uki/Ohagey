@@ -91,9 +91,9 @@ msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64
 | `OhageySwiftExe` | `swift.exe` の絶対パス。既定は PATH 上の `swift` |
 
 ```bat
-rem LIB を設定していない場合
+rem LIB を設定していない場合(tools\fetch-backends.ps1 が置くディレクトリ)
 msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 ^
-        /p:OhageyLlamaLibDir=C:\path	o\llama.cppuild-b4846\src\Release
+        /p:OhageyLlamaLibDir=C:\src\Ohagey\backends
 
 rem C++ だけ回したいとき
 msbuild SampleIME.vcxproj /p:Configuration=Release /p:Platform=x64 /p:OhageyBuildEngine=false
