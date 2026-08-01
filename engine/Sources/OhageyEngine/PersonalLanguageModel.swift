@@ -43,13 +43,13 @@ final class PersonalLanguageModel {
     /// empty stand-in.
     private var usesRealBaseModel = false
 
-    /// How many commits to gather before retraining.
+    /// Corpus lines as of the last time they were counted.
     ///
-    /// A compromise. Retraining per commit would spend a second of CPU on every
-    /// confirmed phrase; waiting much longer makes the feature feel broken,
-    /// because a user who has just corrected the same word three times expects
-    /// the fourth to be right. Twenty phrases is a paragraph or two.
-    private static let commitsPerTrainingRun = 20
+    /// Kept rather than read back on every commit: the threshold depends on it,
+    /// and re-reading a 10,000 line file to decide whether to retrain would cost
+    /// more than the decision is worth. Seeded at startup and kept in step by
+    /// the append; the training run corrects it from the real count.
+    private var corpusLines = 0
 
     private let fileManager = FileManager.default
 
@@ -77,6 +77,8 @@ final class PersonalLanguageModel {
             )
             discardPartialGenerations()
             baseIsReady = try ensureBaseModel()
+            // Counted once here rather than on each commit; see `corpusLines`.
+            corpusLines = readCorpus().count
             publishedGeneration = newestCompleteGeneration()
             if let publishedGeneration {
                 log("personalisation: generation \(publishedGeneration) loaded")
@@ -228,8 +230,13 @@ final class PersonalLanguageModel {
 
         appendToCorpus(line)
         unlearnedCommits += 1
+        corpusLines += 1
 
-        guard unlearnedCommits >= Self.commitsPerTrainingRun, !isTraining else { return }
+        // Scaled to the corpus, not fixed: training reads all of it every run,
+        // so a constant threshold would spend steadily more CPU per commit the
+        // longer someone uses the IME. See `commitsPerTrainingRun`.
+        let threshold = PersonalizationLayout.commitsPerTrainingRun(corpusLines: corpusLines)
+        guard unlearnedCommits >= threshold, !isTraining else { return }
         startTraining()
     }
 
@@ -254,9 +261,7 @@ final class PersonalLanguageModel {
         guard let contents = try? String(contentsOf: PersonalizationLayout.corpusURL, encoding: .utf8)
         else { return [] }
 
-        let lines = contents
-            .split(separator: "\n", omittingEmptySubsequences: true)
-            .map(String.init)
+        let lines = PersonalizationLayout.corpusLines(from: contents)
         let trimmed = PersonalizationLayout.trimmed(corpus: lines)
         if trimmed.count < lines.count {
             try? trimmed.joined(separator: "\n")
@@ -268,6 +273,9 @@ final class PersonalLanguageModel {
 
     private func startTraining() {
         let lines = readCorpus()
+        // The authoritative count, which also picks up any trimming the read
+        // just did — the running tally cannot know about that.
+        corpusLines = lines.count
         guard !lines.isEmpty else {
             unlearnedCommits = 0
             return
@@ -280,9 +288,16 @@ final class PersonalLanguageModel {
         // Detached, at utility priority: this is a second of CPU that must not
         // come out of the time budget for the keystroke that triggered it.
         Task.detached(priority: .utility) { [fileManager] in
+            let started = DispatchTime.now().uptimeNanoseconds
             let trained = Self.train(generation: generation, lines: lines, fileManager: fileManager)
+            let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
             await MainActor.run {
-                self.finishTraining(generation: generation, succeeded: trained)
+                self.finishTraining(
+                    generation: generation,
+                    succeeded: trained,
+                    lines: lines.count,
+                    milliseconds: elapsed
+                )
             }
         }
     }
@@ -333,7 +348,12 @@ final class PersonalLanguageModel {
         }
     }
 
-    private func finishTraining(generation: Int, succeeded: Bool) {
+    private func finishTraining(
+        generation: Int,
+        succeeded: Bool,
+        lines: Int,
+        milliseconds: Double
+    ) {
         isTraining = false
         guard succeeded else {
             log("personalisation: training generation \(generation) failed")
@@ -342,7 +362,13 @@ final class PersonalLanguageModel {
 
         let previous = publishedGeneration
         publishedGeneration = generation
-        log("personalisation: generation \(generation) published")
+        // The corpus size and the time are logged together because one explains
+        // the other: training reads the whole corpus every run, so the cost
+        // grows with how long the user has been using the IME. It is also what
+        // decides how often retraining can afford to happen — see
+        // `commitsPerTrainingRun`.
+        log("personalisation: generation \(generation) published"
+            + " (\(lines) lines, \(Int(milliseconds.rounded()))ms)")
 
         // Only once the new generation is the published one, so a converter
         // holding the old path is never left pointing at a deleted file.
@@ -373,6 +399,10 @@ final class PersonalLanguageModel {
         try? fileManager.removeItem(at: PersonalizationLayout.corpusURL)
         publishedGeneration = nil
         unlearnedCommits = 0
+        // Otherwise the next commits would be judged against a corpus that no
+        // longer exists, and a user who has just erased everything would keep
+        // waiting 20 commits for the first retrain.
+        corpusLines = 0
         log("personalisation: learning data erased")
     }
 }

@@ -153,6 +153,95 @@ final class PersonalizationLayoutTests: XCTestCase {
         XCTAssertNotNil(PersonalizationLayout.corpusLine(for: atTheLimit))
     }
 
+    // MARK: - How often to retrain
+
+    func testThreeCorrectionsAreEnoughOnANewProfile() {
+        // The promise the feature has to keep, and the one the roadmap recorded
+        // as broken: with a fixed threshold of 20, correcting the same word
+        // three times did nothing at all.
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 0), 3)
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 100), 3)
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 149), 3)
+    }
+
+    func testTheThresholdGrowsWithTheCorpus() {
+        // Training reads the whole corpus, so a fixed threshold would spend
+        // steadily more CPU per commit the longer the IME is used — measured at
+        // 3ms a commit on a new profile against 133ms on a full one.
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 500), 10)
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 750), 15)
+    }
+
+    func testAHeavyUserIsNoWorseOffThanBefore() {
+        // Capped at the value the engine used unconditionally, so no profile
+        // waits longer for a retrain than it did when the threshold was fixed.
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: 1_000), 20)
+        XCTAssertEqual(
+            PersonalizationLayout.commitsPerTrainingRun(corpusLines: PersonalizationLayout.corpusLimit),
+            20
+        )
+    }
+
+    func testANonsensicalCountStillYieldsAUsableThreshold() {
+        // A threshold of zero would retrain on every commit forever; a negative
+        // one would never retrain at all. Neither is reachable today, but both
+        // are one arithmetic slip away and only one of them is noisy.
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: -1), 3)
+        XCTAssertEqual(PersonalizationLayout.commitsPerTrainingRun(corpusLines: .max), 20)
+    }
+
+    // MARK: - Reading the corpus back
+
+    func testReadsBackWhatWasWritten() {
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(from: "一行目\n二行目\n三行目\n"),
+            ["一行目", "二行目", "三行目"]
+        )
+    }
+
+    func testACrlfCorpusIsNotReadAsOneEnormousLine() {
+        // The bug this exists for: `"\r\n"` is a single Character in Swift and
+        // does not equal `"\n"`, so `split(separator: "\n")` leaves a CRLF file
+        // completely unsplit. Measured on a 980 line corpus — it came back as
+        // one line, and training silently learned a single 50 KB sequence.
+        //
+        // The engine writes LF. This happens when something else has touched
+        // the file, which decision 0025 invites: opening it to see what the IME
+        // remembers about you.
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(from: "一行目\r\n二行目\r\n三行目\r\n"),
+            ["一行目", "二行目", "三行目"]
+        )
+    }
+
+    func testAMixtureOfLineEndingsStillSplits() {
+        // Exactly what a file edited in Notepad and then appended to by the
+        // engine looks like.
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(from: "古い\r\n行\r\n新しい行\n"),
+            ["古い", "行", "新しい行"]
+        )
+    }
+
+    func testBlankLinesAreNotRemembered() {
+        // They would be trained on as empty sequences and count against the
+        // corpus limit for nothing.
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(from: "一行目\n\n\r\n二行目\n"),
+            ["一行目", "二行目"]
+        )
+        XCTAssertEqual(PersonalizationLayout.corpusLines(from: ""), [])
+        XCTAssertEqual(PersonalizationLayout.corpusLines(from: "\n\n"), [])
+    }
+
+    func testAFinalLineWithoutANewlineIsStillALine() {
+        // A write interrupted before its terminator, or a hand-edited file.
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(from: "一行目\n二行目"),
+            ["一行目", "二行目"]
+        )
+    }
+
     func testTrimmingKeepsTheNewestLines() {
         let lines = (1 ... 10).map(String.init)
         XCTAssertEqual(PersonalizationLayout.trimmed(corpus: lines, limit: 3), ["8", "9", "10"])
