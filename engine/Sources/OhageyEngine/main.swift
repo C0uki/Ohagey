@@ -59,6 +59,20 @@ enum OhageyEngineMain {
         // conversion.
         let selected = BackendLoader.select(settings.backend, log: log)
 
+        // Recorded for the settings app, which almost never has an engine
+        // running to ask (decisions 0015 / 0028). Best effort: failing to write
+        // it costs a diagnostic, and refusing to start an IME over that would
+        // be the wrong trade.
+        BackendStatusStore.write(
+            BackendStatus(
+                requested: settings.backend,
+                effective: selected.backend,
+                reason: selected.reason,
+                detail: selected.detail
+            ),
+            log: log
+        )
+
         do {
             let sessionId = try PipeServer.currentSessionId()
             let name = PipeServer.pipeName(sessionId: sessionId)
@@ -69,7 +83,7 @@ enum OhageyEngineMain {
             // app will show something the engine is not doing.
             let service = ConversionService(
                 settings: settings,
-                effectiveBackend: selected?.backend ?? settings.backend,
+                effectiveBackend: selected.backend ?? settings.backend,
                 log: log
             )
             let router = RequestRouter(handler: service)

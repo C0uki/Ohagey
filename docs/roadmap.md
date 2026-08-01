@@ -12,7 +12,7 @@
 |---|---|
 | `engine/` (Swift) | `Package.swift` + `main.swift`(TODOのみ)+ `ohagey.proto`(本フェーズで追加) |
 | `tsf/` (C++) | READMEのみ。SampleIME未取り込み |
-| `settings-app/` (WinUI 3) | ロジック(テスト54件)+ 4画面。実機で起動確認済み |
+| `settings-app/` (WinUI 3) | ロジック(テスト77件)+ 4画面。実機で起動確認済み |
 | `installer/` (Inno Setup) | `ohagey.iss` 雛形 |
 
 > **実行環境の前提**: 本プロジェクトは Windows 専用(TSF C++ / WinUI 3 / Swift-on-Windows)。
@@ -274,7 +274,7 @@ after:  機者の記者 / 記者の記者 / 汽車の記者 / き者の記者 / 
 
 ## フェーズ3 — 設定アプリ / インストーラ
 
-- [x] `settings-app/`: ロジック(`Ohagey.Settings.Core` + テスト54件、CI 有効)。
+- [x] `settings-app/`: ロジック(`Ohagey.Settings.Core` + テスト77件、CI 有効)。
       設定スキーマ(0035)と辞書フォーマット(0036)の C# 実装、学習データ消去(0025/0034)。
       **C# が書いた設定を Swift のエンジンが読むところまで実測済み。**
 - [x] `settings-app/`: WinUI 3 の画面(決定 0013)。変換エンジン / 学習 /
@@ -293,14 +293,22 @@ Windows では upstream が `llama.cpp` を `.systemLibrary` として宣言し�
 **おはぎー側で llama.cpp をビルドして用意する必要がある**。エンジンのビルドを通す
 前提条件でもあるので、フェーズ1の `swift build` 到達時に必要になる。
 
-- [ ] llama.cpp を CPU / CUDA / Vulkan の各構成でビルド(バージョン・ビルドフラグを記録)。
-      手順は [`local-setup.md`](local-setup.md) の「llama.cpp の用意」を参照。
-      **まず CPU 版だけ用意して `swift build` を通すのが最短経路。**
+- [x] ~~llama.cpp を CPU / CUDA / Vulkan の各構成でビルド~~ → **ビルドしない。**
+      `tools/fetch-backends.ps1` が `azooKey/llama.cpp` の b4846 リリースから
+      バックエンド別のプレビルドを取る(決定 0028 の追記)。
 - [x] ~~`systemLibrary` 用の module map とヘッダ配置を用意~~ → **upstream が同梱済み**
       (`Sources/llama.cpp/module.modulemap` + 各ヘッダ)。`link "llama"` 指定があるため、
       こちらが用意するのは `llama.lib` / `llama.dll` と、リンカへの `-Xlinker -L` 指定のみ。
-- [ ] エンジン起動時の DLL 検索パス切り替え(`SetDllDirectory` / 遅延ロード)を実装。
-- [ ] 選択したバックエンドの初期化失敗時に CPU へフォールバックし、状態を設定アプリに表示。
+- [x] エンジン起動時の DLL 検索パス切り替え(`SetDefaultDllDirectories` / `AddDllDirectory`
+      + 遅延ロード)を実装。
+- [x] 選択したバックエンドの初期化失敗時に CPU へフォールバックし、状態を設定アプリに表示。
+      **検索パスを向けるだけでは足りない** — それでは読み込めるかが決まらず、遅延ロード
+      任せだと最初の変換で構造化例外になってフォールバックの機会が無い。まだ引き返せる
+      うちに `LoadLibraryExW` で実際に読み込む。状態は
+      `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に書いて設定アプリが読む
+      (エンジンはオンデマンド起動なので、設定アプリを開いた時点では動いていない)。
+      実機で3ケース確認(`tsf/Ohagey/tools/check-backend-fallback.ps1`)、
+      フォールバック後もそのまま Zenzai が変換できることまで確認済み。決定 0028 の追記
 
 ## 実装時に確定する残課題(決定ログより)
 

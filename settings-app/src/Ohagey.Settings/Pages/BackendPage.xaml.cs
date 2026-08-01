@@ -36,7 +36,30 @@ public sealed partial class BackendPage : Page
         InferenceLimit.Minimum = SettingsSchema.MinimumInferenceLimit;
         InferenceLimit.Value = _loaded.ZenzaiInferenceLimit;
         ModelStatus.Text = ModelState.Describe();
+        ShowBackendStatus(_loaded.Backend);
         _loading = false;
+    }
+
+    /// <summary>
+    /// Says what the engine actually loaded last time it started.
+    /// </summary>
+    /// <remarks>
+    /// Re-read on every change rather than cached with the page: the status is
+    /// compared against the currently selected backend, so switching the combo
+    /// box has to move it from "running on CPU" to "will use CUDA next time".
+    ///
+    /// Severity is raised only when the engine is not doing what was asked. A
+    /// warning on the ordinary case would train the user to ignore it, which is
+    /// the opposite of what decision 0028 wants from this line.
+    /// </remarks>
+    private void ShowBackendStatus(Backend selected)
+    {
+        var status = BackendStatusFile.Read();
+        BackendStatusNotice.Message = BackendState.Describe(status, selected);
+        BackendStatusNotice.Severity =
+            status is not null && status.Requested == selected && !status.IsHonoringRequest
+                ? InfoBarSeverity.Warning
+                : InfoBarSeverity.Informational;
     }
 
     private void OnChanged(object sender, SelectionChangedEventArgs e) => Save();
@@ -63,5 +86,6 @@ public sealed partial class BackendPage : Page
         // the last keystroke: dragging the slider back to where it started
         // should stop claiming a restart is needed.
         RestartNotice.IsOpen = updated.SettingsRequiringRestart(_loaded).Count > 0;
+        ShowBackendStatus(updated.Backend);
     }
 }

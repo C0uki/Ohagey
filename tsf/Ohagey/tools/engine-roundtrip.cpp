@@ -128,15 +128,13 @@ int wmain()
     r = client.Commit(L"へんかん", L"変換", false);
     Check(r == CallResult::Ok, "empty-body response decoded");
 
-    // ── RegisterWord: expected to fail, and to say why ─────────────────────
-    printf("\nRegisterWord (user dictionary is not implemented — decision 0026)\n");
-    r = client.RegisterWord(L"おはぎー", L"Ohagey", L"名詞");
-    Check(r == CallResult::Status, "reported as a status failure, not a transport error");
-    if (r == CallResult::Status)
-    {
-        printf("  status: %d\n", static_cast<int>(client.LastStatus()));
-        Say("  message: ", client.LastStatusMessage());
-    }
+    // RegisterWord used to be exercised here, back when it was expected to
+    // fail because the user dictionary was not implemented. It is now
+    // (decisions 0026 / 0036), which made this a call that quietly succeeded —
+    // writing a word into whichever dictionary the running engine happens to
+    // own, which for a developer is the one they type with. The dedicated
+    // harness does it against a scratch profile instead:
+    // build-and-run-userdict.ps1.
 
     // ── A bad request must not cost us the connection (decision 0030) ──────
     printf("\nConvert(\"\") — invalid, connection must survive\n");
