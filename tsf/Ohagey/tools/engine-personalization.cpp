@@ -172,15 +172,26 @@ int wmain()
     }
     Check(ping.modelLoaded, "the Zenzai model is loaded");
 
-    // A reading with many plausible *kanji* conversions, so there is a real
-    // ranking to change.
+    // ── Why this reading and not a richer one ──────────────────────────────
     //
-    // Was `きしゃのきしゃ`, which turns out to be a weak test: its only
-    // full-length candidates below the top are the katakana form and the
-    // reading itself, and promoting either proves little about a character
-    // n-gram trained on exactly that string. `こうしょう` offers twenty
-    // conversions that are all genuinely different words.
-    const std::wstring reading = L"こうしょう";
+    // This was briefly `こうしょう`, on the reasoning that twenty genuinely
+    // different kanji conversions make a better ranking to disturb than one
+    // whose only movable full-length candidates are katakana forms. The result
+    // looked much stronger — 20th to 1st instead of 2nd to 1st.
+    //
+    // It was measuring the wrong thing. Confirming a candidate also feeds the
+    // converter's own learning store, which sits *under* Zenzai, and for a
+    // single short word that lattice ordering survives the re-ranking: with
+    // personalisation switched off entirely, `こうしょう` still went 20th to
+    // 1st. The promotion was real and had nothing to do with the mechanism
+    // this harness exists to test.
+    //
+    // `きしゃのきしゃ` is a multi-clause reading where Zenzai dominates, and the
+    // control run holds: learning store alone leaves the target at 2nd after
+    // forty confirmations, and only personalisation moves it to 1st. That A/B
+    // is `build-and-run-learning.ps1`, and it is what makes this reading the
+    // right one — a weaker-looking number that is actually about personalisation.
+    const std::wstring reading = L"きしゃのきしゃ";
 
     // More than the five that get printed. `mainResults` spends its first few
     // places on the full-length conversions and then on forms that are not
@@ -302,6 +313,17 @@ int wmain()
     // What is asserted above is the claim the feature rests on: the confirmed
     // candidate rises. How much collateral there is belongs in the output, with
     // enough detail to tell whether it is getting better or worse.
+    // Counted, not just noticed. The lever on this is alpha, and choosing a
+    // value means comparing runs — "some candidates moved" cannot be compared
+    // with anything, while "3 of 19 moved" can.
+    size_t displaced = 0;
+    for (size_t i = 0; i < othersBefore.size(); ++i)
+    {
+        bool same = i < othersAfter.size() && othersBefore[i] == othersAfter[i];
+        if (!same) ++displaced;
+    }
+    printf("  collateral: %zu of %zu other candidates moved\n", displaced, othersBefore.size());
+
     if (othersBefore == othersAfter)
     {
         printf("  [ -- ] every other candidate kept its order\n");
