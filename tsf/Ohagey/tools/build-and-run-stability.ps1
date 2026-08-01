@@ -1,12 +1,18 @@
-# Builds and runs the personalisation harness (decision 0034).
+# Builds and runs the conversion-stability check (decisions 0032 / 0034).
 #
-# Unlike build-and-run.ps1 this must *not* have an engine already running: it
-# points the engine it launches at a scratch profile so the training does not
-# land in the learning data you type against.
+# Converts one reading many times with nothing in between, and reports whether
+# the answer ever differs. See engine-stability.cpp for why this matters — in
+# short, the personalisation harness polls until it likes the answer, and that
+# is only a measurement if conversion is deterministic.
 #
-# The Zenzai model has to be installed, or set OHAGEY_MODEL_PATH first (debug
-# builds only) — there is no neural ranking to personalise without it.
-param([int]$NBest = 20, [switch]$KeepIntermediates)
+# Must NOT have an engine already running: this starts one against a scratch
+# profile.
+
+param(
+    [int]$NBest = 20,
+    [int]$Rounds = 60,
+    [switch]$KeepIntermediates
+)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -27,19 +33,16 @@ if (-not $env:VCINSTALLDIR) {
 
 New-Item -ItemType Directory -Force $out | Out-Null
 
-$sources = @(
-    (Join-Path $here "engine-personalization.cpp"),
-    (Join-Path $here "..\OhageyEngineClient.cpp"),
-    (Join-Path $here "..\OhageyWire.cpp")
-)
-
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi /DOHAGEY_ALLOW_ENGINE_PATH_OVERRIDE `
-    /Fo"$out\" /Fd"$out\p13n.pdb" /Fe"$out\engine-personalization.exe" `
-    $sources /link kernel32.lib user32.lib advapi32.lib
+    /Fo"$out\" /Fd"$out\stability.pdb" /Fe"$out\engine-stability.exe" `
+    (Join-Path $here "engine-stability.cpp") `
+    (Join-Path $here "..\OhageyEngineClient.cpp") `
+    (Join-Path $here "..\OhageyWire.cpp") `
+    /link kernel32.lib user32.lib advapi32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
-& "$out\engine-personalization.exe" $NBest
+& "$out\engine-stability.exe" $NBest $Rounds
 $exit = $LASTEXITCODE
 
 if (-not $KeepIntermediates) {
