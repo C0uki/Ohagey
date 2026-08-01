@@ -5,7 +5,11 @@
 # solution-wide build for no benefit.
 #
 # Run from an "x64 Native Tools Command Prompt for VS 2022", or let this script
-# find vcvars64 itself. OhageyEngine must already be running.
+# find vcvars64 itself.
+#
+# Must NOT have an engine already running: the harness starts one against a
+# scratch profile, because the learning section confirms candidates and those
+# would otherwise be learned into the profile you type with.
 param([switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"

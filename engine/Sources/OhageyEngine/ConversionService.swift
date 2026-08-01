@@ -55,7 +55,20 @@ final class ConversionService {
         personalModel.prepare()
 
         userDictionary.reloadIfChanged()
+        applyUserDictionary()
+    }
+
+    /// Hands the registered words to both places that need them.
+    ///
+    /// Two, not one, and the second is easy to forget: the lattice cost decides
+    /// the order only while Zenzai is off. With the model loaded, Zenzai
+    /// re-ranks above the lattice and a registered word lands wherever the
+    /// neural model happens to put it — measured at 3rd, behind the reading
+    /// passed straight through. The personal n-gram is the one mechanism that
+    /// reaches that ranking (decisions 0034 / 0036).
+    private func applyUserDictionary() {
         userDictionary.apply(to: converter)
+        personalModel.updateRegisteredWords(userDictionary.words, settings: settings)
     }
 
     func updateSettings(_ newSettings: EngineSettings) {
@@ -66,7 +79,7 @@ final class ConversionService {
         // keeping the record, not just to stop consulting it (decision 0025).
         // Someone turning it off on a shared machine means the data should go.
         if wasPersonalizing, !newSettings.personalizationActive {
-            personalModel.erase()
+            personalModel.erase(settings: newSettings)
         }
     }
 
@@ -113,7 +126,7 @@ final class ConversionService {
         // A `stat` per conversion is nothing beside the conversion itself, and
         // it cannot miss a change the way a dropped notification could.
         if userDictionary.reloadIfChanged() {
-            userDictionary.apply(to: converter)
+            applyUserDictionary()
         }
 
         var composing = ComposingText()
@@ -319,7 +332,7 @@ extension ConversionService: EngineRequestHandling {
             // conversion rather than after the file's timestamp is next
             // noticed. Registering a word and then finding it does not convert
             // is indistinguishable from it having failed.
-            userDictionary.apply(to: converter)
+            applyUserDictionary()
             return .registerWord
 
         case .ping:

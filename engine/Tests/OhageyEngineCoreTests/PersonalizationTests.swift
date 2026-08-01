@@ -338,3 +338,53 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertEqual(changed.settingsRequiringRestart(comparedTo: .default), [])
     }
 }
+
+// MARK: - Registered words
+
+/// A registered word's lattice cost decides the order only while Zenzai is off.
+/// With the model loaded, Zenzai re-ranks above the lattice — measured, the word
+/// fell to 3rd behind the reading passed straight through. So the word also goes
+/// into the personal n-gram, which is the one mechanism that reaches that
+/// ranking (decisions 0034 / 0036).
+final class RegisteredWordTrainingTests: XCTestCase {
+    func testARegisteredWordIsRepeatedEnoughToBeHeard() {
+        let lines = PersonalizationLayout.trainingLines(forRegisteredWords: ["Ohagey"])
+        XCTAssertEqual(lines.count, PersonalizationLayout.registeredWordWeight)
+        XCTAssertEqual(Set(lines), ["Ohagey"])
+    }
+
+    func testTheWeightIsWhatWasMeasuredToBeEnough() {
+        // Forty is the number of confirmations that carried a candidate from
+        // 20th to 1st (decision 0034). Registering a word should be at least as
+        // strong as typing one forty times, since it is a statement rather than
+        // a habit.
+        XCTAssertEqual(PersonalizationLayout.registeredWordWeight, 40)
+    }
+
+    func testEveryRegisteredWordGetsTheSameWeight() {
+        let lines = PersonalizationLayout.trainingLines(forRegisteredWords: ["Ohagey", "おはぎ"])
+        XCTAssertEqual(lines.count, 2 * PersonalizationLayout.registeredWordWeight)
+        XCTAssertEqual(
+            lines.filter { $0 == "Ohagey" }.count,
+            lines.filter { $0 == "おはぎ" }.count
+        )
+    }
+
+    func testNoRegisteredWordsMeansNoLines() {
+        // The caller adds these to the corpus, and an empty corpus is what tells
+        // it there is nothing to train.
+        XCTAssertEqual(PersonalizationLayout.trainingLines(forRegisteredWords: []), [])
+    }
+
+    func testAWordThatCouldNotBeACorpusLineIsSkipped() {
+        // Same rules as a commit: the training input is line-based, so a word
+        // holding a newline would become two, and something the length of a
+        // paste would skew the model. The dictionary validates on the way in,
+        // but the file is user-editable (decision 0013).
+        let tooLong = String(repeating: "あ", count: PersonalizationLayout.maximumLineLength + 1)
+        XCTAssertEqual(PersonalizationLayout.trainingLines(forRegisteredWords: [tooLong, "  "]), [])
+
+        let flattened = PersonalizationLayout.trainingLines(forRegisteredWords: ["前半\n後半"])
+        XCTAssertEqual(Set(flattened), ["前半 後半"])
+    }
+}

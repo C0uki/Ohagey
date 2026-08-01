@@ -66,7 +66,7 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- `swift test` **170件パス**
+- `swift test` **175件パス**
 - **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
   `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
 - **6クライアント同時接続** — 全員が自分の `request_id` で正しく応答を受け取る
@@ -85,11 +85,9 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
   **20位の候補を 40 回確定 → 1位**。`tsf/Ohagey/tools/build-and-run-personalization.ps1`。
   確定していない候補まで並び替わるのは既知の限界で、FAIL ではなく報告として出る
 
-### 未検証
-- UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
-
-- **ユーザー辞書**(decision 0026 / 0036)。`registerWord` で登録した語が候補に出る。
-  ただし**現在は3位で、記録(1位)を再現しない** — `docs/roadmap.md` の未解決項目を参照。
+- **ユーザー辞書**(decision 0026 / 0036)。Zenzai 有効のまま、登録直後は候補に出て
+  (格子のコスト)、個人モデルの再学習後に**1位**になる。格子のコストだけでは足りない —
+  Zenzai は格子の上で並べ替えるので、登録語も個人 n-gram に通す必要がある。
   `tsf/Ohagey/tools/build-and-run-userdict.ps1`
 
 - **バックエンド選択**(decision 0028)。`backends\<name>\` の DLL 検索パス切り替えと、
@@ -99,6 +97,9 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
   (正常 / ディレクトリ無し / `llama.dll` はあるが依存が無い→126)。
   フォールバック後もそのまま Zenzai が変換できる。状態は
   `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
+
+### 未検証
+- UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
 
 ### 未着手
 - CUDA / Vulkan バックエンドの実機動作(プレビルドの取得までは確認済み)

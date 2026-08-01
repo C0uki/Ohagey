@@ -19,6 +19,29 @@ namespace
 {
     int g_failures = 0;
 
+    // Recursive delete, for the scratch profile. Same helper as the
+    // personalisation harness; kept local rather than shared because these
+    // files are meant to be readable on their own.
+    bool RemoveTree(const std::wstring& path)
+    {
+        WIN32_FIND_DATAW found = {};
+        const std::wstring pattern = path + L"\\*";
+        HANDLE handle = FindFirstFileW(pattern.c_str(), &found);
+        if (handle == INVALID_HANDLE_VALUE) return RemoveDirectoryW(path.c_str()) != 0;
+
+        do
+        {
+            const std::wstring name = found.cFileName;
+            if (name == L"." || name == L"..") continue;
+            const std::wstring child = path + L"\\" + name;
+            if (found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) RemoveTree(child);
+            else DeleteFileW(child.c_str());
+        } while (FindNextFileW(handle, &found));
+
+        FindClose(handle);
+        return RemoveDirectoryW(path.c_str()) != 0;
+    }
+
     // Everything prints through printf. Mixing wprintf and printf on stdout
     // fights over the stream's orientation and silently drops one of them, so
     // the harness stays narrow and converts wide strings itself.
@@ -65,14 +88,56 @@ int wmain()
 {
     SetConsoleOutputCP(CP_UTF8);
 
+    // ── Your own data is not touched ────────────────────────────────────────
+    //
+    // The learning section below confirms candidates, and a confirmed candidate
+    // goes into the corpus the personal language model is trained from
+    // (decisions 0024 / 0034). Against a developer's own engine that is the
+    // profile they type with — measured, this harness had quietly put 21 copies
+    // of 変換 and 返還 into one, and trained a model from them.
+    //
+    // So LOCALAPPDATA is redirected before the engine is launched, exactly as
+    // the personalisation and user-dictionary harnesses do. An engine that is
+    // already up has the real path, so this refuses rather than using it.
+    wchar_t temp[MAX_PATH] = {};
+    GetTempPathW(MAX_PATH, temp);
+    const std::wstring scratch = std::wstring(temp) + L"ohagey-roundtrip-check";
+    RemoveTree(scratch);
+    CreateDirectoryW(scratch.c_str(), nullptr);
+    SetEnvironmentVariableW(L"LOCALAPPDATA", scratch.c_str());
+    Say("scratch profile: ", scratch);
+
     std::wstring pipe;
     EngineClient::PipeName(&pipe);
     Say("pipe: ", pipe);
 
-    EngineClient client;
-    if (!client.Connect())
+    // Opened directly rather than through Connect, which would *launch* one
+    // (decisions 0015 / 0033) — and the point of the check is to catch an
+    // engine that was started with the real profile.
     {
-        printf("could not connect (error %lu) — is OhageyEngine running?\n", GetLastError());
+        const HANDLE probe = CreateFileW(pipe.c_str(), GENERIC_READ, 0, nullptr,
+                                         OPEN_EXISTING, 0, nullptr);
+        if (probe != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(probe);
+            printf("An engine is already running. Close it first: this harness confirms\n"
+                   "candidates, and those would be learned into the profile you type with.\n");
+            return 1;
+        }
+    }
+
+    EngineClient client;
+    // A cold start loads the dictionary and the Zenzai weights before it
+    // listens, which takes longer than Connect's own one-second budget.
+    bool connected = false;
+    for (int attempt = 0; attempt < 60 && !connected; ++attempt)
+    {
+        connected = client.Connect();
+        if (!connected) Sleep(1000);
+    }
+    if (!connected)
+    {
+        printf("could not connect (error %lu)\n", GetLastError());
         return 2;
     }
     printf("connected\n\n");
@@ -256,6 +321,8 @@ int wmain()
             Check(false, "needed at least two candidates to test learning");
         }
     }
+
+    RemoveTree(scratch);
 
     printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASSED" : "FAILED",
             g_failures, g_failures == 1 ? "" : "s");
