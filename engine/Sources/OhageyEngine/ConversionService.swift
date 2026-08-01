@@ -129,6 +129,28 @@ final class ConversionService {
             applyUserDictionary()
         }
 
+        // ── Why every conversion starts from nothing ───────────────────────
+        //
+        // `requestCandidates` keeps the previous lattice and Zenzai cache and
+        // reuses them when the next request looks like a continuation of the
+        // last. That is right for a keyboard feeding it one keystroke at a
+        // time, and wrong here: each request on the wire carries a whole
+        // reading (decision 0007), so there is no continuation to exploit —
+        // only stale state to inherit.
+        //
+        // Measured, and the reason this is not a micro-optimisation question:
+        // after confirming a candidate, converting the same reading five times
+        // in a row returned rank 2, 1, 2, 1, 2. The same input, no input in
+        // between, and the candidate list alternating between two orders. For a
+        // user that is worse than learning not working at all — the list moves
+        // under their fingers and no habit can form against it.
+        //
+        // Both other places that mutate what the converter knows already do
+        // this for the same reason (see `commit` and `UserDictionaryStore`);
+        // doing it here makes the rule general rather than a patch applied
+        // wherever someone noticed.
+        converter.stopComposition()
+
         var composing = ComposingText()
         // `.direct` — the TSF layer has already resolved romaji to kana, so the
         // engine receives the reading as-is.

@@ -32,6 +32,10 @@ using namespace Ohagey;
 
 namespace
 {
+    // Enough to see whether the rank settles, without turning the run into a
+    // benchmark. Five is comfortably more than the two the question needs.
+    constexpr int kRepeats = 5;
+
     void Say(const char* label, const std::wstring& value)
     {
         printf("%s", label);
@@ -162,33 +166,28 @@ int wmain(int argc, wchar_t** argv)
 
         const int total = (commits == 3) ? 3 : 40;
 
-        // Measured twice, immediately and again after a pause.
+        // Converted several times in a row, with no pause and nothing in
+        // between, and the rank printed for each.
         //
-        // This harness used to take only the immediate reading, and that is how
-        // it came to disagree with build-and-run-personalization.ps1 about the
-        // same reading and the same target: one said the confirmed candidate
-        // never moved, the other said it reached first. The personalisation
-        // harness polls for up to thirty seconds, so whatever takes effect late
-        // was visible to it and not to this.
-        //
-        // Both numbers are printed rather than one replacing the other, because
-        // the difference between them is itself the finding — an IME that needs
-        // fifteen seconds to reflect a correction behaves very differently from
-        // one that reflects it on the next keystroke.
-        for (const wchar_t* when : { L"immediately", L"after 15s" })
+        // The point is to separate two explanations that a single delayed
+        // measurement cannot tell apart: "the effect needs time to land" and
+        // "the effect needs one more conversion". This harness used to measure
+        // once, immediately, and concluded the confirmed candidate never moved;
+        // the personalisation harness polled for thirty seconds and concluded it
+        // reached first. If the rank changes on the second call with no waiting,
+        // the difference was never about time.
+        printf("\n  after %d confirmations, converting %d times in a row:\n",
+               total, kRepeats);
+        ConvertResult after;
+        for (int attempt = 0; attempt < kRepeats; ++attempt)
         {
-            if (when[0] == L'a') Sleep(15000);
-
-            ConvertResult after;
             if (client.Convert(reading, 5, L"", &after) != CallResult::Ok) continue;
-
-            printf("\n  after %d confirmations, ", total);
-            Say("", when);
-            PrintRanking("", after);
-            printf("    target rank: %d -> %d\n", RankOf(before, target) + 1, RankOf(after, target) + 1);
-            printf("    other original candidates still present: %d of %zu\n",
-                   Survivors(before, after, target), before.candidates.size() - 1);
+            printf("    call %d: target rank %d\n", attempt + 1, RankOf(after, target) + 1);
         }
+        PrintRanking("", after);
+        printf("    target rank: %d -> %d\n", RankOf(before, target) + 1, RankOf(after, target) + 1);
+        printf("    other original candidates still present: %d of %zu\n",
+               Survivors(before, after, target), before.candidates.size() - 1);
     }
 
     RemoveTree(scratch);
