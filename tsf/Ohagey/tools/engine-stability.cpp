@@ -151,13 +151,32 @@ int wmain(int argc, wchar_t** argv)
 
     int differed = 0;
     std::vector<std::wstring> firstDifference;
+
+    // Timed as well as compared. Every conversion now discards the previous
+    // lattice before building a new one (see ConversionService.convert), which
+    // is what stopped the candidate order alternating between calls — but it
+    // also means the cache is no longer paying for anything, and the price of
+    // that belongs here rather than in someone's typing.
+    double totalMs = 0;
+    double worstMs = 0;
+    LARGE_INTEGER frequency = {};
+    QueryPerformanceFrequency(&frequency);
+
     for (int round = 1; round < rounds; ++round)
     {
         // The same pause the personalisation harness leaves between polls, so
         // that anything time-dependent has the same chance to happen.
         Sleep(500);
         ConvertResult again;
-        if (client.Convert(reading, nBest, L"", &again) != CallResult::Ok) continue;
+        LARGE_INTEGER started = {}, finished = {};
+        QueryPerformanceCounter(&started);
+        const CallResult call = client.Convert(reading, nBest, L"", &again);
+        QueryPerformanceCounter(&finished);
+        if (call != CallResult::Ok) continue;
+        const double ms = (finished.QuadPart - started.QuadPart) * 1000.0 / frequency.QuadPart;
+        totalMs += ms;
+        if (ms > worstMs) worstMs = ms;
+
         const std::vector<std::wstring> texts = TextsOf(again);
         if (texts == baseline) continue;
         if (differed == 0)
@@ -174,6 +193,11 @@ int wmain(int argc, wchar_t** argv)
     }
 
     printf("\n  %d of %d repeats differed from the first answer\n", differed, rounds - 1);
+    if (rounds > 1)
+    {
+        printf("  conversion: mean %.0fms, worst %.0fms over %d calls\n",
+               totalMs / (rounds - 1), worstMs, rounds - 1);
+    }
     Check(differed == 0,
           "the same reading converts the same way every time");
     if (differed != 0)
