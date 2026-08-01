@@ -81,9 +81,11 @@ fork には実バグ修正が2件入っている。**上の b4846 との一体�
   release/CPU で **p50 ≈ 70〜95ms、p95 ≈ 90〜140ms**。
   計測方法の落とし穴は `docs/local-setup.md` に記録した(素朴に測るとキャッシュを測ってしまう)
 
-- **Zenzai 有効時の順位に学習が効く**(decision 0034)。`こうしょう` で
-  **20位の候補を 40 回確定 → 1位**。`tsf/Ohagey/tools/build-and-run-personalization.ps1`。
-  確定していない候補まで並び替わるのは既知の限界で、FAIL ではなく報告として出る
+- **Zenzai 有効時の順位に学習が効く**(decision 0034)。`tsf/Ohagey/tools/build-and-run-learning.ps1`
+  が個人化 OFF → ON の A/B を回す: `きしゃのきしゃ` で **学習ストアのみなら 2位→2位、
+  個人化を足すと 2位→1位**。
+  **`build-and-run-personalization.ps1` の方は対照が取れていない**(個人化を切っても
+  昇格する)。`docs/roadmap.md` の未解決項目を参照 — **alpha の話はそこが解けるまで進まない**
 
 - **ユーザー辞書**(decision 0026 / 0036)。Zenzai 有効のまま、登録直後は候補に出て
   (格子のコスト)、個人モデルの再学習後に**1位**になる。格子のコストだけでは足りない —
