@@ -88,6 +88,53 @@ namespace
         }
     }
 
+    /// Reads `reading<TAB>expected` lines, skipping comments and blanks.
+    ///
+    /// UTF-8 with no BOM, which is what the repo's file is and what anyone
+    /// editing it in an editor will produce. Lines without a tab are skipped
+    /// rather than rejected: the file is meant to be edited by hand, and one
+    /// malformed line should not cost the whole run.
+    bool ReadEvalSet(const wchar_t* path,
+                     std::vector<std::wstring>* readings,
+                     std::vector<std::wstring>* expected)
+    {
+        const HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, nullptr,
+                                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file == INVALID_HANDLE_VALUE) return false;
+
+        std::string bytes;
+        char buffer[4096];
+        DWORD read = 0;
+        while (ReadFile(file, buffer, sizeof(buffer), &read, nullptr) && read > 0)
+        {
+            bytes.append(buffer, read);
+        }
+        CloseHandle(file);
+
+        const int chars = MultiByteToWideChar(CP_UTF8, 0, bytes.data(),
+                                              static_cast<int>(bytes.size()), nullptr, 0);
+        std::wstring text(static_cast<size_t>(chars), L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, bytes.data(), static_cast<int>(bytes.size()),
+                            text.data(), chars);
+
+        size_t start = 0;
+        while (start <= text.size())
+        {
+            size_t end = text.find(L'\n', start);
+            if (end == std::wstring::npos) end = text.size();
+            std::wstring line = text.substr(start, end - start);
+            start = end + 1;
+            if (!line.empty() && line.back() == L'\r') line.pop_back();
+            if (line.empty() || line[0] == L'#') continue;
+
+            const size_t tab = line.find(L'\t');
+            if (tab == std::wstring::npos) continue;
+            readings->push_back(line.substr(0, tab));
+            expected->push_back(line.substr(tab + 1));
+        }
+        return !readings->empty();
+    }
+
     bool RemoveTree(const std::wstring& path)
     {
         // Double-NUL terminated, as SHFileOperation-style APIs want; here the
@@ -115,10 +162,20 @@ int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
 
-    // argv[1] n_best, argv[2] reading, argv[3] a corpus file to start from.
+    // argv[1] n_best, argv[2] reading, argv[3] a corpus file to start from,
+    // argv[4] an evaluation set of readings with their expected conversions.
     // Read here rather than beside each use because the seeding below happens
     // before anything else — it has to be in place before the engine starts.
-    const wchar_t* seedCorpus = argc > 3 ? argv[3] : nullptr;
+    // "-" means "not given". PowerShell drops empty arguments to a native
+    // executable, so a positional gap needs something to stand in it.
+    const auto optional = [](const wchar_t* value) -> const wchar_t* {
+        if (value == nullptr) return nullptr;
+        const std::wstring text = value;
+        if (text.empty() || text == L"-") return nullptr;
+        return value;
+    };
+    const wchar_t* seedCorpus = optional(argc > 3 ? argv[3] : nullptr);
+    const wchar_t* evalSet = optional(argc > 4 ? argv[4] : nullptr);
 
     // An engine already running was launched with the real LOCALAPPDATA and
     // would train on — and pollute — the profile you actually type with.
@@ -304,13 +361,34 @@ int wmain(int argc, wchar_t** argv)
     // trained reading would show it.
     // Several of them, not one. A single control reading is one coin flip, and
     // this project has repeatedly drawn a conclusion from a single measurement
-    // and had to take it back. Chosen to be ordinary and unrelated to the
-    // trained phrase: a sentence, a compound noun, and a short everyday one.
-    const std::vector<std::wstring> controlReadings = {
-        L"あしたのてんき",
-        L"かいぎのしりょう",
-        L"でんしゃがおくれた",
-    };
+    // and had to take it back.
+    //
+    // Each one carries the answer it *should* give, so the report can say
+    // "broke" instead of "changed". That distinction is what the alpha question
+    // has been stuck on: a reading moving because personalisation nudged it
+    // toward what this user writes is the feature working, and one moving from
+    // the right answer to a wrong one is the feature leaking. Counting changes
+    // cannot tell them apart, and every previous round of this measurement
+    // could only count changes.
+    //
+    // eval-set.tsv beside this file, or the three below when it is not given.
+    std::vector<std::wstring> controlReadings;
+    std::vector<std::wstring> controlExpected;
+    if (evalSet != nullptr && evalSet[0] != L'\0')
+    {
+        if (!ReadEvalSet(evalSet, &controlReadings, &controlExpected))
+        {
+            printf("could not read the evaluation set\n");
+            return 1;
+        }
+        Say("evaluation set: ", evalSet);
+    }
+    else
+    {
+        controlReadings = { L"あしたのてんき", L"かいぎのしりょう", L"でんしゃがおくれた" };
+        controlExpected = { L"明日の天気", L"会議の資料", L"電車が遅れた" };
+    }
+
     std::vector<std::vector<std::wstring>> controlBefore;
     for (const auto& control : controlReadings)
     {
@@ -409,6 +487,7 @@ int wmain(int argc, wchar_t** argv)
         // collateral: it is a property of the mechanism, tracked in the
         // roadmap, and a permanently red check is one nobody reads.
         size_t movedReadings = 0;
+        size_t rightBefore = 0, rightAfter = 0, broke = 0, fixed = 0;
         for (size_t r = 0; r < controlReadings.size(); ++r)
         {
             ConvertResult controlAfter;
@@ -416,26 +495,36 @@ int wmain(int argc, wchar_t** argv)
 
             const std::vector<std::wstring>& was = controlBefore[r];
             const std::vector<std::wstring> now = TextsOf(controlAfter);
-            const bool changed = was != now;
-            if (changed) ++movedReadings;
+            if (was != now) ++movedReadings;
 
-            printf("  untrained ");
-            std::wstring header = controlReadings[r];
-            header += changed ? L": REORDERED" : L": unchanged";
-            Say("", header);
-            if (!changed) continue;
+            // Top of the list only. A right answer sitting at rank 4 is one the
+            // user still has to hunt for, so counting it as correct would
+            // flatter the result.
+            const bool wasRight = !was.empty() && was[0] == controlExpected[r];
+            const bool isRight = !now.empty() && now[0] == controlExpected[r];
+            rightBefore += wasRight ? 1 : 0;
+            rightAfter += isRight ? 1 : 0;
+            if (wasRight && !isRight) ++broke;
+            if (!wasRight && isRight) ++fixed;
 
-            for (size_t i = 0; i < was.size() && i < now.size() && i < 3; ++i)
+            // Only the ones that got worse are printed in full. A run over
+            // thirty readings would otherwise bury the answer in output, and
+            // the readings that broke are the answer.
+            if (wasRight && !isRight)
             {
-                std::wstring line = was[i];
-                line += (was[i] == now[i]) ? L"   =   " : L"   ->  ";
-                line += now[i];
-                printf("    %zu. ", i + 1);
+                printf("    broke: ");
+                std::wstring line = controlReadings[r];
+                line += L"   ";
+                line += was.empty() ? L"" : was[0];
+                line += L"   ->  ";
+                line += now.empty() ? L"(none)" : now[0];
                 Say("", line);
             }
         }
         printf("  untrained readings disturbed: %zu of %zu\n",
                movedReadings, controlReadings.size());
+        printf("  correct at rank 1: %zu -> %zu of %zu   (broke %zu, fixed %zu)\n",
+               rightBefore, rightAfter, controlReadings.size(), broke, fixed);
     }
 
     if (othersBefore == othersAfter)
