@@ -1,0 +1,44 @@
+# Readings with an unambiguously correct conversion, for measuring whether
+# personalisation makes conversion worse (decision 0034).
+#
+# Everyday phrases whose right answer nobody would argue about. The point is not
+# to score the converter — its starting accuracy is whatever it is — but to
+# count how many of these it gets right *before* training and *after*, so that
+# "an unrelated reading changed" can be split into "improved" and "broke".
+#
+# Deliberately unrelated to corpus-sample.txt and to anything the harness
+# confirms, so a change here is leakage rather than the feature working.
+#
+# reading<TAB>expected
+あしたのてんき	明日の天気
+かいぎのしりょう	会議の資料
+でんしゃがおくれた	電車が遅れた
+がっこうにいく	学校に行く
+ほんをよむ	本を読む
+みずをのむ	水を飲む
+てがみをかく	手紙を書く
+おんがくをきく	音楽を聞く
+りょうりをつくる	料理を作る
+しゃしんをとる	写真を撮る
+でんわをかける	電話をかける
+くるまをうんてんする	車を運転する
+やまにのぼる	山に登る
+うみでおよぐ	海で泳ぐ
+はなをそだてる	花を育てる
+ともだちとあう	友達と会う
+かぞくとすごす	家族と過ごす
+しごとをさがす	仕事を探す
+えきまであるく	駅まで歩く
+きっぷをかう	切符を買う
+にもつをおくる	荷物を送る
+へやをかたづける	部屋を片付ける
+りょこうのけいかく	旅行の計画
+たんじょうびのおいわい	誕生日のお祝い
+びょういんのよやく	病院の予約
+ぎんこうのこうざ	銀行の口座
+しんぶんをよむ	新聞を読む
+やさいをかう	野菜を買う
+あさごはんをたべる	朝ご飯を食べる
+まどをあける	窓を開ける
+でんきをけす	電気を消す
+かさをわすれた	傘を忘れた

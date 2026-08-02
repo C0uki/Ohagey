@@ -6,7 +6,7 @@
 #
 # The Zenzai model has to be installed, or set OHAGEY_MODEL_PATH first (debug
 # builds only) — there is no neural ranking to personalise without it.
-param([int]$NBest = 20, [string]$Reading = "", [string]$SeedCorpus = "", [switch]$KeepIntermediates)
+param([int]$NBest = 20, [string]$Reading = "", [string]$SeedCorpus = "", [string]$EvalSet = "", [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -39,12 +39,19 @@ $sources = @(
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
-# The reading is omitted rather than passed empty: the harness treats any
-# argument as a reading, and an empty one converts nothing.
+# The harness takes its arguments positionally, so a gap has to be filled
+# rather than skipped. "-" stands for "not given": PowerShell drops an empty
+# string when calling a native executable, which silently shifts every later
+# argument down one. The evaluation set arrived as the seed corpus that way.
 $harnessArgs = @($NBest)
-# Positional, so a seed corpus needs a reading in front of it.
-if ($Reading -or $SeedCorpus) { $harnessArgs += ($Reading ? $Reading : "きしゃのきしゃ") }
-if ($SeedCorpus) { $harnessArgs += (Resolve-Path $SeedCorpus).Path }
+if ($Reading -or $SeedCorpus -or $EvalSet) {
+    $harnessArgs += ($Reading ? $Reading : "きしゃのきしゃ")
+}
+if ($SeedCorpus -or $EvalSet) {
+    $harnessArgs += ($SeedCorpus ? (Resolve-Path $SeedCorpus).Path : "-")
+}
+if ($EvalSet) { $harnessArgs += (Resolve-Path $EvalSet).Path }
+
 & "$out\engine-personalization.exe" @harnessArgs
 $exit = $LASTEXITCODE
 
