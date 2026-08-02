@@ -6,7 +6,7 @@
 #
 # The Zenzai model has to be installed, or set OHAGEY_MODEL_PATH first (debug
 # builds only) — there is no neural ranking to personalise without it.
-param([int]$NBest = 20, [string]$Reading = "", [switch]$KeepIntermediates)
+param([int]$NBest = 20, [string]$Reading = "", [string]$SeedCorpus = "", [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -42,7 +42,9 @@ Write-Host ""
 # The reading is omitted rather than passed empty: the harness treats any
 # argument as a reading, and an empty one converts nothing.
 $harnessArgs = @($NBest)
-if ($Reading) { $harnessArgs += $Reading }
+# Positional, so a seed corpus needs a reading in front of it.
+if ($Reading -or $SeedCorpus) { $harnessArgs += ($Reading ? $Reading : "きしゃのきしゃ") }
+if ($SeedCorpus) { $harnessArgs += (Resolve-Path $SeedCorpus).Path }
 & "$out\engine-personalization.exe" @harnessArgs
 $exit = $LASTEXITCODE
 
