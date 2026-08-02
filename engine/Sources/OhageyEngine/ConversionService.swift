@@ -244,6 +244,14 @@ final class ConversionService {
             // from that we could describe to the converter, and inventing a
             // Candidate would put entries in the learning store that the
             // dictionary never produced.
+            //
+            // Logged, because it is a silent half-failure: personalisation
+            // above still learned from this commit, the converter's own store
+            // did not, and nothing else would say so. It cost a measurement —
+            // a harness converting 32 unrelated readings between a conversion
+            // and its commit pushed the entry out of a cache of 8, and the
+            // result was read as personalisation behaving differently.
+            log("commit: no remembered candidate for this reading; the converter's learning store was not updated")
             return
         }
 

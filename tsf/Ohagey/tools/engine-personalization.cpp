@@ -398,6 +398,25 @@ int wmain(int argc, wchar_t** argv)
     }
     const bool haveControl = controlBefore.size() == controlReadings.size();
 
+    // Converted once more, immediately before confirming it.
+    //
+    // The engine can only feed its own learning store a candidate it still
+    // remembers offering, and it remembers the last eight readings
+    // (`ConversionService.recentCandidates`). Reading the evaluation set above
+    // converts thirty-two, which pushed the target out — so the commits below
+    // reached personalisation and not the learning store, and the run measured
+    // something different from the runs without an evaluation set. That is what
+    // made the target's rank move the wrong way.
+    //
+    // A real user converts and then confirms, with nothing in between. Doing
+    // the same here is both the fix and the more honest scenario.
+    ConvertResult refreshed;
+    if (client.Convert(reading, nBest, L"", &refreshed) != CallResult::Ok)
+    {
+        Check(false, "re-converted the target before confirming it");
+        return 1;
+    }
+
     // Past the engine's retraining threshold, with room to spare: the model is
     // rebuilt after a batch of commits, not on each one.
     const int commits = 40;
