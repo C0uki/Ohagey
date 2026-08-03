@@ -262,8 +262,16 @@ final class PersonalizationLayoutTests: XCTestCase {
 // MARK: - Settings
 
 final class PersonalizationSettingsTests: XCTestCase {
-    func testPersonalizationIsOnByDefault() {
-        XCTAssertTrue(EngineSettings.default.personalizationActive)
+    func testLearningIsOnByDefaultAndPersonalisationIsNot() {
+        // Deliberately different, and the difference is the whole of decision
+        // 0034's addendum 11: learning works and is wanted; personalisation
+        // works and costs more than it gives — measured at 15 to 18 of 30
+        // known-correct conversions broken by confirming a single phrase.
+        //
+        // Pinned in one test so that "tidying up" the two into agreement fails
+        // here rather than shipping.
+        XCTAssertTrue(EngineSettings.default.learningEnabled)
+        XCTAssertFalse(EngineSettings.default.personalizationActive)
     }
 
     func testTurningLearningOffAlsoTurnsPersonalizationOff() {
@@ -271,15 +279,17 @@ final class PersonalizationSettingsTests: XCTestCase {
         // cannot outlive the consent that learning stands for (decision 0025).
         var settings = EngineSettings()
         settings.learningEnabled = false
+        settings.personalizationEnabled = true
         XCTAssertTrue(settings.personalizationEnabled, "the stored preference is untouched")
         XCTAssertFalse(settings.personalizationActive, "but it must not take effect")
     }
 
-    func testPersonalizationCanBeOffWhileLearningStaysOn() {
+    func testPersonalizationCanBeOnWhileItIsTurnedOnDeliberately() {
+        // The path someone takes when they switch it on in the settings app.
         var settings = EngineSettings()
-        settings.personalizationEnabled = false
+        settings.personalizationEnabled = true
         XCTAssertTrue(settings.learningEnabled)
-        XCTAssertFalse(settings.personalizationActive)
+        XCTAssertTrue(settings.personalizationActive)
     }
 
     func testAlphaIsClampedToSomethingHarmless() {
@@ -310,16 +320,26 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertEqual(EngineSettings.maximumPersonalizationAlpha, 1.5, accuracy: 1e-9)
     }
 
-    func testAStoreThatPredatesTheseSettingsStillGetsThem() {
+    func testASettingsKeyThatSaysNothingAboutItLeavesItOff() {
         // A settings app older than this feature writes neither value, and the
-        // user has to come back with personalisation on rather than silently
-        // off (decision 0014's leniency rule).
+        // default stands in (decision 0014's leniency rule). That default is
+        // now off, so someone upgrading into this version does not silently
+        // acquire a feature that breaks their conversions.
         let settings = EngineSettings(values: [
             SettingsSchema.Key.learningEnabled: .number(1),
             SettingsSchema.Key.backend: .text("cpu"),
         ])
-        XCTAssertTrue(settings.personalizationActive)
+        XCTAssertFalse(settings.personalizationActive)
         XCTAssertEqual(settings.personalizationAlpha, EngineSettings.default.personalizationAlpha)
+    }
+
+    func testAStoreThatTurnsItOnGetsIt() {
+        // The other half: someone who switched it on keeps it across upgrades.
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(1),
+            SettingsSchema.Key.personalizationEnabled: .number(1),
+        ])
+        XCTAssertTrue(settings.personalizationActive)
     }
 
     func testAStoreThatTurnsLearningOffDoesNotGetPersonalisationAnyway() {

@@ -6,6 +6,11 @@
 #
 # The Zenzai model has to be installed, or set OHAGEY_MODEL_PATH first (debug
 # builds only) — there is no neural ranking to personalise without it.
+#
+# Personalisation is switched on for the run and restored afterwards. It ships
+# off (decision 0034, addendum 11), and a harness whose subject is off by
+# default measures nothing — this one quietly started reporting "the target did
+# not move" the moment the default changed.
 param([int]$NBest = 20, [string]$Reading = "", [string]$SeedCorpus = "", [string]$EvalSet = "", [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
@@ -52,8 +57,26 @@ if ($SeedCorpus -or $EvalSet) {
 }
 if ($EvalSet) { $harnessArgs += (Resolve-Path $EvalSet).Path }
 
-& "$out\engine-personalization.exe" @harnessArgs
-$exit = $LASTEXITCODE
+# HKCU\Software\Ohagey is the user's real settings key, so what is touched
+# here is put back — including removing a value that was not there before.
+$key = "HKCU:\Software\Ohagey"
+$hadKey = Test-Path $key
+if (-not $hadKey) { New-Item -Path $key | Out-Null }
+$savedPersonalization = (Get-ItemProperty $key -ErrorAction SilentlyContinue).PersonalizationEnabled
+Set-ItemProperty $key -Name PersonalizationEnabled -Value 1 -Type DWord
+
+try {
+    & "$out\engine-personalization.exe" @harnessArgs
+    $exit = $LASTEXITCODE
+}
+finally {
+    if ($null -ne $savedPersonalization) {
+        Set-ItemProperty $key -Name PersonalizationEnabled -Value $savedPersonalization
+    }
+    else {
+        Remove-ItemProperty $key -Name PersonalizationEnabled -ErrorAction SilentlyContinue
+    }
+}
 
 if (-not $KeepIntermediates) {
     Get-ChildItem $out -Filter *.obj -ErrorAction SilentlyContinue | Remove-Item -Force
