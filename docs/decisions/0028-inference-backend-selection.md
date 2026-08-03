@@ -242,3 +242,58 @@ CPU は展開後 2.4MB(実測)。Vulkan は zip が 21.8MB で、展開後は未
 - [ ] **CPU / Vulkan のレイテンシを実測してから決める。** Vulkan で足りるなら
       CUDA は落とせる。実機に NVIDIA GPU がある前提の測定が要る
 - [ ] 落とさないなら、**インストーラでバックエンドを選択式にする**(全部入れない)
+
+## 追記(2026-08-03、その2)— CUDA を同梱する。**ただし速度差は 12ms しかない**
+
+「CUDA を含める」という判断を受けて `tools/fetch-backends.ps1` に CUDA ランタイムの
+取得を足した。`-Backends cuda` は2つのアーカイブを取る:
+
+| 取得元 | アセット | 展開後 |
+|---|---|---|
+| `azooKey/llama.cpp` | `llama-b4846-bin-win-cuda-cu12.4-x64.zip` | 429MB |
+| `ggml-org/llama.cpp` | `cudart-llama-bin-win-cu12.4-x64.zip` | **548MB** |
+| | **合計** | **977MB**(10 DLL) |
+
+`cublasLt64_12.dll` 単体で 451.6MB ある。**ダウンロード 557MB、ディスク 977MB。**
+
+ランタイムを upstream から取るのは、上の「なぜ `azooKey/llama.cpp` か」と矛盾しない。
+あの議論は zenz の pre-tokenizer を持つ llama 側の DLL についてのもので、
+`cudart` / `cublas` は **NVIDIA の再配布物**であり、どこから取っても同一である。
+
+**2つのアーカイブは必ず一緒に取る。** 片方だけの `backends\cuda\` は
+「インストールされているのに読み込めない」状態そのもので、エンジンは CPU に
+フォールバックし、設定アプリは CUDA と表示することになる(上の 126 の件)。
+
+### 実機で動いた
+
+RTX 3050 Ti Laptop で確認:
+
+```
+backend: cuda from ...\backends\cuda
+requested cuda / effective cuda / reason requested
+```
+
+`cudart` を入れる前は同じ構成が **126(依存 DLL が無い)で CPU に落ちていた**ので、
+ランタイムの同梱が効いていることも同時に確かめられた。
+
+### ⚠️ 速度差は 12ms
+
+`tsf/Ohagey/tools/build-and-run-stability.ps1`、release、同一セッション、
+`きしゃのきしゃ` を20回:
+
+| バックエンド | 平均 | 最悪 |
+|---|---|---|
+| CPU | **78ms** | 86ms |
+| CUDA | **66ms** | 71ms |
+
+**977MB を配って 12ms(約15%)。** Zenzai は 500M 級の小さなモデルで、1回の変換が
+数十msしかかからない以上、GPU に載せても稼げる幅がそもそも小さい。
+
+判断は「CUDA を含める」で確定しているが、**この数字は判断の前には無かった**ので
+記録しておく。再考の材料になるなら:
+
+- Vulkan は zip 21.8MB。NVIDIA / AMD / Intel を一括で賄える。**未計測**
+- インストーラでバックエンドを選択式にすれば、既定は CPU のまま CUDA を任意にできる
+- CPU 78ms が許容できるなら、GPU 自体が要らない可能性もある
+
+- [ ] **Vulkan のレイテンシを測る。** CUDA と同程度なら、**1/45 のサイズで足りる**ことになる

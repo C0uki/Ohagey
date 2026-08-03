@@ -24,7 +24,8 @@
 [CmdletBinding()]
 param(
     # cpu is the default because it is the one that always works: no driver, no
-    # device, no vendor runtime. CUDA is a 192 MB download, so it is opt-in.
+    # device, no vendor runtime. CUDA is a 557 MB download for 977 MB on disk —
+    # the backend plus NVIDIA's runtime — so it is very much opt-in.
     [ValidateSet("cpu", "cuda", "vulkan")]
     [string[]]$Backends = @("cpu"),
 
@@ -44,17 +45,32 @@ $assets = @{
     # a worse trade than one that converts a little slower on a newer one.
     cpu    = "llama-$Tag-bin-win-avx-x64.zip"
 
-    # Not yet verified: upstream ships the CUDA runtime as a separate
-    # `cudart-llama-bin-win-*` asset, and azooKey's release has no such file. So
-    # either this archive carries cudart/cublas itself or it expects a CUDA
-    # installation on the machine. Which one decides whether the installer can
-    # offer CUDA at all — settle it before wiring CUDA into the installer.
+    # ── CUDA needs two archives ────────────────────────────────────────────
+    #
+    # Measured: this one carries no cudart, no cublas, nothing from NVIDIA. It
+    # is `ggml-cuda.dll` (427 MB on its own) plus the usual llama DLLs, and on a
+    # machine without the CUDA runtime it loads and fails — which the engine
+    # then reports as a fallback to CPU (decision 0028).
+    #
+    # The runtime comes from `ggml-org/llama.cpp`, which publishes it as a
+    # separate asset for the same tag. Taking it from there rather than from
+    # azooKey's fork does not reopen the provenance question that decided where
+    # the llama DLLs come from: these three files are NVIDIA's redistributables,
+    # identical wherever they are mirrored from.
     cuda   = "llama-$Tag-bin-win-cuda-cu12.4-x64.zip"
 
     vulkan = "llama-$Tag-bin-win-vulkan-x64.zip"
 }
 
 $release = "https://github.com/azooKey/llama.cpp/releases/download/$Tag"
+
+# The CUDA runtime, from upstream. See the note beside `cuda` above.
+#
+# 373 MB to download and 548 MB on disk, on top of the backend's own 429 MB.
+# CUDA is close to a gigabyte all told, which is why it is opt-in here and why
+# decision 0028 keeps "drop CUDA, ship CPU + Vulkan" on the table.
+$cudartRelease = "https://github.com/ggml-org/llama.cpp/releases/download/$Tag"
+$cudartAsset = "cudart-llama-bin-win-cu12.4-x64.zip"
 New-Item -ItemType Directory -Force $Destination | Out-Null
 
 foreach ($backend in $Backends) {
@@ -85,6 +101,22 @@ foreach ($backend in $Backends) {
     if ($backend -eq "cpu") {
         $lib = Get-ChildItem $staging -Recurse -Filter "llama.lib" | Select-Object -First 1
         if ($lib) { Copy-Item $lib.FullName $Destination -Force }
+    }
+
+    # The CUDA backend is inert without NVIDIA's runtime beside it, so the two
+    # are fetched together — a `backends\cuda\` holding only half of what it
+    # needs is the "installed but will not load" case, and the engine would
+    # fall back to CPU while the settings app said CUDA.
+    if ($backend -eq "cuda") {
+        $cudartZip = Join-Path $env:TEMP $cudartAsset
+        Write-Host "$backend : downloading $cudartAsset (the CUDA runtime, ~373 MB)"
+        Invoke-WebRequest -Uri "$cudartRelease/$cudartAsset" -OutFile $cudartZip
+        $cudartStaging = Join-Path $env:TEMP "ohagey-cudart"
+        Remove-Item -Recurse -Force $cudartStaging -ErrorAction SilentlyContinue
+        Expand-Archive -Path $cudartZip -DestinationPath $cudartStaging
+        Get-ChildItem $cudartStaging -Recurse -Filter *.dll | Copy-Item -Destination $target -Force
+        Remove-Item -Recurse -Force $cudartStaging -ErrorAction SilentlyContinue
+        Remove-Item $cudartZip -Force -ErrorAction SilentlyContinue
     }
 
     Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
