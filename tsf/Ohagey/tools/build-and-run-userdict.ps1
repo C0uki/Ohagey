@@ -3,7 +3,7 @@
 # Must NOT have an engine already running: it points the engine it launches at a
 # scratch profile so the words it registers do not land in the dictionary you
 # type against.
-param([switch]$KeepIntermediates)
+param([string]$EvalSet = "", [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -46,7 +46,11 @@ if ($running) {
 }
 
 Write-Host ""
-& "$out\engine-userdict.exe"
+# The evaluation set is optional; omitted rather than passed empty, because
+# PowerShell drops an empty argument and the harness would read the next one.
+$harnessArgs = @()
+if ($EvalSet) { $harnessArgs += (Resolve-Path $EvalSet).Path }
+& "$out\engine-userdict.exe" @harnessArgs
 $exit = $LASTEXITCODE
 
 if (-not $KeepIntermediates) {
