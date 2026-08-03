@@ -200,12 +200,23 @@ final class PersonalLanguageModel {
     func personalizationMode(
         settings: EngineSettings
     ) -> ConvertRequestOptions.ZenzaiMode.PersonalizationMode? {
-        // Registered words keep this on even when personalisation is off. The
-        // model is then trained from the dictionary alone — nothing about what
-        // the user typed is in it, which is what decision 0025 asks for — but it
-        // still has to be handed over, because it is the only route by which an
-        // explicitly registered word reaches Zenzai's ranking (decision 0036).
-        guard settings.personalizationActive || !registeredWords.isEmpty,
+        // ── Registered words no longer keep this on ────────────────────────
+        //
+        // They used to: decision 0036 routed them through here because it is
+        // the only mechanism that reaches Zenzai's ranking, and without it a
+        // registered word lands 3rd instead of 1st.
+        //
+        // Measured what that cost. Registering one word — `おはぎー` — put it at
+        // the top as intended and broke **18 of 30** otherwise-correct
+        // conversions: `病院の予約` came back as `病医ンノ予ヤ久`. That is the
+        // same damage, and the same number, as personalisation itself, because
+        // it is the same mechanism handed a model trained on almost nothing.
+        //
+        // So a registered word gets its lattice cost and nothing more until the
+        // calibration problem behind all of this is understood (decision 0034,
+        // addendum 10). 3rd with the rest of the language intact beats 1st with
+        // half of it broken.
+        guard settings.personalizationActive,
               baseIsReady,
               let generation = publishedGeneration
         else { return nil }
@@ -292,7 +303,11 @@ final class PersonalLanguageModel {
     func updateRegisteredWords(_ words: [String], settings: EngineSettings) {
         guard words != registeredWords else { return }
         registeredWords = words
-        guard baseIsReady, !isTraining else { return }
+        // Only while personalisation is on. They are still weighted heavily in
+        // the training input when it is (an explicit word should outrank a
+        // habit inside a feature the user opted into) — but they no longer
+        // switch the feature on by themselves. See `personalizationMode`.
+        guard settings.personalizationActive, baseIsReady, !isTraining else { return }
         startTraining(settings: settings)
     }
 
@@ -441,7 +456,7 @@ final class PersonalLanguageModel {
         // just been deleted along with everything else. Rebuild it from the
         // dictionary alone, or erasing the typing history would silently take
         // the user dictionary down with it (decision 0036).
-        if baseIsReady, !registeredWords.isEmpty, !isTraining {
+        if settings.personalizationActive, baseIsReady, !registeredWords.isEmpty, !isTraining {
             startTraining(settings: settings)
         }
     }
