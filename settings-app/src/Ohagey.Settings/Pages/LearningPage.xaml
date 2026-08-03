@@ -17,11 +17,21 @@
                 TextWrapping="Wrap"
                 Style="{StaticResource CaptionTextBlockStyle}" />
 
+            <!-- Off by default, and said so here rather than only in the
+                 decision log: it is a switch that makes conversion worse for
+                 most people, and someone about to turn it on deserves to know
+                 what was measured. See decision 0034's addendum 11. -->
             <ToggleSwitch
                 x:Name="PersonalizationSwitch"
-                Header="学習をニューラル変換の候補順にも反映する"
+                Header="学習をニューラル変換の候補順にも反映する(実験的)"
                 OnContent="オン" OffContent="オフ"
                 Toggled="OnToggled" />
+            <InfoBar
+                IsOpen="True"
+                IsClosable="False"
+                Severity="Warning"
+                Title="既定でオフです"
+                Message="確定した語は候補の上位に来るようになりますが、関係のない語の変換が悪くなることが実測で確認されています(正解していた30件のうち15〜18件)。原因の調査中です。" />
             <TextBlock
                 x:Name="PersonalizationNote"
                 TextWrapping="Wrap"
@@ -29,15 +39,19 @@
 
             <StackPanel Spacing="8">
                 <TextBlock Text="反映の強さ" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <!-- Maximum is 150, matching SettingsSchema.MaximumAlphaPercent
+                     and azooKey-Desktop's "hard". It said 100, which silently
+                     capped the setting below what the schema allows and what
+                     the engine would accept. -->
                 <Slider
                     x:Name="AlphaSlider"
-                    Minimum="0" Maximum="100"
+                    Minimum="0" Maximum="150"
                     StepFrequency="1"
                     Width="320"
                     HorizontalAlignment="Left"
                     ValueChanged="OnSliderChanged" />
                 <TextBlock
-                    Text="強くしすぎると、学習した語がニューラル変換の判断を押し切ってしまいます。"
+                    Text="弱くすると関係のない語への影響は減りますが、100 未満では学習した語も上がらなくなります。"
                     TextWrapping="Wrap"
                     Style="{StaticResource CaptionTextBlockStyle}" />
             </StackPanel>

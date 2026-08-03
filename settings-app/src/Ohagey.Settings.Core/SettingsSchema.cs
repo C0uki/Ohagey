@@ -97,7 +97,19 @@ public enum Backend
 public sealed record EngineSettings
 {
     public bool LearningEnabled { get; init; } = true;
-    public bool PersonalizationEnabled { get; init; } = true;
+
+    /// <summary>Whether committed text also re-ranks Zenzai's output.</summary>
+    /// <remarks>
+    /// Off by default (decision 0034, addendum 11). It works — a confirmed
+    /// candidate does climb to the top — but it also breaks conversions the
+    /// user never touched: measured against 32 readings with known-correct
+    /// answers, confirming one phrase cost 15 to 18 of the 30 that had been
+    /// right. A corpus 200 times larger moved that from 18 to 15, so it is not
+    /// a matter of training it more.
+    ///
+    /// Learning itself is unaffected and still on by default.
+    /// </remarks>
+    public bool PersonalizationEnabled { get; init; } = false;
 
     /// <summary>How hard the personal model may push Zenzai's ranking, 0–100.</summary>
     /// <remarks>

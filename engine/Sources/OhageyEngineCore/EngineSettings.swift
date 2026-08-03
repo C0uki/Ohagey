@@ -34,7 +34,25 @@ public struct EngineSettings: Sendable, Equatable {
     /// converter's learning store is an opaque database, while this keeps a
     /// plain-text corpus of committed phrases on disk in order to retrain from
     /// it. Switching learning off switches this off too — never the reverse.
-    public var personalizationEnabled: Bool = true
+    ///
+    /// ── Off by default (decision 0034, addendum 11) ────────────────────────
+    ///
+    /// It works — a confirmed candidate does climb to the top, which is the
+    /// whole claim decision 0034 rests on. It also breaks conversions the user
+    /// never touched: measured against 32 readings with known-correct answers,
+    /// confirming one phrase cost **15 to 18** of the 30 that had been right.
+    /// A corpus 200 times larger moved that from 18 to 15, so it is not the
+    /// personal model being under-trained; the two language models being mixed
+    /// are on scales that do not subtract meaningfully. Turning alpha down to
+    /// where it stops breaking things is also where it stops working.
+    ///
+    /// So it ships off, and stays in the settings app for anyone who wants it.
+    /// Learning itself is untouched and still on by default — the converter's
+    /// own store keeps working, which is what decision 0025 is about.
+    ///
+    /// One consequence worth knowing: with this off, no plain-text corpus of
+    /// what the user typed is written at all.
+    public var personalizationEnabled: Bool = false
     /// How hard the personal model is allowed to push Zenzai's ranking.
     ///
     /// azooKey-Desktop, which ships the same converter and the same base
