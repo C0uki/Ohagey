@@ -335,18 +335,35 @@ final class PersonalLanguageModel {
         isTraining = true
         unlearnedCommits = 0
 
+        // ── Continue from the base model when there is one to continue from ──
+        //
+        // Read here, on the main actor, rather than inside the detached task:
+        // it is a filesystem check against state the task must not race with.
+        //
+        // Nil is the ordinary case today and the reason personalisation costs
+        // what it does. See `EnginePaths.isBaseLanguageModelResumable`.
+        let resumeFrom = EnginePaths.isBaseLanguageModelResumable
+            ? EnginePaths.baseLanguageModelPrefix
+            : nil
+
         // Detached, at utility priority: this is a second of CPU that must not
         // come out of the time budget for the keystroke that triggered it.
         Task.detached(priority: .utility) { [fileManager] in
             let started = DispatchTime.now().uptimeNanoseconds
-            let trained = Self.train(generation: generation, lines: lines, fileManager: fileManager)
+            let trained = Self.train(
+                generation: generation,
+                lines: lines,
+                resumeFrom: resumeFrom,
+                fileManager: fileManager
+            )
             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
             await MainActor.run {
                 self.finishTraining(
                     generation: generation,
                     succeeded: trained,
                     lines: lines.count,
-                    milliseconds: elapsed
+                    milliseconds: elapsed,
+                    settings: settings
                 )
             }
         }
@@ -361,6 +378,7 @@ final class PersonalLanguageModel {
     private nonisolated static func train(
         generation: Int,
         lines: [String],
+        resumeFrom: String?,
         fileManager: FileManager
     ) -> Bool {
         let staging = PersonalizationLayout.incompleteGenerationDirectory(generation)
@@ -370,11 +388,16 @@ final class PersonalLanguageModel {
             try? fileManager.removeItem(at: staging)
             try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
 
+            // `resumeFilePattern` is what decides whether this is a model of
+            // the user's text or a copy of the language with the user's text
+            // added to it. The second is the one that can be subtracted from
+            // the base without punishing every word they have not typed.
             trainNGram(
                 lines: lines,
                 n: ngramOrder,
                 baseFilePattern: PersonalizationLayout.modelPattern,
-                outputDir: staging.path
+                outputDir: staging.path,
+                resumeFilePattern: resumeFrom
             )
 
             // Refuse to publish an incomplete set rather than discovering it
@@ -402,7 +425,13 @@ final class PersonalLanguageModel {
         generation: Int,
         succeeded: Bool,
         lines: Int,
-        milliseconds: Double
+        milliseconds: Double,
+        // Carried through the round trip rather than re-read: the settings
+        // this run was started under are the ones that decide whether a
+        // follow-up run is allowed. A hot reload mid-training must not turn
+        // a finished run into one that starts another after the user has
+        // just switched personalisation off (decision 0025).
+        settings: EngineSettings
     ) {
         isTraining = false
         guard succeeded else {
@@ -424,6 +453,23 @@ final class PersonalLanguageModel {
         // holding the old path is never left pointing at a deleted file.
         if let previous {
             try? fileManager.removeItem(at: PersonalizationLayout.generationDirectory(previous))
+        }
+
+        // ── Commits that arrived while this run was going ──────────────────
+        //
+        // `record` refuses to start a run while one is in flight, and the
+        // one in flight had already zeroed the counter. Without this, a
+        // burst of commits trains once — on whatever had accumulated when
+        // the first run began — and then never again until the *next*
+        // commit arrives.
+        //
+        // Found while measuring: forty confirmations in a row produced one
+        // generation containing three lines, because training takes seconds
+        // and the other thirty-seven landed inside that window. Someone
+        // pasting a paragraph, or correcting the same word repeatedly, hits
+        // exactly this.
+        if unlearnedCommits >= PersonalizationLayout.commitsPerTrainingRun(corpusLines: corpusLines) {
+            startTraining(settings: settings)
         }
     }
 
