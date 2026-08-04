@@ -37,6 +37,12 @@ New-Item -ItemType Directory -Force $out | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 $key = "HKCU:\Software\Ohagey"
+# Reported, not required: the first phase (learning store only) is a real
+# measurement either way, and it is the second phase — the one whose whole point
+# is the personal model — that the base model decides (decision 0034).
+. (Join-Path $here "base-lm-status.ps1")
+Assert-OhageyBaseLm
+
 $saved = $null
 if (Test-Path $key) { $saved = Get-ItemProperty $key }
 

@@ -108,13 +108,17 @@ final class PersonalLanguageModel {
     /// mixing mean anything.
     ///
     /// When it is missing, an empty base is generated so personalisation still
-    /// runs rather than being switched off entirely. That is a much weaker
-    /// arrangement and it is worth being clear why: `ZenzContext` adds
-    /// `alpha * (log p_personal - log p_base)`, and a base that scores every
-    /// token identically leaves the personal model pushing against nothing. It
-    /// was measured as ineffective for an ordinary correction and destructive
-    /// for a heavily repeated one — see decision 0034. It is a fallback, not a
-    /// design.
+    /// runs rather than being switched off entirely. **Measured, that fallback
+    /// is inert**: `ZenzContext` adds `alpha * (log p_personal - log p_base)`,
+    /// and a base that scores every token identically leaves the personal model
+    /// pushing against nothing. Forty confirmations of one phrase moved its rank
+    /// not at all and broke none of the 30 other eval items — against 2位→1位
+    /// and 18 broken with the real base (decision 0034).
+    ///
+    /// So this is not "weaker personalisation", it is none, and it is kept only
+    /// because switching the feature off mid-session would be a larger surprise
+    /// than leaving it running. It is a fallback, not a design, and the log says
+    /// so.
     private func ensureBaseModel() throws -> Bool {
         if EnginePaths.isBaseLanguageModelAvailable {
             usesRealBaseModel = true
@@ -124,7 +128,7 @@ final class PersonalLanguageModel {
         usesRealBaseModel = false
 
         if baseModelExists() { return true }
-        log("personalisation: no base language model installed — falling back to an empty one, which is much weaker (decision 0034)")
+        log("personalisation: no base language model installed — falling back to an empty one, which is INERT: it will neither improve nor damage the ranking (decision 0034)")
 
         log("personalisation: building the empty base model")
         let staging = PersonalizationLayout.directory
