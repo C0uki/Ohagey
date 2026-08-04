@@ -433,6 +433,29 @@ OhageyEngine: Zenzai model found at C:/swb/models/ggml-model-Q5_K_M.gguf
 > この変数をレジストリから再設定するので、子プロセスには元の値しか渡らない(実測)。
 > `OHAGEY_MODEL_PATH` はまさにこれが理由で用意してある。
 
+### base 言語モデルの配置 — **これが無いと個人化は完全に無効**
+
+個人化(決定 0034)には zenz の重みとは**別に** base の n-gram モデルが要る。
+`Miwa-Keita/base_n5_lm` の4ファイル(`lm_c_abc` / `lm_r_xbx` / `lm_u_abx` / `lm_u_xbc`、
+計 42.6MB)を落として、`OHAGEY_BASE_LM_PATH` に**拡張子と接尾辞を除いた接頭辞**を渡す:
+
+```bat
+set OHAGEY_BASE_LM_PATH=C:\swb\base_n5_lm\lm
+```
+
+**`OHAGEY_MODEL_PATH` と同じく debug ビルドでしか効かない。** release が見るのは
+`%ProgramFiles%\Ohagey\models\lm_*.marisa` だけで、**インストーラはこれを入れない**。
+
+半日これで潰した(決定 0034 の 2026-08-04 追記)。**無いときの症状が「エラー」ではなく
+「個人化が何もしない」**なので、測定地点からは見えない。起動ログには出る:
+
+```
+OhageyEngine: personalisation: no base language model installed — falling back to an empty one, which is INERT: ...
+OhageyEngine: personalisation: using the installed base language model
+```
+
+個人化を主題にするハーネスは `tsf/Ohagey/tools/base-lm-status.ps1` で不在を検出する。
+
 変換品質は辞書のみとは明確に別物:
 
 | 読み | 結果 |
