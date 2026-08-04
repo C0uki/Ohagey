@@ -436,15 +436,30 @@ OhageyEngine: Zenzai model found at C:/swb/models/ggml-model-Q5_K_M.gguf
 ### base 言語モデルの配置 — **これが無いと個人化は完全に無効**
 
 個人化(決定 0034)には zenz の重みとは**別に** base の n-gram モデルが要る。
-`Miwa-Keita/base_n5_lm` の4ファイル(`lm_c_abc` / `lm_r_xbx` / `lm_u_abx` / `lm_u_xbc`、
-計 42.6MB)を落として、`OHAGEY_BASE_LM_PATH` に**拡張子と接尾辞を除いた接頭辞**を渡す:
+出荷物ではインストーラが `{app}\models\` に入れる(決定 0008 の追記)。開発機では
+インストーラを通さないので、自分で取ってきて `OHAGEY_BASE_LM_PATH` に
+**接尾辞と拡張子を除いた接頭辞**を渡す:
 
 ```bat
+for %f in (lm_c_abc lm_r_xbx lm_u_abx lm_u_xbc) do curl -L --create-dirs ^
+  -o C:\swb\base_n5_lm\%f.marisa ^
+  https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/%f.marisa
+
 set OHAGEY_BASE_LM_PATH=C:\swb\base_n5_lm\lm
 ```
 
+インストーラと同じ検証を掛けたければ `installer\download-model.ps1` を直接呼べる
+(`-Sha256` は `installer\ohagey.iss` に固定してある値):
+
+```powershell
+powershell -NoProfile -File installer\download-model.ps1 `
+  -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_r_xbx.marisa `
+  -Dest C:\swb\base_n5_lm\lm_r_xbx.marisa `
+  -Sha256 F9594D23E2F15A8E6D51811F15B23E23BFC7CEFD24B8B1C06F3F0366CE5BF555
+```
+
 **`OHAGEY_MODEL_PATH` と同じく debug ビルドでしか効かない。** release が見るのは
-`%ProgramFiles%\Ohagey\models\lm_*.marisa` だけで、**インストーラはこれを入れない**。
+`%ProgramFiles%\Ohagey\models\lm_*.marisa` だけである。
 
 半日これで潰した(決定 0034 の 2026-08-04 追記)。**無いときの症状が「エラー」ではなく
 「個人化が何もしない」**なので、測定地点からは見えない。起動ログには出る:
