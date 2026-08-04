@@ -35,6 +35,20 @@
                     NavigateUri="https://creativecommons.org/licenses/by-sa/4.0/" />
             </StackPanel>
 
+            <!-- Named here even though nothing obliges it. The base language
+                 model states no licence at all (checked 2026-08-04), so unlike
+                 the Zenzai weights there is no attribution clause to satisfy —
+                 which is exactly why a user should be able to see what is on
+                 their machine and where it came from. Decisions 0009 / 0034. -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="個人化用の言語モデル" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="個人化を有効にした場合、Miwa Keita 氏の base_n5_lm (n-gram 言語モデル) を使用します。&#x0a;このモデルには配布元にライセンスの記載がありません。おはぎーは再配布せず、インストール時に配布元から取得するだけです。" />
+                <HyperlinkButton
+                    Content="base_n5_lm の配布元"
+                    NavigateUri="https://huggingface.co/Miwa-Keita/base_n5_lm" />
+            </StackPanel>
+
             <StackPanel Spacing="8">
                 <TextBlock Text="変換エンジン" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <TextBlock TextWrapping="Wrap"
