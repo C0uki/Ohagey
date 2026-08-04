@@ -144,4 +144,69 @@ public class SchemaAgreementTests
         Assert.Equal(100, UserDictionary.MaximumFieldLength);
         Assert.Equal(10_000, UserDictionary.MaximumEntries);
     }
+
+    // ── Decision 0034: the base language model's filenames ──────────────────
+    //
+    // Written twice, like everything else here — EngineSettings.swift builds
+    // the same four paths. A disagreement does not fail anything: the engine
+    // decides the model is absent, falls back to an empty base, and
+    // personalisation goes inert while the settings app reports it installed.
+    // That is the exact failure mode this whole section exists to prevent.
+
+    [Fact]
+    public void TheBaseLanguageModelSuffixesAreWhatTheEngineLooksFor()
+    {
+        // Four, not five. The published model has no _c_bc.
+        Assert.Equal(
+            new[] { "_c_abc", "_r_xbx", "_u_abx", "_u_xbc" },
+            ModelState.BaseLanguageModelSuffixes);
+    }
+
+    [Fact]
+    public void TheBaseLanguageModelFilenamesAreWhatTheInstallerWrites()
+    {
+        var names = ModelState.BaseLanguageModelPaths.Select(Path.GetFileName).ToArray();
+        Assert.Equal(
+            new[] { "lm_c_abc.marisa", "lm_r_xbx.marisa", "lm_u_abx.marisa", "lm_u_xbc.marisa" },
+            names);
+    }
+
+    [Fact]
+    public void TheBaseLanguageModelSitsBesideTheWeights()
+    {
+        // Same directory as the gguf, because that is the one the engine
+        // derives both from (EnginePaths.modelDirectory).
+        foreach (var path in ModelState.BaseLanguageModelPaths)
+        {
+            Assert.Equal(ModelState.ModelDirectory, Path.GetDirectoryName(path));
+        }
+        Assert.Equal(ModelState.ModelDirectory, Path.GetDirectoryName(ModelState.ModelPath));
+    }
+
+    [Fact]
+    public void APartialBaseModelIsNotInstalled()
+    {
+        // Not asserted against the real Program Files — this pins the rule, not
+        // the machine: every file has to be there, because a partial set makes
+        // the engine fall back exactly as if none were.
+        Assert.Equal(4, ModelState.BaseLanguageModelSuffixes.Count);
+        Assert.Equal(
+            ModelState.BaseLanguageModelPaths.All(File.Exists),
+            ModelState.IsBaseLanguageModelInstalled);
+    }
+
+    [Fact]
+    public void TheBaseModelMessageSaysWhatIsWrongInBothStates()
+    {
+        var whenOn = ModelState.DescribeBaseLanguageModel(personalizationEnabled: true);
+        var whenOff = ModelState.DescribeBaseLanguageModel(personalizationEnabled: false);
+
+        Assert.NotEmpty(whenOn);
+        Assert.NotEmpty(whenOff);
+        // The two cases have to read differently. Someone who deliberately
+        // turned the switch on needs a different sentence from someone who
+        // never touched it, and an identical string here would mean the
+        // distinction was lost in a refactor.
+        Assert.NotEqual(whenOn, whenOff);
+    }
 }
