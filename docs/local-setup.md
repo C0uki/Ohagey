@@ -395,6 +395,54 @@ swift run   -Xlinker -LC:\src\Ohagey\backends
 > Windows で開発者モードが無効だと `unable to create symbolic link at .build\debug` という
 > 警告が出るが無害。実体は `.build\x86_64-unknown-windows-msvc\debug\OhageyEngine.exe`。
 
+## 変換器そのものを触るとき — `OHAGEY_CONVERTER_PATH`
+
+**`.build/checkouts/` の中を編集しても反映されない。** SwiftPM はあそこを自分の管理下の
+キャッシュとして扱うので、編集して `swift build` しても1秒で「Build complete」と言い、
+**前のバイナリをそのままリンクする**。決定 0034 は、これに気づかず取った測定を
+まるごと撤回している。
+
+fork をクローンして `OHAGEY_CONVERTER_PATH` を指すと、`.package(path:)` に切り替わる:
+
+```powershell
+git clone --recurse-submodules https://github.com/C0uki/AzooKeyKanaKanjiConverter C:\swb\AzooKeyKanaKanjiConverter
+cd C:\swb\AzooKeyKanaKanjiConverter
+git checkout fdaaa9a1dff92109e7b1d88521fe8993b14df2a3
+git submodule update --init --recursive
+
+$env:OHAGEY_CONVERTER_PATH = "C:\swb\AzooKeyKanaKanjiConverter"
+swift build --scratch-path C:\swb\13x
+```
+
+踏むところが4つある:
+
+1. **ディレクトリ名は `AzooKeyKanaKanjiConverter` でなければならない。**
+   SwiftPM は path 依存の identity をマニフェストではなく**最後のパス要素**から取る。
+   他の名前だと、依存する全ターゲットが `unknown package 'AzooKeyKanaKanjiConverter'`
+   で落ちる
+2. **scratch を分けること**(上では `C:\swb\13x`)。同じ scratch で pin と path を
+   行き来すると、そのたびに全部ビルドし直しになる
+3. **`backends\cpu\` を新しい scratch の出力ディレクトリにコピーすること。**
+   エンジンは exe の隣の `backends\<name>\` を見る(決定 0028):
+
+   ```powershell
+   Copy-Item <repo>\backends\cpu\*.dll C:\swb\13x\x86_64-unknown-windows-msvc\debug\backends\cpu\
+   ```
+
+   忘れると **「Zenzai モデルは読めているのに変換が空で返る」**という紛らわしい
+   落ち方をする。起動ログに `backend: cpu is not installed` と出るので、そこを見ること
+
+4. **`engine/Package.resolved` が書き換わる。** path 依存には pin が無いので、
+   上書きビルドを回すと converter の pin が **`Package.resolved` から消える**。
+   環境変数を外して普通にビルドし直せば戻るが、**その差分をコミットしないこと** —
+   pin が落ちた `Package.resolved` は、他の全員のビルドから再現性を奪う。
+   `git status` に出ていたら `git checkout -- engine/Package.resolved` で戻す
+
+環境変数を外せば pin されたリビジョンに戻る。**CI と出荷ビルドは常にそちら**である。
+
+編集が本当に効いているかは、まず**明らかに壊れる版**をビルドして確かめるとよい
+(決定 0034 の 2026-08-04 追記その3 では、混合項に 0 を掛けた版で確かめた)。
+
 ## 残っている注意点
 
 **ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。
