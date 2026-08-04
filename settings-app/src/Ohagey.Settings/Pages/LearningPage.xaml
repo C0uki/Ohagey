@@ -37,6 +37,19 @@
                 TextWrapping="Wrap"
                 Style="{StaticResource CaptionTextBlockStyle}" />
 
+            <!-- The base language model is downloaded separately and can be
+                 missing on its own (decision 0034). Without it the switch above
+                 does nothing at all — not less, nothing — and there is no other
+                 way for a user to tell that apart from "this feature is
+                 useless". Severity is raised only when the switch is on and the
+                 model is absent; a warning on a machine where everything is
+                 fine would teach people to ignore this bar. -->
+            <InfoBar
+                x:Name="BaseModelNotice"
+                IsOpen="True"
+                IsClosable="False"
+                Severity="Informational" />
+
             <StackPanel Spacing="8">
                 <TextBlock Text="反映の強さ" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <!-- Maximum is 150, matching SettingsSchema.MaximumAlphaPercent

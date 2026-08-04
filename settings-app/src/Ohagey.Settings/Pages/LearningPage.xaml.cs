@@ -42,6 +42,34 @@ public sealed partial class LearningPage : Page
         PersonalizationNote.Text = settings.LearningEnabled
             ? "確定した語句を控えて学習し直します。切ると、その控えも消えます。"
             : "学習がオフのあいだは使えません。";
+        ShowBaseModelStatus(settings);
+    }
+
+    /// <summary>
+    /// Says whether the base language model personalisation needs is actually
+    /// installed (decision 0034).
+    /// </summary>
+    /// <remarks>
+    /// Re-read on every change rather than once, because the message depends on
+    /// the switch: with personalisation off this is a note, and with it on and
+    /// the model missing it is the reason nothing is happening.
+    ///
+    /// This is the failure this project has walked into twice — the absence is
+    /// invisible at the point where the effect is expected, so it reads as the
+    /// feature not working rather than as a missing file.
+    /// </remarks>
+    private void ShowBaseModelStatus(EngineSettings settings)
+    {
+        var installed = ModelState.IsBaseLanguageModelInstalled;
+        var wanted = settings.PersonalizationActive;
+
+        BaseModelNotice.Title = installed
+            ? "個人化用のモデル"
+            : wanted ? "個人化は動作しません" : "個人化用のモデルがありません";
+        BaseModelNotice.Message = ModelState.DescribeBaseLanguageModel(wanted);
+        BaseModelNotice.Severity = !installed && wanted
+            ? InfoBarSeverity.Warning
+            : InfoBarSeverity.Informational;
     }
 
     private void OnToggled(object sender, RoutedEventArgs e) => Save();
