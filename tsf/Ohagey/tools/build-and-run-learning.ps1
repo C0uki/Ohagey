@@ -7,7 +7,11 @@
 #
 # Needs the azooKey build of llama.cpp: upstream's cannot load the zenz model,
 # and this measures nothing without it. See docs/local-setup.md.
-param([switch]$KeepIntermediates)
+# `-Reading` matters more than it looks. Personalisation cannot move the
+# first character of a candidate, so a reading whose alternatives all differ
+# there measures the learning store alone. The default does exactly that;
+# "きかいをつくる" offers 機会をつくる and 機会を作る, which share 機会を.
+param([string]$Reading = '', [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -60,7 +64,11 @@ try {
         New-Item -Path $key -Force | Out-Null
         New-ItemProperty -Path $key -Name "LearningEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
         New-ItemProperty -Path $key -Name "PersonalizationEnabled" -Value $phase.Personalization -PropertyType DWord -Force | Out-Null
-        & "$out\engine-learning.exe" $phase.Label
+        if ($Reading) {
+            & "$out\engine-learning.exe" $phase.Label $Reading
+        } else {
+            & "$out\engine-learning.exe" $phase.Label
+        }
     }
 } finally {
     Stop-Engine

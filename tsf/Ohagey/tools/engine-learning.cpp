@@ -103,6 +103,14 @@ int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
     const std::wstring label = (argc > 1) ? argv[1] : L"(unlabelled)";
+    // The reading, because which one is chosen decides what this can show.
+    //
+    // Personalisation cannot touch the first character of a candidate
+    // (`ZenzContext` skips the mixing while the generated prefix is empty),
+    // so a reading whose alternatives all differ at character one measures
+    // the learning store and nothing else. きしゃのきしゃ is such a reading;
+    // きかいをつくる offers 機会をつくる and 機会を作る, which share 機会を.
+    const std::wstring reading = (argc > 2) ? argv[2] : L"きしゃのきしゃ";
 
     // Opened directly rather than through Connect, which would launch an engine
     // against the real profile before the redirect below.
@@ -142,7 +150,6 @@ int wmain(int argc, wchar_t** argv)
     printf("  model loaded: %s\n", ping.modelLoaded ? "yes" : "NO — this measures nothing");
     if (!ping.modelLoaded) return 1;
 
-    const std::wstring reading = L"きしゃのきしゃ";
 
     ConvertResult before;
     if (client.Convert(reading, 5, L"", &before) != CallResult::Ok || before.candidates.size() < 2)

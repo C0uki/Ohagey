@@ -122,7 +122,16 @@ final class PersonalLanguageModel {
     private func ensureBaseModel() throws -> Bool {
         if EnginePaths.isBaseLanguageModelAvailable {
             usesRealBaseModel = true
-            log("personalisation: using the installed base language model")
+            if EnginePaths.isBaseLanguageModelResumable {
+                log("personalisation: using the installed base language model")
+            } else {
+                // Loud, because everything else looks fine: the model is
+                // there, it loads, and the switch in the settings app is
+                // available. It just cannot be continued from, and the only
+                // personal model we could build without that is the one
+                // measured to break 8-18 of 30 conversions.
+                log("personalisation: the installed base language model cannot be resumed from (no _c_bc) — personalisation will do nothing rather than train a model that damages unrelated conversions (decision 0034)")
+            }
             return true
         }
         usesRealBaseModel = false
@@ -220,15 +229,39 @@ final class PersonalLanguageModel {
         // calibration problem behind all of this is understood (decision 0034,
         // addendum 10). 3rd with the rest of the language intact beats 1st with
         // half of it broken.
+        // ── And nothing happens unless the base can be resumed from ────────
+        //
+        // This is the guard that keeps the switch from being a trap.
+        //
+        // A personal model trained from nothing assigns the smoothing floor
+        // to every token the user has not typed, and subtracting the base
+        // then penalises the whole rest of the language: 8 to 18 of 30
+        // otherwise-correct conversions lost, measured. Trained by resuming
+        // from the base it is the same model plus the user's counts, the
+        // difference outside their own text is 0.00 logits, and the same
+        // measurement breaks nothing while still promoting the target.
+        //
+        // The difference is one file. `Miwa-Keita/base_n5_lm` publishes four
+        // and `SwiftTrainer(baseFilePattern:)` needs five, so on a machine
+        // with the shipped base the only personal model we can build is the
+        // harmful one. Rather than let the setting produce that, it produces
+        // nothing — the user gets no personalisation instead of a worse IME,
+        // and the settings app says which it is.
+        //
+        // `usesRealBaseModel` matters as much as the file count: the empty
+        // base generated when none is installed has all five files and
+        // resuming from it is training from nothing by another name.
         guard settings.personalizationActive,
               baseIsReady,
+              usesRealBaseModel,
+              EnginePaths.isBaseLanguageModelResumable,
               let generation = publishedGeneration
         else { return nil }
 
         return .init(
-            baseNgramLanguageModel: usesRealBaseModel
-                ? EnginePaths.baseLanguageModelPrefix
-                : PersonalizationLayout.basePrefix,
+            // Always the installed one: the guard above has already refused
+            // every other case.
+            baseNgramLanguageModel: EnginePaths.baseLanguageModelPrefix,
             personalNgramLanguageModel: PersonalizationLayout.modelPrefix(generation: generation),
             n: Self.ngramOrder,
             d: Self.discount,
