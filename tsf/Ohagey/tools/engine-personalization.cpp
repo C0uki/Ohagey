@@ -331,13 +331,54 @@ int wmain(int argc, wchar_t** argv)
     // very little: the personal model is a character n-gram trained on exactly
     // that string, so it would rise whether or not the mechanism does anything
     // interesting to a *conversion*.
+    //
+    // ── And it has to start with the same character as the top candidate ──
+    //
+    // `ZenzContext` skips personalisation entirely while the generated
+    // prefix is empty:
+    //
+    //     if !prefix.isEmpty { baseProb = baseLM.bulkPredict(prefix)... }
+    //     else { baseProb = Array(repeating: 0, count: n_vocab) }
+    //
+    // SwiftNgram has no unigram probabilities, so **the first character of a
+    // candidate can never be personalised**. A target that differs from the
+    // top candidate at character one asks the mechanism for something it
+    // structurally cannot do, and the harness then reports that
+    // personalisation does not work.
+    //
+    // That is what it did report. Scanning from the end picked the katakana
+    // passthrough — キカイヲツクル against 機会をつくる — which differs at
+    // character one. Choosing 機会を作る instead, which shares 機会を, the
+    // same run promotes it to 1st.
+    //
+    // So: prefer a candidate sharing the first character with the top one.
+    // Fall back to the old choice when there is none, and say so — a run
+    // that cannot promote still measures whether anything breaks, but its
+    // rank result means nothing.
     std::wstring target;
-    for (size_t i = before.candidates.size(); i-- > 0;)
+    bool targetIsReachable = false;
+    const std::wstring topFirst =
+        before.candidates.empty() ? std::wstring() : before.candidates[0].text.substr(0, 1);
+
+    for (size_t i = 1; i < before.candidates.size(); ++i)
     {
         if (before.candidates[i].reading != reading) continue;
         if (before.candidates[i].text == reading) continue;
+        if (before.candidates[i].text.substr(0, 1) != topFirst) continue;
         target = before.candidates[i].text;
+        targetIsReachable = true;
         break;
+    }
+
+    if (target.empty())
+    {
+        for (size_t i = before.candidates.size(); i-- > 0;)
+        {
+            if (before.candidates[i].reading != reading) continue;
+            if (before.candidates[i].text == reading) continue;
+            target = before.candidates[i].text;
+            break;
+        }
     }
     if (target.empty())
     {
@@ -350,6 +391,12 @@ int wmain(int argc, wchar_t** argv)
     const int rankBefore = RankOf(before, target);
     printf("  target: rank %d\n", rankBefore + 1);
     Say("          ", target);
+    if (!targetIsReachable)
+    {
+        printf("  NOTE: no candidate shares its first character with the top one, so this\n"
+               "        target cannot be promoted however well personalisation works.\n"
+               "        The collateral numbers below still hold; the rank does not.\n");
+    }
 
     // ── A reading that has nothing to do with any of this ──────────────────
     //
