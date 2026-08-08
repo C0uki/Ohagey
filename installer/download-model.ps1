@@ -23,13 +23,13 @@ param(
 
     # Expected SHA-256, pinned in ohagey.iss.
     #
-    # Not paranoia about the transport -- this is HTTPS -- but about the source.
-    # The Zenzai weights and the base language model are fetched from a
-    # third-party Hugging Face repository that can be updated at any time, and
-    # one of them (`base_n5_lm`) states no licence at all. Pinning means an
-    # installer that was tested against a particular file keeps installing that
-    # file, and a change upstream shows up as a skipped download rather than as
-    # a user with a model nobody here has ever run.
+    # Not paranoia about the transport -- this is HTTPS -- but about what is on
+    # the other end. The Zenzai weights come from a third-party Hugging Face
+    # repository that can be updated at any time; the base language model is
+    # our own release asset, which can be replaced by accident. Either way,
+    # pinning means an installer tested against a particular file keeps
+    # installing that file, and a change shows up as a skipped download rather
+    # than as a user with a model nobody here has ever run.
     [string]$Sha256 = "",
 
     [int]$TimeoutSec = 600,

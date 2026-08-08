@@ -64,11 +64,11 @@ Name: "{app}\models"
 ; what happened in {app}\models\download.log.
 ;
 ; Every file is pinned by SHA-256. Not for the transport — this is HTTPS — but
-; for the source: these come from third-party Hugging Face repositories that can
-; change at any time. The hashes below are the files this build was tested
-; against, verified against upstream on 2026-08-04. A change upstream then shows
-; up as a skipped download rather than as a user running weights nobody here has
-; ever seen.
+; for what is on the other end. The Zenzai weights come from a third-party
+; Hugging Face repository that can change at any time; the base language model
+; is ours, and pinning it means a release asset replaced by accident shows up
+; as a skipped download rather than as a user running a model nobody here has
+; tested. The hashes are what this build was tested against.
 ;
 ; `powershell.exe` rather than naming the .ps1 directly: Inno hands Filename to
 ; whatever is registered for the extension, which on a default Windows is
@@ -77,24 +77,50 @@ Name: "{app}\models"
 ; ── Zenzai weights (decisions 0008 / 0009 — CC-BY-SA 4.0) ──────────────────
 ; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/ggml-model-Q5_K_M.gguf -Dest ""{app}\models\ggml-model-Q5_K_M.gguf"" -Sha256 4DE930C06BEF8C263AA1AA40684AF206DB4CE1B96375B3B8ED0EA508E0B14F6C"; Flags: runhidden; StatusMsg: "Downloading conversion model..."
 
-; ── Base language model (decision 0034) ────────────────────────────────────
+; -- Base language model (decisions 0009 / 0034) ---------------------------
 ;
-; Four files, 42.6 MB. WITHOUT THESE, PERSONALISATION IS INERT — not weak,
-; inert. The engine falls back to an empty base model, and Zenzai's
-; alpha * (log p_personal - log p_base) against a base that scores every token
-; identically moves nothing. Measured: 40 confirmations changed no ranking and
-; broke none of 30 eval items, against 2nd->1st and 18 broken with the real
-; base. Switching personalisation on in the settings app does nothing without
-; these files.
+; Five files, 9.4 MB, built by us. `tools/build-base-lm.ps1` produces them
+; from an archived Wikipedia corpus; both are published as release assets.
 ;
-; LICENCE: Miwa-Keita/base_n5_lm states NO licence — no licence field, no tag,
-; no LICENSE file (checked 2026-08-04). Unlike the Zenzai weights (CC-BY-SA 4.0)
-; there is nothing to comply with and nothing to attribute under. Nothing is
-; redistributed here — the files are fetched on the user's own machine from the
-; author's own repository — but that is a narrower position than decision 0009
-; takes for the weights, and it is written down in decision 0009's addendum
-; rather than assumed.
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_c_abc.marisa -Dest ""{app}\models\lm_c_abc.marisa"" -Sha256 AB9CFB9B4231B1187934109776339001A9CB089A9D0FA8ED160C79508C8783A3"; Flags: runhidden; StatusMsg: "Downloading personalisation model (1 of 4)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_r_xbx.marisa -Dest ""{app}\models\lm_r_xbx.marisa"" -Sha256 F9594D23E2F15A8E6D51811F15B23E23BFC7CEFD24B8B1C06F3F0366CE5BF555"; Flags: runhidden; StatusMsg: "Downloading personalisation model (2 of 4)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_u_abx.marisa -Dest ""{app}\models\lm_u_abx.marisa"" -Sha256 6656BB6BEA01F75A2156009B7B104ADBD6BF897CFF47635FD907215F2BC727E9"; Flags: runhidden; StatusMsg: "Downloading personalisation model (3 of 4)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_u_xbc.marisa -Dest ""{app}\models\lm_u_xbc.marisa"" -Sha256 69F43384DC45FD16F45E19CBDF242E67F5F8433168DADFE2012ABB7657D38041"; Flags: runhidden; StatusMsg: "Downloading personalisation model (4 of 4)..."
+; WITHOUT THESE, PERSONALISATION DOES NOTHING. The engine refuses to apply a
+; personal model unless it can be trained by resuming from this one, because
+; the alternative -- training from nothing -- is what breaks 8 to 18 of 30
+; unrelated conversions (decision 0034). Missing files therefore cost the
+; feature, not the user's conversion quality.
+;
+; -- Why not Miwa-Keita/base_n5_lm any more --------------------------------
+;
+; It was here until 2026-08-04 and has been removed. Two independent reasons,
+; either of which is enough:
+;
+;   * it publishes four files and SwiftTrainer(baseFilePattern:) needs five.
+;     With four, the only personal model that can be built is the harmful
+;     one -- so shipping it meant shipping a setting that makes conversion
+;     worse;
+;   * it states no licence at all (no field, no tag, no LICENSE file), which
+;     decision 0009 could only meet with a narrow "we do not redistribute"
+;     position.
+;
+; Ours is 9.4 MB rather than 42.6 MB, and that is deliberate. The personal
+; model is trained by resuming from this one, so it ends up the same size,
+; and each retraining costs about a second and 48 MB of peak memory per
+; megabyte of base -- on the user's machine, every time they correct a few
+; words. 42.6 MB would mean 41 seconds and 2 GB. 9.4 MB scores the same
+; 30-of-30 on the evaluation set (decision 0034).
+;
+; LICENCE: CC BY-SA 4.0, inherited from Japanese Wikipedia. The same licence
+; as the Zenzai weights, so decision 0009's arrangement covers it unchanged:
+; a separate artefact, attributed in the settings app, with Ohagey's own code
+; staying MIT. The corpus is published alongside because share-alike is about
+; the source, not only the derivative.
+;
+; TODO: the release does not exist yet. Publish lm_*.marisa, corpus.txt and
+; corpus.LICENSE.txt from tools/build-base-lm.ps1 as `base-lm-v1`, then
+; uncomment. The hashes below are of the files that script produced here on
+; 2026-08-04 and are what has been tested; re-check them against whatever is
+; actually uploaded.
+; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_abc.marisa -Dest ""{app}\models\lm_c_abc.marisa"" -Sha256 4F164B78FF9D33694BD0ADB8A82D8D6EA833EE111F71D16CDE2E765EDBA07F30"; Flags: runhidden; StatusMsg: "Downloading personalisation model (1 of 5)..."
+; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_bc.marisa -Dest ""{app}\models\lm_c_bc.marisa"" -Sha256 9CA26F3EB02691AE7FDB3154ADE612E107B87DBBE4CA0F67ACF6EFD4744E3CC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (2 of 5)..."
+; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_r_xbx.marisa -Dest ""{app}\models\lm_r_xbx.marisa"" -Sha256 31BC54FCB7041847028E58F6BAC52703BAC785FAC10C5B6B17079C312A76D059"; Flags: runhidden; StatusMsg: "Downloading personalisation model (3 of 5)..."
+; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_abx.marisa -Dest ""{app}\models\lm_u_abx.marisa"" -Sha256 9037787429C11D75903C9BB9F0C574E6DD146966D2800FE368DCDCAF1138ABC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (4 of 5)..."
+; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_xbc.marisa -Dest ""{app}\models\lm_u_xbc.marisa"" -Sha256 D10C5413F543F7D8EC761ED81C99D4DE49C9608CCE003B2195DA6A218BB02FFD"; Flags: runhidden; StatusMsg: "Downloading personalisation model (5 of 5)..."

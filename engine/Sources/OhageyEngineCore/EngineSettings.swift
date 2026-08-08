@@ -35,24 +35,41 @@ public struct EngineSettings: Sendable, Equatable {
     /// plain-text corpus of committed phrases on disk in order to retrain from
     /// it. Switching learning off switches this off too — never the reverse.
     ///
-    /// ── Off by default (decision 0034, addendum 11) ────────────────────────
+    /// ── On by default, since the base model ships (decision 0034) ─────────
     ///
-    /// It works — a confirmed candidate does climb to the top, which is the
-    /// whole claim decision 0034 rests on. It also breaks conversions the user
-    /// never touched: measured against 32 readings with known-correct answers,
-    /// confirming one phrase cost **15 to 18** of the 30 that had been right.
-    /// A corpus 200 times larger moved that from 18 to 15, so it is not the
-    /// personal model being under-trained; the two language models being mixed
-    /// are on scales that do not subtract meaningfully. Turning alpha down to
-    /// where it stops breaking things is also where it stops working.
+    /// It was off for a month, and the reason was measured: confirming one
+    /// phrase cost 15 to 18 of 30 otherwise-correct conversions. That turned
+    /// out to be a consequence of *how the personal model was built*, not of
+    /// the feature. Trained from nothing it assigns the smoothing floor to
+    /// every word the user has not typed, and subtracting the base then
+    /// penalises the whole rest of the language. Trained by resuming from the
+    /// base it is the same model with the user's counts added, the difference
+    /// outside their own text is 0.00 logits, and the evaluation set comes
+    /// through untouched — 30 of 30 — while the confirmed candidate still
+    /// climbs to the top.
     ///
-    /// So it ships off, and stays in the settings app for anyone who wants it.
-    /// Learning itself is untouched and still on by default — the converter's
-    /// own store keeps working, which is what decision 0025 is about.
+    /// Resuming needs a base model with all five files, which the published
+    /// one does not have. Ohagey now trains and ships its own, so the
+    /// condition holds on an ordinary installation.
     ///
-    /// One consequence worth knowing: with this off, no plain-text corpus of
-    /// what the user typed is written at all.
-    public var personalizationEnabled: Bool = false
+    /// `personalizationMode` refuses to apply anything when the base cannot
+    /// be resumed from, so this being on cannot reintroduce the damage on a
+    /// machine where the download failed: the feature does nothing there
+    /// rather than doing harm.
+    ///
+    /// ── What being on costs the user ──────────────────────────────────────
+    ///
+    /// A plain-text file of the phrases they confirmed, kept so the model can
+    /// be retrained from it. The converter's own learning store records the
+    /// same thing, but opaquely; this one can be read in Notepad. It lives
+    /// under `%LOCALAPPDATA%`, the settings app erases it, and switching
+    /// either switch off deletes it (decision 0025).
+    ///
+    /// Retraining also costs about a second and 48 MB of peak memory per
+    /// megabyte of base — the reason the shipped base is 9.4 MB rather than
+    /// the 42.6 MB of the published one, and the reason runs are rate-limited
+    /// to a tenth of the machine (`PersonalizationLayout.trainingDutyCycle`).
+    public var personalizationEnabled: Bool = true
     /// How hard the personal model is allowed to push Zenzai's ranking.
     ///
     /// azooKey-Desktop, which ships the same converter and the same base
