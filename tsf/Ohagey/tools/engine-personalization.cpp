@@ -481,7 +481,12 @@ int wmain(int argc, wchar_t** argv)
     printf("  waiting for the engine to retrain...\n");
     int rankAfter = rankBefore;
     ConvertResult after;
-    for (int attempt = 0; attempt < 60; ++attempt)
+    // 480 half-seconds. Long because the wait is set by the base model, not
+    // by the machine: resuming from a 42.6 MB base takes about forty seconds
+    // per training run. The loop still exits as soon as the rank improves, so
+    // the budget is only spent when nothing is going to happen — which is
+    // exactly the case worth being sure about.
+    for (int attempt = 0; attempt < 480; ++attempt)
     {
         Sleep(500);
         if (client.Convert(reading, nBest, L"", &after) != CallResult::Ok) continue;

@@ -11,7 +11,10 @@
 # first character of a candidate, so a reading whose alternatives all differ
 # there measures the learning store alone. The default does exactly that;
 # "きかいをつくる" offers 機会をつくる and 機会を作る, which share 機会を.
-param([string]$Reading = '', [switch]$KeepIntermediates)
+# `-SettleSeconds` has to grow with the base model: one retraining run takes
+# about a second per megabyte of base (1.4 MB -> 1.2s, 42.6 MB -> 41s), and
+# measuring before it lands looks exactly like personalisation not working.
+param([string]$Reading = '', [int]$SettleSeconds = 20, [switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -64,11 +67,8 @@ try {
         New-Item -Path $key -Force | Out-Null
         New-ItemProperty -Path $key -Name "LearningEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
         New-ItemProperty -Path $key -Name "PersonalizationEnabled" -Value $phase.Personalization -PropertyType DWord -Force | Out-Null
-        if ($Reading) {
-            & "$out\engine-learning.exe" $phase.Label $Reading
-        } else {
-            & "$out\engine-learning.exe" $phase.Label
-        }
+        $reading = if ($Reading) { $Reading } else { 'きしゃのきしゃ' }
+        & "$out\engine-learning.exe" $phase.Label $reading $SettleSeconds
     }
 } finally {
     Stop-Engine

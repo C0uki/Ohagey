@@ -111,6 +111,13 @@ int wmain(int argc, wchar_t** argv)
     // the learning store and nothing else. きしゃのきしゃ is such a reading;
     // きかいをつくる offers 機会をつくる and 機会を作る, which share 機会を.
     const std::wstring reading = (argc > 2) ? argv[2] : L"きしゃのきしゃ";
+    // How long to let the retraining finish before measuring.
+    //
+    // Has to be a knob because the cost is set by the base model: resuming
+    // from a 1.4 MB base takes about a second, and from a 42.6 MB one about
+    // forty. Waiting too little does not look like waiting too little — it
+    // looks like personalisation doing nothing.
+    const int settleSeconds = (argc > 3) ? _wtoi(argv[3]) : 20;
 
     // Opened directly rather than through Connect, which would launch an engine
     // against the real profile before the redirect below.
@@ -188,7 +195,7 @@ int wmain(int argc, wchar_t** argv)
         // takes ~5s. Measuring immediately reported "personalisation does
         // nothing" for every resumed run, which is the opposite of what a
         // longer look shows.
-        Sleep(20000);
+        Sleep(static_cast<DWORD>(settleSeconds) * 1000);
 
         const int total = (commits == 3) ? 3 : 40;
 

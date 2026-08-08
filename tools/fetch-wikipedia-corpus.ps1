@@ -34,7 +34,11 @@ param(
     # than this are usually tables that survived the plain-text extraction.
     [int]$MinimumLength = 12,
     [int]$MaximumLength = 120,
-    [int]$PauseMilliseconds = 300
+    [int]$PauseMilliseconds = 300,
+    # Adds to an existing corpus instead of replacing it, so it can be grown
+    # over several runs. Duplicates are dropped either way — the articles are
+    # drawn at random and the same one does come round again.
+    [switch]$Append
 )
 
 $ErrorActionPreference = "Stop"
@@ -45,6 +49,10 @@ $userAgent = "Ohagey-corpus-builder/0.1 (https://github.com/C0uki/Ohagey; base l
 $endpoint = "https://ja.wikipedia.org/w/api.php"
 
 $sentences = [System.Collections.Generic.HashSet[string]]::new()
+if ($Append -and (Test-Path $Destination)) {
+    foreach ($existing in [System.IO.File]::ReadAllLines($Destination)) { [void]$sentences.Add($existing) }
+    Write-Host "starting from $($sentences.Count) sentences already in $Destination"
+}
 $fetched = 0
 $calls = [math]::Ceiling($Articles / $batch)
 
