@@ -169,7 +169,26 @@ int wmain(int argc, wchar_t** argv)
     // same word a few times in an afternoon; forty is a week of it.
     for (const int commits : { 3, 37 })
     {
-        for (int i = 0; i < commits; ++i) client.Commit(reading, target, true);
+        // Re-converted before each commit. The engine only remembers the
+        // last few readings it answered, and a commit for one it has
+        // forgotten is dropped (decision 0034).
+        for (int i = 0; i < commits; ++i)
+        {
+            ConvertResult again;
+            client.Convert(reading, 5, L"", &again);
+            client.Commit(reading, target, true);
+        }
+
+        // ── Wait for the retraining, then measure ──────────────────────
+        //
+        // Fixed, and generous, and *not* a poll that stops when it likes
+        // the answer — decision 0034 has been burned by that. It is here
+        // because retraining time depends on how the personal model is
+        // built: from nothing it takes ~30ms, and resumed from the base it
+        // takes ~5s. Measuring immediately reported "personalisation does
+        // nothing" for every resumed run, which is the opposite of what a
+        // longer look shows.
+        Sleep(20000);
 
         const int total = (commits == 3) ? 3 : 40;
 
