@@ -262,16 +262,17 @@ final class PersonalizationLayoutTests: XCTestCase {
 // MARK: - Settings
 
 final class PersonalizationSettingsTests: XCTestCase {
-    func testLearningIsOnByDefaultAndPersonalisationIsNot() {
-        // Deliberately different, and the difference is the whole of decision
-        // 0034's addendum 11: learning works and is wanted; personalisation
-        // works and costs more than it gives — measured at 15 to 18 of 30
-        // known-correct conversions broken by confirming a single phrase.
+    func testBothLearningSwitchesAreOnByDefault() {
+        // They were deliberately different for a month: personalisation broke
+        // 15 to 18 of 30 known-correct conversions when one phrase was
+        // confirmed. That was how the personal model was built — from nothing
+        // rather than by resuming from a base — and Ohagey now ships a base it
+        // can resume from, which leaves the same measurement at 30 of 30.
         //
-        // Pinned in one test so that "tidying up" the two into agreement fails
-        // here rather than shipping.
+        // Pinned so that flipping either one back is a decision someone makes
+        // here, with the decision log open, rather than an edit nobody notices.
         XCTAssertTrue(EngineSettings.default.learningEnabled)
-        XCTAssertFalse(EngineSettings.default.personalizationActive)
+        XCTAssertTrue(EngineSettings.default.personalizationActive)
     }
 
     func testTurningLearningOffAlsoTurnsPersonalizationOff() {
@@ -320,17 +321,30 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertEqual(EngineSettings.maximumPersonalizationAlpha, 1.5, accuracy: 1e-9)
     }
 
-    func testASettingsKeyThatSaysNothingAboutItLeavesItOff() {
+    func testASettingsKeyThatSaysNothingAboutItTakesTheDefault() {
         // A settings app older than this feature writes neither value, and the
-        // default stands in (decision 0014's leniency rule). That default is
-        // now off, so someone upgrading into this version does not silently
-        // acquire a feature that breaks their conversions.
+        // default stands in (decision 0014's leniency rule).
+        //
+        // That default is now on, which is only safe because the engine
+        // refuses to personalise unless the base model can be resumed from:
+        // an upgrade that has not fetched the base yet inherits a switch that
+        // does nothing, not one that damages conversions.
         let settings = EngineSettings(values: [
             SettingsSchema.Key.learningEnabled: .number(1),
             SettingsSchema.Key.backend: .text("cpu"),
         ])
-        XCTAssertFalse(settings.personalizationActive)
+        XCTAssertTrue(settings.personalizationActive)
         XCTAssertEqual(settings.personalizationAlpha, EngineSettings.default.personalizationAlpha)
+    }
+
+    func testAStoreThatTurnsItOffKeepsItOff() {
+        // The half that matters now the default flipped: someone who switched
+        // it off must not have it switched back on by an upgrade.
+        let settings = EngineSettings(values: [
+            SettingsSchema.Key.learningEnabled: .number(1),
+            SettingsSchema.Key.personalizationEnabled: .number(0),
+        ])
+        XCTAssertFalse(settings.personalizationActive)
     }
 
     func testAStoreThatTurnsItOnGetsIt() {

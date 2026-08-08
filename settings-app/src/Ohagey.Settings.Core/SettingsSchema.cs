@@ -100,16 +100,25 @@ public sealed record EngineSettings
 
     /// <summary>Whether committed text also re-ranks Zenzai's output.</summary>
     /// <remarks>
-    /// Off by default (decision 0034, addendum 11). It works — a confirmed
-    /// candidate does climb to the top — but it also breaks conversions the
-    /// user never touched: measured against 32 readings with known-correct
-    /// answers, confirming one phrase cost 15 to 18 of the 30 that had been
-    /// right. A corpus 200 times larger moved that from 18 to 15, so it is not
-    /// a matter of training it more.
+    /// On by default since the base language model ships (decision 0034).
     ///
-    /// Learning itself is unaffected and still on by default.
+    /// It was off for a month because confirming one phrase cost 15 to 18 of
+    /// 30 otherwise-correct conversions. That was a consequence of building
+    /// the personal model from nothing rather than of the feature: trained by
+    /// resuming from the base it leaves the evaluation set at 30 of 30 while
+    /// still promoting the confirmed candidate. Resuming needs a five-file
+    /// base, which Ohagey now trains and ships.
+    ///
+    /// The engine refuses to personalise at all when the base cannot be
+    /// resumed from, so on a machine where the download failed this does
+    /// nothing rather than doing harm.
+    ///
+    /// Mirrors the engine's own default, and the pair is pinned in
+    /// SchemaAgreementTests: the engine keeps its default for anything this
+    /// app has not written, so a disagreement shows the user one thing while
+    /// the engine does another.
     /// </remarks>
-    public bool PersonalizationEnabled { get; init; } = false;
+    public bool PersonalizationEnabled { get; init; } = true;
 
     /// <summary>How hard the personal model may push Zenzai's ranking, 0–100.</summary>
     /// <remarks>
