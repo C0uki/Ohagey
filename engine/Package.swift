@@ -39,6 +39,8 @@ let package = Package(
         .executable(name: "OhageyEngine", targets: ["OhageyEngine"]),
         // A diagnostic, not part of the product. See Sources/OhageyLMProbe.
         .executable(name: "OhageyLMProbe", targets: ["OhageyLMProbe"]),
+        // Also a diagnostic. See Sources/OhageyLMTrain.
+        .executable(name: "OhageyLMTrain", targets: ["OhageyLMTrain"]),
     ],
     dependencies: [
         // AzooKeyKanaKanjiConverter — a fork of the 0.8.5 tag, pinned by commit
@@ -88,6 +90,25 @@ let package = Package(
         // Deliberately not a mode of the engine: it has no business being
         // reachable from a running IME, and the installer ships
         // OhageyEngine.exe alone.
+        // Trains an n-gram model from a text file, so a base model can be
+        // built here rather than taken from a repository that publishes four
+        // of the five files and no licence (decision 0034, option 3).
+        //
+        // Same reasoning as OhageyLMProbe for keeping it out of the engine.
+        .executableTarget(
+            name: "OhageyLMTrain",
+            dependencies: [
+                .product(name: "EfficientNGram", package: "AzooKeyKanaKanjiConverter"),
+            ],
+            path: "Sources/OhageyLMTrain",
+            swiftSettings: [
+                .swiftLanguageMode(.v5),
+                // EfficientNGram reaches llama.cpp through a package built
+                // with C++ interop, and Swift will not import such a module
+                // without it.
+                .interoperabilityMode(.Cxx)
+            ]
+        ),
         .executableTarget(
             name: "OhageyLMProbe",
             dependencies: [

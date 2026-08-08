@@ -217,8 +217,41 @@ public enum EnginePaths {
 
     /// Whether the base model is installed.
     public static var isBaseLanguageModelAvailable: Bool {
+        hasBaseLanguageModel(suffixes: baseLanguageModelSuffixes)
+    }
+
+    /// The fifth file, needed only to *continue* training from the base.
+    ///
+    /// `SwiftTrainer(baseFilePattern:)` loads all five; inference reads four.
+    /// Kept as its own list rather than folded into the one above so that a
+    /// base model which cannot be resumed from is still perfectly usable for
+    /// what it is mostly for.
+    public static let baseLanguageModelResumeSuffixes =
+        baseLanguageModelSuffixes + ["_c_bc"]
+
+    /// Whether the personal model can be trained *starting from* the base.
+    ///
+    /// This is the difference between the two ways of building a personal
+    /// model, and it decides how the mixing behaves (decision 0034):
+    ///
+    /// - Trained from nothing, the personal model assigns the smoothing floor
+    ///   to every token the user has not typed. Subtracting the base then
+    ///   produces a large penalty on the whole rest of the language, which is
+    ///   what breaks unrelated conversions.
+    /// - Resumed from the base, it starts as a copy of the base and the user's
+    ///   text only adds counts. Anything they have not typed keeps the base's
+    ///   own probability, the difference is ~0, and there is nothing to
+    ///   subtract.
+    ///
+    /// False for `Miwa-Keita/base_n5_lm`, which publishes only four files —
+    /// which is why decision 0034 records this route as blocked for that model.
+    public static var isBaseLanguageModelResumable: Bool {
+        hasBaseLanguageModel(suffixes: baseLanguageModelResumeSuffixes)
+    }
+
+    private static func hasBaseLanguageModel(suffixes: [String]) -> Bool {
         let prefix = baseLanguageModelPrefix
-        return baseLanguageModelSuffixes.allSatisfy {
+        return suffixes.allSatisfy {
             FileManager.default.fileExists(atPath: "\(prefix)\($0).marisa")
         }
     }

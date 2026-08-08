@@ -407,4 +407,30 @@ final class RegisteredWordTrainingTests: XCTestCase {
         let flattened = PersonalizationLayout.trainingLines(forRegisteredWords: ["前半\n後半"])
         XCTAssertEqual(Set(flattened), ["前半 後半"])
     }
+
+    // MARK: - How often a run may happen (decision 0034)
+
+    func testTheCooldownIsProportionalToTheRunItFollows() {
+        // The whole point: the interval is set by what the last run actually
+        // cost, so it adjusts to the base model and to the machine without
+        // anyone tuning a constant.
+        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 1.2), 10.8, accuracy: 0.001)
+        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 41.0), 369.0, accuracy: 0.001)
+    }
+
+    func testTheCooldownHonoursTheStatedDutyCycle() {
+        // run / (run + cooldown) has to come out as the budget, or the
+        // comment on `trainingDutyCycle` is a lie.
+        for run in [0.5, 1.2, 7.9, 41.0] {
+            let share = run / (run + PersonalizationLayout.cooldownSeconds(afterRunOf: run))
+            XCTAssertEqual(share, PersonalizationLayout.trainingDutyCycle, accuracy: 0.0001)
+        }
+    }
+
+    func testAZeroLengthRunDoesNotHoldAnythingUp() {
+        // Nothing measurable was spent, so there is nothing to pay back — and
+        // a clock that reports 0 must not freeze training.
+        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 0), 0)
+        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: -1), 0)
+    }
 }

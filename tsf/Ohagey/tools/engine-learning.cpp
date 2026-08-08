@@ -103,6 +103,21 @@ int wmain(int argc, wchar_t** argv)
 {
     SetConsoleOutputCP(CP_UTF8);
     const std::wstring label = (argc > 1) ? argv[1] : L"(unlabelled)";
+    // The reading, because which one is chosen decides what this can show.
+    //
+    // Personalisation cannot touch the first character of a candidate
+    // (`ZenzContext` skips the mixing while the generated prefix is empty),
+    // so a reading whose alternatives all differ at character one measures
+    // the learning store and nothing else. きしゃのきしゃ is such a reading;
+    // きかいをつくる offers 機会をつくる and 機会を作る, which share 機会を.
+    const std::wstring reading = (argc > 2) ? argv[2] : L"きしゃのきしゃ";
+    // How long to let the retraining finish before measuring.
+    //
+    // Has to be a knob because the cost is set by the base model: resuming
+    // from a 1.4 MB base takes about a second, and from a 42.6 MB one about
+    // forty. Waiting too little does not look like waiting too little — it
+    // looks like personalisation doing nothing.
+    const int settleSeconds = (argc > 3) ? _wtoi(argv[3]) : 20;
 
     // Opened directly rather than through Connect, which would launch an engine
     // against the real profile before the redirect below.
@@ -142,7 +157,6 @@ int wmain(int argc, wchar_t** argv)
     printf("  model loaded: %s\n", ping.modelLoaded ? "yes" : "NO — this measures nothing");
     if (!ping.modelLoaded) return 1;
 
-    const std::wstring reading = L"きしゃのきしゃ";
 
     ConvertResult before;
     if (client.Convert(reading, 5, L"", &before) != CallResult::Ok || before.candidates.size() < 2)
@@ -162,7 +176,26 @@ int wmain(int argc, wchar_t** argv)
     // same word a few times in an afternoon; forty is a week of it.
     for (const int commits : { 3, 37 })
     {
-        for (int i = 0; i < commits; ++i) client.Commit(reading, target, true);
+        // Re-converted before each commit. The engine only remembers the
+        // last few readings it answered, and a commit for one it has
+        // forgotten is dropped (decision 0034).
+        for (int i = 0; i < commits; ++i)
+        {
+            ConvertResult again;
+            client.Convert(reading, 5, L"", &again);
+            client.Commit(reading, target, true);
+        }
+
+        // ── Wait for the retraining, then measure ──────────────────────
+        //
+        // Fixed, and generous, and *not* a poll that stops when it likes
+        // the answer — decision 0034 has been burned by that. It is here
+        // because retraining time depends on how the personal model is
+        // built: from nothing it takes ~30ms, and resumed from the base it
+        // takes ~5s. Measuring immediately reported "personalisation does
+        // nothing" for every resumed run, which is the opposite of what a
+        // longer look shows.
+        Sleep(static_cast<DWORD>(settleSeconds) * 1000);
 
         const int total = (commits == 3) ? 3 : 40;
 
