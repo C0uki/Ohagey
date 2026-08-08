@@ -279,6 +279,17 @@ final class PersonalLanguageModel {
     /// `nonisolated` because the training run reads them from off the main
     /// actor. Without it these inherit the type's isolation, which is a warning
     /// today and an error in the Swift 6 language mode.
+    /// When the next training run may start.
+    ///
+    /// Set from the duration of the last one (see
+    /// `PersonalizationLayout.cooldownSeconds`). Distant past by default so
+    /// the first run is never delayed.
+    private var nextRunNotBefore = Date.distantPast
+
+    /// Whether a deferred run is already queued, so a burst of commits
+    /// queues one and not forty.
+    private var deferredRunQueued = false
+
     private nonisolated static let ngramOrder = 5
     private nonisolated static let discount = 0.75
 
@@ -348,7 +359,34 @@ final class PersonalLanguageModel {
         startTraining(settings: settings)
     }
 
+    /// Starts a run, or queues one for when the cooldown is up.
+    ///
+    /// The cooldown delays rather than cancels: the commits that asked for
+    /// this run stay counted, and it happens later. Cancelling would mean a
+    /// user who corrects a word ten times in a row gets one of those
+    /// corrections learned and nine dropped.
     private func startTraining(settings: EngineSettings) {
+        let wait = nextRunNotBefore.timeIntervalSinceNow
+        if wait > 0 {
+            guard !deferredRunQueued else { return }
+            deferredRunQueued = true
+            log("personalisation: deferring the next training run by \(Int(wait.rounded()))s"
+                + " to stay under \(Int(PersonalizationLayout.trainingDutyCycle * 100))% of the machine")
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                guard let self else { return }
+                self.deferredRunQueued = false
+                // Re-checked rather than assumed: personalisation may have
+                // been switched off while this was waiting (decision 0025).
+                guard settings.personalizationActive, self.baseIsReady, !self.isTraining else { return }
+                self.beginTraining(settings: settings)
+            }
+            return
+        }
+        beginTraining(settings: settings)
+    }
+
+    private func beginTraining(settings: EngineSettings) {
         // The corpus only when it is allowed to exist. Registered words are
         // always included: they are an explicit instruction rather than a
         // record of what someone typed, so switching learning off must not
@@ -467,6 +505,11 @@ final class PersonalLanguageModel {
         settings: EngineSettings
     ) {
         isTraining = false
+        // Recorded whether or not it succeeded: a run that failed still spent
+        // the time and the memory.
+        nextRunNotBefore = Date().addingTimeInterval(
+            PersonalizationLayout.cooldownSeconds(afterRunOf: milliseconds / 1000)
+        )
         guard succeeded else {
             log("personalisation: training generation \(generation) failed")
             return

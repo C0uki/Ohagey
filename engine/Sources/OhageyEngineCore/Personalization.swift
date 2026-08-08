@@ -208,6 +208,41 @@ public enum PersonalizationLayout {
         return min(maximumCommitsPerTrainingRun, max(minimumCommitsPerTrainingRun, scaled))
     }
 
+    // MARK: - How often a run may happen at all
+
+    /// Share of wall time personalisation may spend retraining.
+    ///
+    /// ── Why a duty cycle and not just a commit count ───────────────────
+    ///
+    /// `commitsPerTrainingRun` bounds the work per commit, which was enough
+    /// while a run cost milliseconds. Resuming from a base model changed the
+    /// scale entirely: a run copies the base and rewrites it, so it costs
+    /// roughly a second and 48 MB of peak memory per megabyte of base.
+    ///
+    ///     base 1.4 MB ->  1.2s,    76 MB
+    ///     base 9.4 MB ->  7.9s,   459 MB
+    ///     base 42.6 MB -> 41.0s, 2037 MB
+    ///
+    /// A threshold of three commits was calibrated against the first row and
+    /// is wrong for the others: someone correcting words steadily would have
+    /// the engine retraining continuously, with the memory spike that goes
+    /// with it.
+    ///
+    /// Tying the interval to the *measured* duration of the last run fixes
+    /// that without anyone having to know the base size — it adjusts itself
+    /// to a slower machine too.
+    public static let trainingDutyCycle = 0.10
+
+    /// How long to leave the engine alone after a run of this length.
+    ///
+    /// Delays the next run; it does not cancel it. Commits made in the
+    /// meantime stay counted, and the run happens when the cooldown is up —
+    /// dropping them would mean a burst of corrections was silently ignored.
+    public static func cooldownSeconds(afterRunOf seconds: Double) -> Double {
+        guard seconds > 0 else { return 0 }
+        return seconds * (1 / trainingDutyCycle - 1)
+    }
+
     // MARK: - Registered words
 
     /// How many times a registered word is repeated in the training input.
