@@ -69,11 +69,12 @@ public class SchemaAgreementTests
         // the engine does another until every value has been touched once.
         var defaults = EngineSettings.Default;
         Assert.True(defaults.LearningEnabled);
-        // Off, and the two are deliberately different: learning works and is
-        // wanted, personalisation works and costs more than it gives
-        // (decision 0034, addendum 11). Pinned because the difference is easy
-        // to "tidy up" into matching.
-        Assert.False(defaults.PersonalizationEnabled);
+        // Both on since the base language model ships (decision 0034). They
+        // were deliberately different for a month, while personalisation cost
+        // more than it gave; that turned out to be how the personal model was
+        // built, not the feature. Pinned either way — this pair drifting apart
+        // is invisible until someone notices a setting doing nothing.
+        Assert.True(defaults.PersonalizationEnabled);
         Assert.Equal(100, defaults.PersonalizationAlphaPercent);
         Assert.Equal(Backend.Cpu, defaults.Backend);
         Assert.Equal(10, defaults.ZenzaiInferenceLimit);

@@ -17,21 +17,27 @@
                 TextWrapping="Wrap"
                 Style="{StaticResource CaptionTextBlockStyle}" />
 
-            <!-- Off by default, and said so here rather than only in the
-                 decision log: it is a switch that makes conversion worse for
-                 most people, and someone about to turn it on deserves to know
-                 what was measured. See decision 0034's addendum 11. -->
+            <!-- On by default since the base language model ships
+                 (decision 0034). It was off for a month because confirming
+                 one phrase cost 15 to 18 of 30 otherwise-correct
+                 conversions — which turned out to be how the personal model
+                 was built, not the feature.
+
+                 The bar below is informational rather than a warning: there
+                 is no longer a trade to warn about, but the switch does
+                 decide whether a readable record of what was typed exists on
+                 disk, and that is worth saying where the switch is. -->
             <ToggleSwitch
                 x:Name="PersonalizationSwitch"
-                Header="学習をニューラル変換の候補順にも反映する(実験的)"
+                Header="学習をニューラル変換の候補順にも反映する"
                 OnContent="オン" OffContent="オフ"
                 Toggled="OnToggled" />
             <InfoBar
                 IsOpen="True"
                 IsClosable="False"
-                Severity="Warning"
-                Title="既定でオフです"
-                Message="確定した語は候補の上位に来るようになりますが、関係のない語の変換が悪くなることが実測で確認されています(正解していた30件のうち15〜18件)。原因の調査中です。" />
+                Severity="Informational"
+                Title="確定した語が候補の上位に来ます"
+                Message="オフにすると、確定した語句の控え(テキストファイル)も作られなくなります。共有のパソコンで気になる場合は切っておけます。" />
             <TextBlock
                 x:Name="PersonalizationNote"
                 TextWrapping="Wrap"
