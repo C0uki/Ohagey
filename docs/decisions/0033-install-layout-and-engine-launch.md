@@ -80,3 +80,57 @@ DLL のプロジェクトはこれを定義しないので、出荷される DLL
 決定 0008 の `OHAGEY_MODEL_PATH` より厳しくしているのは、**こちらは任意のコードを
 実行させる穴**だから。読むモデルを選ばせるのとは危険度が違う。実行時フラグではなく
 コンパイル時に落とす。
+
+## 追記(2026-08-04)— インストーラの `[Files]` を実物と突き合わせた。3件中2件が間違っていた
+
+`iscc` を通す前に、`installer/ohagey.iss` の `[Files]` が指しているパスが**実際の
+ビルド成果物と一致するか**を確認した。ずっとコメントアウトされたままだったので、
+誰も確かめていなかった。
+
+| 対象 | 書いてあったパス | 実際 |
+|---|---|---|
+| TSF DLL | `..\tsf\SampleIME\x64\Release\OhageyTSF.dll` | ✅ 正しい(実物を確認) |
+| エンジン | `..\engine\.build\release\OhageyEngine.exe` | ❌ **存在しない** |
+| 設定アプリ | `..\settings-app\bin\x64\Release\OhageySettings.exe` | ❌ **場所も形も違う** |
+
+### エンジン — `.build\release` はシンボリックリンクで、作成に失敗する
+
+SwiftPM は `.build\release` を**アーキテクチャ三つ組ディレクトリへのシンボリック
+リンク**として作る。Windows でシンボリックリンクを作るには開発者モードか昇格が要り、
+**普通の環境では失敗する**。この機械でも毎回こう出ている:
+
+```
+warning: unable to create symbolic link at <...>\.build\release:
+encountered an I/O error (code: 512)
+```
+
+そしてディレクトリは残らない。リンクの名前で参照すると、**リンクを作れない機械
+——つまり大半——でパッケージングが失敗する**。
+
+`..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe` に直した。
+
+### 設定アプリ — ファイル1つではなくディレクトリ
+
+`Ohagey.Settings.csproj` は `RuntimeIdentifier=win-x64` かつ
+`WindowsAppSDKSelfContained=true` なので、出力は**アプリと Windows App Runtime の
+一式**(数十ファイル)になる。`OhageySettings.exe` だけを入れると、
+**起動できないものをインストールすることになる**。
+
+しかも self-contained にしたのは、まさに「インストール後にランタイムの
+ダウンロードを訊きにいかせない」ため(決定 0016)だった。1ファイルだけ入れると
+その目的ごと失われる。
+
+パスも違っていた。プロジェクトは `settings-app\src\Ohagey.Settings\` にあり、
+TFM と RID がパスに入る:
+
+```
+..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*
+```
+
+`Flags: recursesubdirs createallsubdirs` を付けてディレクトリごと入れるようにした。
+
+### まだ通していない
+
+`iscc` はこの機械に入っていないので、**コンパイルは確認できていない**。
+`[Files]` の行はコメントのままである。確かめたのは「パスが実在するか」までで、
+「Inno がこれを受け付けるか」はまだ。
