@@ -159,24 +159,24 @@ extern const WCHAR StringDelimiter  = L'\"';
 //---------------------------------------------------------------------
 // defined item in setting file table [PreservedKey] section
 //---------------------------------------------------------------------
-extern const WCHAR ImeModeDescription[] = L"Chinese/English input (Shift)";
+extern const WCHAR ImeModeDescription[] = L"かな/英数の切り替え (Shift)";
 extern const int ImeModeOnIcoIndex = IME_MODE_ON_ICON_INDEX;
 extern const int ImeModeOffIcoIndex = IME_MODE_OFF_ICON_INDEX;
 
-extern const WCHAR DoubleSingleByteDescription[] = L"Double/Single byte (Shift+Space)";
+extern const WCHAR DoubleSingleByteDescription[] = L"全角/半角 (Shift+Space)";
 extern const int DoubleSingleByteOnIcoIndex = IME_DOUBLE_ON_INDEX;
 extern const int DoubleSingleByteOffIcoIndex = IME_DOUBLE_OFF_INDEX;
 
-extern const WCHAR PunctuationDescription[] = L"Chinese/English punctuation (Ctrl+.)";
+extern const WCHAR PunctuationDescription[] = L"句読点の全角/半角 (Ctrl+.)";
 extern const int PunctuationOnIcoIndex = IME_PUNCTUATION_ON_INDEX;
 extern const int PunctuationOffIcoIndex = IME_PUNCTUATION_OFF_INDEX;
 
 //---------------------------------------------------------------------
 // defined item in setting file table [LanguageBar] section
 //---------------------------------------------------------------------
-extern const WCHAR LangbarImeModeDescription[] = L"Conversion mode";
-extern const WCHAR LangbarDoubleSingleByteDescription[] = L"Character width";
-extern const WCHAR LangbarPunctuationDescription[] = L"Punctuation";
+extern const WCHAR LangbarImeModeDescription[] = L"入力モード";
+extern const WCHAR LangbarDoubleSingleByteDescription[] = L"文字幅";
+extern const WCHAR LangbarPunctuationDescription[] = L"句読点";
 
 //---------------------------------------------------------------------
 // windows class / titile / atom

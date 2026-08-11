@@ -132,8 +132,6 @@ private:
     void KeyboardOpenCompartmentUpdated(_In_ ITfThreadMgr *pThreadMgr);
 
     
-    BOOL SetupDictionaryFile();
-    CFile* GetDictionaryFile();
 
 private:
     struct _KEYSTROKE

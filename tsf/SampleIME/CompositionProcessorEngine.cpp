@@ -236,7 +236,6 @@ BOOL CCompositionProcessorEngine::SetupLanguageProfile(LANGID langid, REFGUID gu
     SetupLanguageBar(pThreadMgr, tfClientId, isSecureMode);
     SetupKeystroke();
     SetupConfiguration();
-    SetupDictionaryFile();
 
     // Start the engine now rather than at the first conversion (decision 0033).
     // It returns immediately and holds no connection; by the time the user has
@@ -983,79 +982,6 @@ BOOL CCompositionProcessorEngine::InitLanguageBar(_In_ CLangBarItemButton *pLang
         }
     }
     return FALSE;
-}
-
-//+---------------------------------------------------------------------------
-//
-// SetupDictionaryFile
-//
-//----------------------------------------------------------------------------
-
-BOOL CCompositionProcessorEngine::SetupDictionaryFile()
-{	
-    // Not yet registered
-    // Register CFileMapping
-    WCHAR wszFileName[MAX_PATH] = {'\0'};
-    DWORD cchA = GetModuleFileName(Global::dllInstanceHandle, wszFileName, ARRAYSIZE(wszFileName));
-    size_t iDicFileNameLen = cchA + wcslen(TEXTSERVICE_DIC);
-    WCHAR *pwszFileName = new (std::nothrow) WCHAR[iDicFileNameLen + 1];
-    if (!pwszFileName)
-    {
-        goto ErrorExit;
-    }
-    *pwszFileName = L'\0';
-
-    // find the last '/'
-    while (cchA--)
-    {
-        WCHAR wszChar = wszFileName[cchA];
-        if (wszChar == '\\' || wszChar == '/')
-        {
-            StringCchCopyN(pwszFileName, iDicFileNameLen + 1, wszFileName, cchA + 1);
-            StringCchCatN(pwszFileName, iDicFileNameLen + 1, TEXTSERVICE_DIC, wcslen(TEXTSERVICE_DIC));
-            break;
-        }
-    }
-
-    // create CFileMapping object
-    if (_pDictionaryFile == nullptr)
-    {
-        _pDictionaryFile = new (std::nothrow) CFileMapping();
-        if (!_pDictionaryFile)
-        {
-            goto ErrorExit;
-        }
-    }
-    if (!(_pDictionaryFile)->CreateFile(pwszFileName, GENERIC_READ, OPEN_EXISTING, FILE_SHARE_READ))
-    {
-        goto ErrorExit;
-    }
-
-    _pTableDictionaryEngine = new (std::nothrow) CTableDictionaryEngine(GetLocale(), _pDictionaryFile);
-    if (!_pTableDictionaryEngine)
-    {
-        goto ErrorExit;
-    }
-
-    delete []pwszFileName;
-    return TRUE;
-ErrorExit:
-    if (pwszFileName)
-    {
-        delete []pwszFileName;
-    }
-    return FALSE;
-}
-
-//+---------------------------------------------------------------------------
-//
-// GetDictionaryFile
-//
-//----------------------------------------------------------------------------
-
-CFile* CCompositionProcessorEngine::GetDictionaryFile()
-{
-    return _pDictionaryFile;
 }
 
 //+---------------------------------------------------------------------------

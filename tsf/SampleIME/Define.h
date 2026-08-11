@@ -18,7 +18,6 @@
 // reports an error at any point (decision 0021).
 #define TEXTSERVICE_LANGID       MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN)
 #define TEXTSERVICE_ICON_INDEX   -IDIS_SAMPLEIME
-#define TEXTSERVICE_DIC L"SampleIMESimplifiedQuanPin.txt"
 
 #define IME_MODE_ON_ICON_INDEX      IDI_IME_MODE_ON
 #define IME_MODE_OFF_ICON_INDEX     IDI_IME_MODE_OFF
@@ -27,7 +26,15 @@
 #define IME_PUNCTUATION_ON_INDEX    IDI_PUNCTUATION_ON
 #define IME_PUNCTUATION_OFF_INDEX   IDI_PUNCTUATION_OFF
 
-#define SAMPLEIME_FONT_DEFAULT L"Microsoft YaHei UI"
+// The candidate window font. IDS_DEFAULT_FONT in SampleIME.rc is the copy
+// actually loaded; this one is unreferenced and kept only so the two do not
+// disagree.
+//
+// Left as it came, candidates are drawn in a Simplified Chinese face. That is
+// not cosmetic: CJK codepoints are unified, so the same kanji has a different
+// regional shape and Japanese text renders subtly wrong. CreateFont never
+// reports it -- asking for a face that is wrong for the text still succeeds.
+#define SAMPLEIME_FONT_DEFAULT L"Yu Gothic UI"
 
 //---------------------------------------------------------------------
 // defined Candidated Window
