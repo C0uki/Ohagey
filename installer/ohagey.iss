@@ -1,47 +1,42 @@
 ; Ohagey installer (Inno Setup) — decision 0019
 ;
-; This is a scaffold, not a working script yet. Fill in [Files] once tsf/, engine/,
-; and settings-app/ produce real build outputs.
-;
-; `download-model.ps1` beside this file IS real and has been exercised standalone
-; (already-present, hash match, hash mismatch, offline, and no leftovers after a
-; failed fetch). Only its wiring below waits on the rest of the scaffold.
-
-#define MyAppName "Ohagey"
-#define MyAppVersion "0.0.1"
-#define MyAppPublisher "Ohagey Contributors"
-#define MyAppURL "https://github.com/REPLACE_ME/ohagey"
-
-[Setup]
-AppId={{REPLACE-WITH-GENERATED-GUID}}
-AppName={#MyAppName}
-AppVersion={#MyAppVersion}
-AppPublisher={#MyAppPublisher}
-AppPublisherURL={#MyAppURL}
-DefaultDirName={autopf}\Ohagey
-DefaultGroupName=Ohagey
-; x64-only (decision 0018)
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
-OutputBaseFilename=ohagey-setup
-Compression=lzma2
-SolidCompression=yes
-PrivilegesRequired=admin
-; TSF registration (regsvr32-equivalent) requires admin.
-
-[Files]
+; This is a scaffold, not a working script yet. Fill in [Files]
 ; Layout is decision 0033. The TSF DLL and the engine must land in the SAME
 ; directory: the DLL starts the engine on demand (decision 0015) by looking for
 ; OhageyEngine.exe beside itself, rather than reading a path from the registry.
 ;
-; Still commented out: the settings app does not exist yet, and none of this has
-; been run through iscc. The paths below are the real build outputs.
+; Still commented out: none of this has been run through iscc. The paths were
+; checked against what the builds actually produce on 2026-08-04, and two of
+; the three were wrong.
 ;
 ; The project directory is still the vendored SampleIME one; the artefact is
 ; already the shipping name, so no DestName rename is needed (decision 0033).
 ; Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit
-; Source: "..\engine\.build\release\OhageyEngine.exe"; DestDir: "{app}"
-; Source: "..\settings-app\bin\x64\Release\OhageySettings.exe"; DestDir: "{app}"
+;
+; -- The engine: the architecture triple, not .build\release ---------------
+;
+; SwiftPM makes `.build\release` a *symbolic link* to the triple directory, and
+; creating one on Windows needs Developer Mode or elevation. It fails on an
+; ordinary machine -- every build here prints
+;
+;     warning: unable to create symbolic link at ...
+;     .build\release: encountered an I/O error (code: 512)
+;
+; and leaves no such directory. Naming the link would make packaging fail on
+; exactly the machines that cannot create it, which is most of them.
+; Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe"; DestDir: "{app}"
+;
+; -- The settings app: a directory, not a file ------------------------------
+;
+; `WindowsAppSDKSelfContained` and `RuntimeIdentifier=win-x64` mean the build
+; output is the app *and* its copy of the Windows App Runtime -- a few dozen
+; files. Shipping only OhageySettings.exe would install something that cannot
+; start, and the reason self-contained was chosen in the first place was to
+; stop it asking to download a runtime after installation (decision 0016).
+;
+; The TFM and RID are part of the path and change with them:
+;   bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\
+; Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 ;
 ; Backend DLLs (decision 0028). The engine picks one at startup via the DLL
 ; search path, so each backend needs its own subdirectory.
