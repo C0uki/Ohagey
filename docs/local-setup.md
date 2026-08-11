@@ -443,6 +443,20 @@ swift build --scratch-path C:\swb\13x
 編集が本当に効いているかは、まず**明らかに壊れる版**をビルドして確かめるとよい
 (決定 0034 の 2026-08-04 追記その3 では、混合項に 0 を掛けた版で確かめた)。
 
+## インストーラを組む(`iscc`)
+
+```powershell
+winget install JRSoftware.InnoSetup
+& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\ohagey.iss
+```
+
+**`winget` は `%LOCALAPPDATA%\Programs\Inno Setup 6\` に入れる。**
+`C:\Program Files (x86)\Inno Setup 6\` を探しても無い(6.7.3 で確認)。
+
+> ⚠️ **`iscc` は間違いを教えてくれない種類のものがある。** `AppId` に
+> `{{REPLACE-WITH-GENERATED-GUID}}` と書いたままでもコンパイルは通り、
+> リテラル文字列としてそのまま製品に入る。
+
 ## 残っている注意点
 
 **ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。

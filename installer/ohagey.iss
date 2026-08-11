@@ -1,11 +1,44 @@
 ; Ohagey installer (Inno Setup) — decision 0019
 ;
-; This is a scaffold, not a working script yet. Fill in [Files]
+; This is a scaffold, not a working script yet. Fill in [Files] once tsf/, engine/,
+; and settings-app/ produce real build outputs.
+;
+; `download-model.ps1` beside this file IS real and has been exercised standalone
+; (already-present, hash match, hash mismatch, offline, and no leftovers after a
+; failed fetch). Only its wiring below waits on the rest of the scaffold.
+
+#define MyAppName "Ohagey"
+#define MyAppVersion "0.0.1"
+#define MyAppPublisher "Ohagey Contributors"
+#define MyAppURL "https://github.com/C0uki/Ohagey"
+
+[Setup]
+; Generated once, 2026-08-04. This is what Windows uses to recognise an
+; existing installation, so it must never change: a new one turns every
+; upgrade into a second, parallel copy of Ohagey.
+; The doubled brace is Inno's escape for a literal `{`.
+AppId={{FA549B8C-7981-4ABE-A7CC-1F7DC99E15E7}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+DefaultDirName={autopf}\Ohagey
+DefaultGroupName=Ohagey
+; x64-only (decision 0018)
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+OutputBaseFilename=ohagey-setup
+Compression=lzma2
+SolidCompression=yes
+PrivilegesRequired=admin
+; TSF registration (regsvr32-equivalent) requires admin.
+
+[Files]
 ; Layout is decision 0033. The TSF DLL and the engine must land in the SAME
 ; directory: the DLL starts the engine on demand (decision 0015) by looking for
 ; OhageyEngine.exe beside itself, rather than reading a path from the registry.
 ;
-; Still commented out: none of this has been run through iscc. The paths were
+; Still commented out: none of this has been through iscc yet. The paths were
 ; checked against what the builds actually produce on 2026-08-04, and two of
 ; the three were wrong.
 ;
@@ -13,29 +46,24 @@
 ; already the shipping name, so no DestName rename is needed (decision 0033).
 ; Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit
 ;
-; -- The engine: the architecture triple, not .build\release ---------------
+; -- The engine: the architecture triple, not .build\release ----------------
 ;
-; SwiftPM makes `.build\release` a *symbolic link* to the triple directory, and
-; creating one on Windows needs Developer Mode or elevation. It fails on an
-; ordinary machine -- every build here prints
-;
-;     warning: unable to create symbolic link at ...
-;     .build\release: encountered an I/O error (code: 512)
-;
-; and leaves no such directory. Naming the link would make packaging fail on
-; exactly the machines that cannot create it, which is most of them.
+; SwiftPM makes `.build\release` a *symbolic link* to the triple directory,
+; and creating one on Windows needs Developer Mode or elevation. It fails on an
+; ordinary machine -- every build here prints "unable to create symbolic link"
+; with I/O error 512 and leaves no such directory. Naming the link would make
+; packaging fail on exactly the machines that cannot create it.
 ; Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe"; DestDir: "{app}"
 ;
-; -- The settings app: a directory, not a file ------------------------------
+; -- The settings app: a directory, not a file -------------------------------
 ;
 ; `WindowsAppSDKSelfContained` and `RuntimeIdentifier=win-x64` mean the build
 ; output is the app *and* its copy of the Windows App Runtime -- a few dozen
 ; files. Shipping only OhageySettings.exe would install something that cannot
-; start, and the reason self-contained was chosen in the first place was to
-; stop it asking to download a runtime after installation (decision 0016).
+; start, and self-contained was chosen precisely to stop it asking to download
+; a runtime after installation (decision 0016).
 ;
-; The TFM and RID are part of the path and change with them:
-;   bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\
+; The TFM and RID are part of the path and change with them.
 ; Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 ;
 ; Backend DLLs (decision 0028). The engine picks one at startup via the DLL
@@ -46,8 +74,7 @@
 ;
 ; Installed rather than run from a temporary copy, so that a repair install and
 ; a later retry from the settings app both have it to hand.
-; Source: "download-model.ps1"; DestDir: "{app}"
-
+Source: "download-model.ps1"; DestDir: "{app}"
 [Dirs]
 ; The models are downloaded after install (decision 0008), so the directory has
 ; to exist first.
@@ -70,7 +97,7 @@ Name: "{app}\models"
 ; Notepad.
 
 ; ── Zenzai weights (decisions 0008 / 0009 — CC-BY-SA 4.0) ──────────────────
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/ggml-model-Q5_K_M.gguf -Dest ""{app}\models\ggml-model-Q5_K_M.gguf"" -Sha256 4DE930C06BEF8C263AA1AA40684AF206DB4CE1B96375B3B8ED0EA508E0B14F6C"; Flags: runhidden; StatusMsg: "Downloading conversion model..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://huggingface.co/Miwa-Keita/zenz-v3.1-small-gguf/resolve/main/ggml-model-Q5_K_M.gguf -Dest ""{app}\models\ggml-model-Q5_K_M.gguf"" -Sha256 4DE930C06BEF8C263AA1AA40684AF206DB4CE1B96375B3B8ED0EA508E0B14F6C"; Flags: runhidden; StatusMsg: "Downloading conversion model..."
 
 ; -- Base language model (decisions 0009 / 0034) ---------------------------
 ;
@@ -109,13 +136,10 @@ Name: "{app}\models"
 ; staying MIT. The corpus is published alongside because share-alike is about
 ; the source, not only the derivative.
 ;
-; TODO: the release does not exist yet. Publish lm_*.marisa, corpus.txt and
-; corpus.LICENSE.txt from tools/build-base-lm.ps1 as `base-lm-v1`, then
-; uncomment. The hashes below are of the files that script produced here on
-; 2026-08-04 and are what has been tested; re-check them against whatever is
-; actually uploaded.
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_abc.marisa -Dest ""{app}\models\lm_c_abc.marisa"" -Sha256 4F164B78FF9D33694BD0ADB8A82D8D6EA833EE111F71D16CDE2E765EDBA07F30"; Flags: runhidden; StatusMsg: "Downloading personalisation model (1 of 5)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_bc.marisa -Dest ""{app}\models\lm_c_bc.marisa"" -Sha256 9CA26F3EB02691AE7FDB3154ADE612E107B87DBBE4CA0F67ACF6EFD4744E3CC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (2 of 5)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_r_xbx.marisa -Dest ""{app}\models\lm_r_xbx.marisa"" -Sha256 31BC54FCB7041847028E58F6BAC52703BAC785FAC10C5B6B17079C312A76D059"; Flags: runhidden; StatusMsg: "Downloading personalisation model (3 of 5)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_abx.marisa -Dest ""{app}\models\lm_u_abx.marisa"" -Sha256 9037787429C11D75903C9BB9F0C574E6DD146966D2800FE368DCDCAF1138ABC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (4 of 5)..."
-; Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_xbc.marisa -Dest ""{app}\models\lm_u_xbc.marisa"" -Sha256 D10C5413F543F7D8EC761ED81C99D4DE49C9608CCE003B2195DA6A218BB02FFD"; Flags: runhidden; StatusMsg: "Downloading personalisation model (5 of 5)..."
+; Published as `base-lm-v1` on 2026-08-04. The hashes below were verified
+; against the uploaded assets by running download-model.ps1 against them.
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_abc.marisa -Dest ""{app}\models\lm_c_abc.marisa"" -Sha256 4F164B78FF9D33694BD0ADB8A82D8D6EA833EE111F71D16CDE2E765EDBA07F30"; Flags: runhidden; StatusMsg: "Downloading personalisation model (1 of 5)..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_c_bc.marisa -Dest ""{app}\models\lm_c_bc.marisa"" -Sha256 9CA26F3EB02691AE7FDB3154ADE612E107B87DBBE4CA0F67ACF6EFD4744E3CC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (2 of 5)..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_r_xbx.marisa -Dest ""{app}\models\lm_r_xbx.marisa"" -Sha256 31BC54FCB7041847028E58F6BAC52703BAC785FAC10C5B6B17079C312A76D059"; Flags: runhidden; StatusMsg: "Downloading personalisation model (3 of 5)..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_abx.marisa -Dest ""{app}\models\lm_u_abx.marisa"" -Sha256 9037787429C11D75903C9BB9F0C574E6DD146966D2800FE368DCDCAF1138ABC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (4 of 5)..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_xbc.marisa -Dest ""{app}\models\lm_u_xbc.marisa"" -Sha256 D10C5413F543F7D8EC761ED81C99D4DE49C9608CCE003B2195DA6A218BB02FFD"; Flags: runhidden; StatusMsg: "Downloading personalisation model (5 of 5)..."
