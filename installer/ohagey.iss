@@ -55,7 +55,23 @@ PrivilegesRequired=admin
 ; then registered the *old* build.
 ;; The project directory is still the vendored SampleIME one; the artefact is
 ; already the shipping name, so no DestName rename is needed (decision 0033).
-Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit ignoreversion
+; -- restartreplace: an in-use TSF DLL cannot be overwritten ----------------
+;
+; Once the DLL is registered as a text service, Windows loads it into every
+; process with a text input surface. Measured on an ordinary desktop, an
+; upgrade found it held by SearchHost, Discord, LINE and the terminal doing
+; the upgrading -- five processes, none of them ours.
+;
+; Without this flag the install fails on `DeleteFile: The existing file
+; appears to be in use (5)`, and in silent mode it simply cancels. Inno's
+; other answer is RestartManager, which offers to *close* those applications;
+; closing someone's chat client to update an IME is not a trade to make
+; silently.
+;
+; `restartreplace` queues the replacement with MoveFileEx instead, so it
+; happens on the next sign-in. `uninsrestartdelete` does the same on the way
+; out. This is why IME installers ask you to sign out.
+Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit ignoreversion restartreplace uninsrestartdelete
 ;
 ; -- The engine: the architecture triple, not .build\release ----------------
 ;

@@ -384,3 +384,50 @@ iscc /DGpuBackends installer\ohagey.iss
 - [ ] **エンジンのログをファイルにも書く**(`%LOCALAPPDATA%\Ohagey\engine.log`)。
       実機での診断はこれが無いと始まらない
 - [ ] ログが取れたら「一回限り」を再現して原因を特定する
+
+## 追記(2026-08-04、その6)— 登録済みの TSF DLL は置き換えられない。**再起動が要る**
+
+打鍵ごとの変換を直した DLL を入れ直そうとして、**インストールが3回失敗した。**
+
+```
+DeleteFile: The existing file appears to be in use (5). Retrying.
+```
+
+TSF DLL は登録されると、**テキスト入力面を持つプロセスすべてに読み込まれる。**
+実際に押さえていたのは:
+
+```
+RestartManager found an application using one of our files: SearchHost.exe
+RestartManager found an application using one of our files: Claude
+RestartManager found an application using one of our files: Discord
+RestartManager found an application using one of our files: Intel(R) Killer(TM) Performance Suite
+RestartManager found an application using one of our files: LINE
+```
+
+5つ。**どれもおはぎーとは無関係のアプリ**である。IME を更新するために、
+利用者のチャットクライアントを閉じることになる。
+
+Inno の既定は RestartManager で**それらを閉じる**ことだった。黙って選んでよい取引では
+ない(サイレントインストールでは確認も出せないので、そのまま cancel していた)。
+
+`restartreplace` と `uninsrestartdelete` を付けた。ロック中のファイルは `MoveFileEx`
+で予約され、**次のサインインで入れ替わる**:
+
+```
+DeleteFile: The existing file appears to be in use (5). Will replace on restart.
+Delaying registration of all files until the next logon since a restart is needed.
+Need to restart Windows? Yes
+```
+
+**IME のインストーラがサインアウトを求めるのはこれが理由である。** 避けようがない —
+更新したいまさにその DLL を、他人のプロセスが握っている。
+
+### 帰結
+
+- **エンジンと設定アプリは即座に入れ替わる**(誰も握っていない)。
+  TSF DLL だけがサインインを待つ
+- つまり**更新直後は、新しいエンジンと古い DLL が組み合わさる**瞬間がある。
+  ワイヤ互換(決定 0007)はこれを支える必要がある — 世代をまたいで壊れない形で
+  あることが、ここで初めて実際に要求される
+- サイレント更新するなら `/NOCLOSEAPPLICATIONS` を必ず渡すこと。
+  渡さないと Inno が利用者のアプリを閉じにいく
