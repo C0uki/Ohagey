@@ -187,34 +187,35 @@ HRESULT CSampleIME::_HandleCompositionInputWorker(_In_ CCompositionProcessorEngi
         }
     }
 
+    // [Ohagey] Typing does not convert.
     //
-    // Get candidate string from composition processor engine
+    // The sample asked the dictionary for candidates on every keystroke and
+    // popped the candidate window open as you typed. That is how a pinyin IME
+    // works: there is no useful intermediate form, so you are always choosing
+    // from a list. Japanese has one -- the kana above -- and conversion is a
+    // thing the user asks for, with space.
     //
-    CSampleImeArray<CCandidateListItem> candidateList;
+    // Keeping the sample's behaviour was not just stylistically wrong, it was
+    // slow. Every keystroke became a full round trip to the engine, and every
+    // request rebuilds the lattice from nothing (decision 0034 stops the
+    // composition first, to keep the candidate order from oscillating). That
+    // is a measured 137ms each. Typing `nihongo` spent seven of them, and the
+    // engine had burned twelve seconds of CPU after a few words of testing --
+    // which is exactly what "sluggish" felt like from the keyboard.
+    //
+    // So: show the kana, and wait to be asked. `_HandleCompositionConvert`
+    // does the conversion when the user presses the conversion key.
+    //
+    // A candidate window left over from a previous conversion is emptied
+    // rather than left standing: the reading just changed under it, so what
+    // it is showing is an answer to a question nobody is asking any more.
+    isWildcardIncluded;
 
-    pCompositionProcessorEngine->GetCandidateList(&candidateList, TRUE, FALSE);
-
-    if ((candidateList.Count()))
-    {
-        hr = _CreateAndStartCandidate(pCompositionProcessorEngine, ec, pContext);
-        if (SUCCEEDED(hr))
-        {
-            _pCandidateListUIPresenter->_ClearList();
-            _pCandidateListUIPresenter->_SetText(&candidateList, TRUE);
-        }
-    }
-    else if (_pCandidateListUIPresenter)
+    if (_pCandidateListUIPresenter)
     {
         _pCandidateListUIPresenter->_ClearList();
     }
-    else if (readingStrings.Count() && isWildcardIncluded)
-    {
-        hr = _CreateAndStartCandidate(pCompositionProcessorEngine, ec, pContext);
-        if (SUCCEEDED(hr))
-        {
-            _pCandidateListUIPresenter->_ClearList();
-        }
-    }
+
     return hr;
 }
 //+---------------------------------------------------------------------------
