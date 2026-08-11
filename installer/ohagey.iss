@@ -38,13 +38,24 @@ PrivilegesRequired=admin
 ; directory: the DLL starts the engine on demand (decision 0015) by looking for
 ; OhageyEngine.exe beside itself, rather than reading a path from the registry.
 ;
-; Still commented out: none of this has been through iscc yet. The paths were
-; checked against what the builds actually produce on 2026-08-04, and two of
-; the three were wrong.
+; The paths were checked against what the builds actually produce, and two of
+; the three were wrong when nobody had run iscc over them (decision 0033).
+; All three are built and packaged now.
 ;
-; The project directory is still the vendored SampleIME one; the artefact is
+; -- ignoreversion on everything we build ------------------------------------
+;
+; Inno compares version resources and skips a file it thinks is not newer.
+; None of our binaries bump one: the TSF DLL carries the vendored sample's
+; version resource, the Swift engine has none, and the settings app's does not
+; move between builds. Without `ignoreversion` the first install wins forever
+; and every later one silently keeps the old files.
+;
+; Measured: a reinstall carrying a rebuilt OhageyTSF.dll left the previous DLL
+; in place, with nothing in the log to say so. The registration that followed
+; then registered the *old* build.
+;; The project directory is still the vendored SampleIME one; the artefact is
 ; already the shipping name, so no DestName rename is needed (decision 0033).
-; Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit
+Source: "..\tsf\SampleIME\x64\Release\OhageyTSF.dll"; DestDir: "{app}"; Flags: regserver 64bit ignoreversion
 ;
 ; -- The engine: the architecture triple, not .build\release ----------------
 ;
@@ -53,7 +64,7 @@ PrivilegesRequired=admin
 ; ordinary machine -- every build here prints "unable to create symbolic link"
 ; with I/O error 512 and leaves no such directory. Naming the link would make
 ; packaging fail on exactly the machines that cannot create it.
-; Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe"; DestDir: "{app}"
+Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe"; DestDir: "{app}"; Flags: ignoreversion
 ;
 ; -- The settings app: a directory, not a file -------------------------------
 ;
@@ -64,17 +75,33 @@ PrivilegesRequired=admin
 ; a runtime after installation (decision 0016).
 ;
 ; The TFM and RID are part of the path and change with them.
-; Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 ;
 ; Backend DLLs (decision 0028). The engine picks one at startup via the DLL
 ; search path, so each backend needs its own subdirectory.
-; Source: "..\backends\cpu\*.dll"; DestDir: "{app}\backends\cpu"
-; Source: "..\backends\cuda\*.dll"; DestDir: "{app}\backends\cuda"
-; Source: "..\backends\vulkan\*.dll"; DestDir: "{app}\backends\vulkan"
+;
+; CPU is always in: it is 2.4 MB and it is the one that works on every
+; machine, with no driver and no vendor runtime.
+Source: "..\backends\cpu\*.dll"; DestDir: "{app}\backends\cpu"; Flags: ignoreversion
+;
+; GPU backends are opt-in at packaging time, because CUDA alone is 977 MB --
+; four hundred times the CPU one, and most of it is the vendor runtime. An
+; installer that carries it by default would be a gigabyte for a feature many
+; machines cannot use.
+;
+;     iscc /DGpuBackends installer\ohagey.iss
+;
+; `skipifsourcedoesntexist` because `tools/fetch-backends.ps1` fetches only
+; what it is asked for: requesting the define should not require having
+; fetched every backend.
+#ifdef GpuBackends
+Source: "..\backends\cuda\*.dll"; DestDir: "{app}\backends\cuda"; Flags: skipifsourcedoesntexist
+Source: "..\backends\vulkan\*.dll"; DestDir: "{app}\backends\vulkan"; Flags: skipifsourcedoesntexist
+#endif
 ;
 ; Installed rather than run from a temporary copy, so that a repair install and
 ; a later retry from the settings app both have it to hand.
-Source: "download-model.ps1"; DestDir: "{app}"
+Source: "download-model.ps1"; DestDir: "{app}"; Flags: ignoreversion
 [Dirs]
 ; The models are downloaded after install (decision 0008), so the directory has
 ; to exist first.

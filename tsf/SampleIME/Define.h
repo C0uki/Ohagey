@@ -9,7 +9,14 @@
 #include "resource.h"
 
 #define TEXTSERVICE_MODEL        L"Apartment"
-#define TEXTSERVICE_LANGID       MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)
+// Japanese, not the Simplified Chinese the sample registered under.
+//
+// This is what Windows files the input method under. Left as it came, the
+// installer registers a *Chinese* IME called "Sample IME": everything builds,
+// regsvr32 succeeds, the CLSID appears in the registry, and it never shows up
+// in the Japanese input methods because it was never offered to them. Nothing
+// reports an error at any point (decision 0021).
+#define TEXTSERVICE_LANGID       MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN)
 #define TEXTSERVICE_ICON_INDEX   -IDIS_SAMPLEIME
 #define TEXTSERVICE_DIC L"SampleIMESimplifiedQuanPin.txt"
 

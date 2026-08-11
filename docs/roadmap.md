@@ -1019,7 +1019,20 @@ alpha の話は、まず遅延を片付けてからでないと意味がない�
 - [x] **既定オンが実際に効くことを確認した。** `HKCU\Software\Ohagey` を丸ごと消して
       (まっさらな利用者と同じ状態)起動すると `generation 1 published (3 lines, 8818ms)`。
       duty cycle も実物で効いている(`deferring the next training run by 79s`)
-- [ ] `backends\{cpu,cuda,vulkan}\` の同梱(決定 0028)と CI での `iscc` 有効化
+- [x] **3成果物すべてをビルドして `[Files]` を有効にし、28MB のインストーラで
+      実際に登録した。** そこで黙って外れていた2件が出た(決定 0033 の追記):
+  - 🔴 **IME が中国語として登録されていた。** vendoring 元の `TEXTSERVICE_LANGID` が
+        `LANG_CHINESE` のままで、名前も `Sample IME`。ビルドも `regsvr32` も成功し、
+        CLSID も TIP も載るのに、**日本語の入力方式一覧には永久に出てこない**。
+        `LANG_JAPANESE` / `おはぎー` に直し、`0x00000411 Description=おはぎー` を確認
+  - 🔴 **自前のバイナリが再インストールで更新されない。** Inno はバージョン資源で
+        判断して上書きを飛ばすが、**おはぎーのバイナリはどれもバージョンを上げない**。
+        直後の `regsvr32` が古いビルドを登録していた。全成果物に `ignoreversion` を付けた
+- [x] **GPU バックエンドはパッケージ時に選ぶ**(`iscc /DGpuBackends`)。
+      `backends\cuda` は 977MB で cpu の400倍。既定で同梱するとインストーラが 1GB を超える
+- [ ] **実際にメモ帳で打つ。** 登録はできたが、日本語の入力方式一覧に追加して
+      切り替えるのは利用者ごとの設定変更なので手を付けていない
+- [ ] CI での `iscc` 有効化
 
 ### llama.cpp の用意(決定 0028、フェーズ2〜3 と並行)
 

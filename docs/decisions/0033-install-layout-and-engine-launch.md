@@ -248,3 +248,84 @@ OhageyEngine: personalisation: deferring the next training run by 79s to stay un
 `%ProgramFiles%\Ohagey\unins000.exe`、または「アプリと機能」から。
 学習データは `%LOCALAPPDATA%\Ohagey\` にあり、これは消えない(決定 0024 / 0025 —
 消すのは設定アプリの「学習データを消去」)。
+
+## 追記(2026-08-04、その4)— 全部入りで組んで登録した。**黙って外れていた2件**
+
+TSF DLL・エンジン・設定アプリを実際にビルドして `[Files]` を有効にし、
+`iscc` で 28MB のインストーラを作って入れた。**そこで初めて分かったことが2件ある。
+どちらもビルドもインストールも成功したまま外れていた。**
+
+### 1. 🔴 IME が**中国語**として登録されていた
+
+```
+HKLM\SOFTWARE\Microsoft\CTF\TIP\{D2291A80-...}\LanguageProfile\
+  0x00000804   Description=Sample IME
+```
+
+`0x0804` は簡体字中国語である。vendoring 元の SampleIME は**中国語の拼音サンプル**で、
+`Define.h` がそのまま残っていた:
+
+```c
+#define TEXTSERVICE_LANGID  MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED)
+static const WCHAR TEXTSERVICE_DESC[] = L"Sample IME";
+```
+
+**どこもエラーにならない。** ビルドは通り、`regsvr32` は成功し、CLSID はレジストリに
+載り、TIP も登録される。ただ**日本語の入力方式一覧には永久に出てこない** —
+そこに登録されていないので。
+
+日本語に直した:
+
+```c
+#define TEXTSERVICE_LANGID  MAKELANGID(LANG_JAPANESE, SUBLANG_JAPANESE_JAPAN)
+static const WCHAR TEXTSERVICE_DESC[] = L"おはぎー";
+```
+
+直後の再インストールで `0x00000411  Description=おはぎー` を確認した。
+
+> ⚠️ `DllUnregisterServer` は**コンパイル時の LANGID** で登録解除するので、
+> LANGID を変えると前の登録が孤児になる。この機械には
+> `0x0804 / Sample IME` が残っている(削除には昇格が要る)。
+> 出荷前に変えたので、利用者には起きない。
+
+### 2. 🔴 自前のバイナリが再インストールで**永久に更新されない**
+
+`Define.h` を直して再ビルドし、入れ直したのに、**登録されたのは古い DLL のまま**だった。
+インストール先のハッシュが変わっていなかった。
+
+Inno はバージョン資源を比べて「新しくない」ファイルの上書きを飛ばす。
+**おはぎーのバイナリはどれもバージョンを上げない** — TSF DLL は vendoring 元の
+バージョン資源をそのまま持ち、Swift のエンジンには資源が無く、設定アプリのものも
+ビルドで動かない。つまり**最初のインストールが永久に勝つ。**
+
+ログには何も出ない。「上書きを飛ばした」という行が無いまま、そのあとの
+`regsvr32` が**古いビルドを登録する。**
+
+自前の成果物すべてに `ignoreversion` を付けた。付けた直後に DLL が置き換わり、
+日本語プロファイルが出た。
+
+### GPU バックエンドはパッケージ時に選ぶ
+
+`backends\cuda` は **977MB**(cpu は 2.4MB)で、大半はベンダーランタイムである。
+既定で同梱すると、多くの機械で使えない機能のためにインストーラが 1GB を超える。
+
+```
+iscc /DGpuBackends installer\ohagey.iss
+```
+
+`skipifsourcedoesntexist` も付けてある。`fetch-backends.ps1` は求められたものしか
+取ってこないので、define を渡すことが「全部取得済みであること」を要求すべきではない。
+
+### 入ったもの
+
+| | |
+|---|---|
+| インストーラ | **28.0 MB**(GPU バックエンド無し) |
+| 展開後 | **212.2 MB** |
+
+内訳の大半は設定アプリの自己完結 WinUI ランタイム(約 96MB)とモデル(約 80MB)。
+
+### まだやっていない — 実際に打つ
+
+登録はできたが、**日本語の入力方式一覧に追加して切り替える**のは利用者ごとの設定
+変更なので、そこは手を出していない。実際にメモ帳で打つのはその先である。
