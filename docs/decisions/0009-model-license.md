@@ -105,3 +105,14 @@ Wikipedia は **CC BY-SA 4.0** で、zenz の重みと同じライセンスで�
 
 前の追記の「作者にライセンスの明示を依頼する — 指示待ち」は**不要になった**。
 そのモデルはもう使っていない。
+
+### 公開した(2026-08-04)
+
+`base-lm-v1` として公開した。5つの `lm_*.marisa` に加えて `corpus.txt` と
+`corpus.LICENSE.txt` も置いてある。**インストーラが取得するのはモデル5件だけ**で、
+コーパスは share-alike のために置いている。
+
+https://github.com/C0uki/Ohagey/releases/tag/base-lm-v1
+
+公開した資産に対して `installer/download-model.ps1` を実際に走らせ、
+`ohagey.iss` に固定したハッシュと一致することを確認した。

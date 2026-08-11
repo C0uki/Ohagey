@@ -62,8 +62,27 @@ $slice = $all[0..($Lines - 1)]
 $archived = Join-Path $Destination "corpus.txt"
 [System.IO.File]::WriteAllLines($archived, $slice, [System.Text.UTF8Encoding]::new($false))
 
-$licence = [System.IO.Path]::ChangeExtension($Corpus, ".LICENSE.txt")
-if (Test-Path $licence) { Copy-Item $licence (Join-Path $Destination "corpus.LICENSE.txt") -Force }
+# Written rather than copied. The source corpus has its own sidecar, but it
+# describes the *whole* corpus — copying it here would sit beside a 10,000-line
+# slice claiming 63,009 sentences, which is the kind of provenance file that is
+# worse than none.
+$source = [System.IO.Path]::ChangeExtension($Corpus, ".LICENSE.txt")
+$origin = if (Test-Path $source) {
+    (Get-Content $source | Where-Object { $_ -match '^Source:' } | Select-Object -First 1)
+} else {
+    "Source: unknown — no sidecar beside $Corpus"
+}
+@(
+    $origin,
+    "Licence: CC BY-SA 4.0  https://creativecommons.org/licenses/by-sa/4.0/",
+    "",
+    "corpus.txt here is the first $Lines lines of that corpus, and is exactly the",
+    "input the lm_*.marisa files beside it were trained from.",
+    "",
+    "Attribution and share-alike apply to this text and to the models derived",
+    "from it. Ohagey's own code is MIT and unaffected; see",
+    "docs/decisions/0009-model-license.md."
+) | Set-Content -Path (Join-Path $Destination "corpus.LICENSE.txt") -Encoding UTF8
 
 Write-Host "corpus: $Lines lines, $((($slice | Measure-Object -Property Length -Sum).Sum)) characters"
 Write-Host "training..."

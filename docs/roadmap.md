@@ -1002,8 +1002,23 @@ alpha の話は、まず遅延を片付けてからでないと意味がない�
         exe 1つだけ入れると起動できないものが入る。パスも `src\Ohagey.Settings\`
         と TFM / RID が抜けていた
       - TSF DLL のパスだけは正しかった
-- [ ] **`iscc` を通す。** この機械に Inno Setup が入っていないため未確認。
-      確かめたのは「パスが実在するか」までで、「Inno が受け付けるか」はまだ
+- [x] **`iscc` を通した。** Inno Setup 6.7.3 で `ohagey-setup.exe`(2.00 MB)が出来る。
+      `winget` は `%LOCALAPPDATA%\Programs\Inno Setup 6\` に入れる(Program Files ではない)
+- [x] **`AppId` を確定させた。** `{{REPLACE-WITH-GENERATED-GUID}}` のままで、
+      **Inno はこれをエラーにしない**(リテラル文字列として通る)。仮の値で出荷して
+      後から変えると、更新が更新にならず2つ目のおはぎーが並んで入る。
+      一度きり生成して固定した。`MyAppURL` の `REPLACE_ME` も直した
+- [x] **base LM を公開した**(`base-lm-v1`)。`[Run]` の6行を有効にし、
+      公開資産に対して `download-model.ps1` を実際に走らせてハッシュ一致を確認
+- [x] **実際にインストールした。** 終了コード 0、84.1 MB。既にあった 70MB の重みは
+      **ハッシュを確認して飛ばした**(再インストールで落とし直さない設計が実物で効いた)
+- [x] **出荷構成で個人化を測り直した** — release ビルド、環境変数の上書きなし、
+      base は `%ProgramFiles%\Ohagey\models\`。これまでの測定は全部 debug +
+      `OHAGEY_BASE_LM_PATH` だったので、**初めて出荷そのもので測れた**:
+      個人化オフ 2位→2位 / オン 2位→1位、評価セット 30/30、`ALL PASSED`
+- [x] **既定オンが実際に効くことを確認した。** `HKCU\Software\Ohagey` を丸ごと消して
+      (まっさらな利用者と同じ状態)起動すると `generation 1 published (3 lines, 8818ms)`。
+      duty cycle も実物で効いている(`deferring the next training run by 79s`)
 - [ ] `backends\{cpu,cuda,vulkan}\` の同梱(決定 0028)と CI での `iscc` 有効化
 
 ### llama.cpp の用意(決定 0028、フェーズ2〜3 と並行)

@@ -134,3 +134,117 @@ TFM と RID がパスに入る:
 `iscc` はこの機械に入っていないので、**コンパイルは確認できていない**。
 `[Files]` の行はコメントのままである。確かめたのは「パスが実在するか」までで、
 「Inno がこれを受け付けるか」はまだ。
+
+## 追記(2026-08-04、その2)— `iscc` を通した。`AppId` が仮のままだった
+
+Inno Setup 6.7.3 を入れて `installer/ohagey.iss` をコンパイルした。**通る。**
+`ohagey-setup.exe`(2.00 MB)が出来る。
+
+> `winget install JRSoftware.InnoSetup` は **`%LOCALAPPDATA%\Programs\Inno Setup 6\`**
+> に入る。`C:\Program Files (x86)\Inno Setup 6\` を探しても無い。
+
+### `AppId` を確定させた
+
+`AppId={{REPLACE-WITH-GENERATED-GUID}}` のままだった。**Inno はこれをエラーにしない** —
+リテラル文字列として受け取り、そのままコンパイルが通る。
+
+`AppId` は Windows が「既存のインストール」を見分けるための識別子である。仮の値のまま
+出荷して後で変えると、**更新が更新にならず、2つ目のおはぎーが並んで入る。**
+一度きり生成して固定した:
+
+```
+AppId={{FA549B8C-7981-4ABE-A7CC-1F7DC99E15E7}
+```
+
+(二重の `{` は Inno のエスケープで、リテラルの `{` を意味する。)
+
+`MyAppURL` の `REPLACE_ME` も実際のリポジトリに直した。
+
+### 有効にしたもの / まだコメントのままのもの
+
+**有効:**
+
+- `[Files]` の `download-model.ps1` — リポジトリに実在するファイルで、ビルド成果物では
+  ないため
+- `[Run]` の6行すべて — zenz の重み1件と base LM の5件。リリース資産が公開されたので
+  URL が実在するようになった
+
+**コメントのまま:** TSF DLL / エンジン / 設定アプリ / バックエンド DLL。
+いずれもビルド成果物で、CI でそれらを作る段取りが要る。
+
+いまの `ohagey-setup.exe` は「`download-model.ps1` を入れて、モデル5件+重みを
+取得する」ところまでを行う。**アプリ本体はまだ入らない。**
+
+### まだやっていない
+
+- [ ] **実際にインストールしてみる。** `%ProgramFiles%\Ohagey\` に書き、80MB を
+      取得する。この機械の状態を変えるので指示待ち
+- [ ] CI で `iscc` を回す
+
+## 追記(2026-08-04、その3)— 実際にインストールして、出荷構成で通した
+
+`ohagey-setup.exe` を `/VERYSILENT` で実行した(`PrivilegesRequired=admin` なので
+UAC の承認が要る)。終了コード 0。
+
+### 入ったもの — 84.1 MB
+
+```
+download-model.ps1                0.01 MB
+models\ggml-model-Q5_K_M.gguf    70.45 MB
+models\lm_c_abc.marisa            3.22 MB
+models\lm_c_bc.marisa             1.78 MB
+models\lm_r_xbx.marisa            0.77 MB
+models\lm_u_abx.marisa            1.75 MB
+models\lm_u_xbc.marisa            1.90 MB
+models\download.log
+unins000.exe                      4.25 MB
+```
+
+`download.log` の1行目が効いている:
+
+```
+ggml-model-Q5_K_M.gguf : already present and matches -- nothing to do
+```
+
+70MB の重みは既にあったので**ハッシュを確認して飛ばした**。再インストールや修復で
+毎回落とし直さない、という設計が実物で効くことの確認になった。
+
+### 出荷構成での実測 — **release ビルド、環境変数の上書きなし**
+
+これまでの個人化の測定はすべて debug ビルド + `OHAGEY_BASE_LM_PATH` だった。
+インストーラが `%ProgramFiles%\Ohagey\models\` に base を置いたことで、
+**初めて出荷そのものの構成で測れる**ようになった。
+
+```
+base language model: present (installed, C:\Program Files\Ohagey\models\lm)
+
+=== 学習ストアのみ(個人化オフ)===   服を切る   2位 → 2位
+=== 学習ストア + 個人化 ===          服を切る   2位 → 1位
+```
+
+評価セット32件: `correct at rank 1: 30 -> 30 of 32 (broke 0, fixed 0)`、`ALL PASSED`。
+
+**debug + 環境変数で測ってきた結果が、release + 実インストールでそのまま出る。**
+
+### 既定オンが実際に効くことの確認
+
+`HKCU\Software\Ohagey` を**丸ごと消して**(=まっさらな利用者と同じ状態)release の
+エンジンを起動した:
+
+```
+OhageyEngine: settings loaded (learning=true, backend=cpu)
+OhageyEngine: personalisation: using the installed base language model
+OhageyEngine: personalisation: no trained model yet
+OhageyEngine: personalisation: generation 1 published (3 lines, 8818ms)
+OhageyEngine: personalisation: deferring the next training run by 79s to stay under 10% of the machine
+```
+
+- 設定キーが1つも無い状態で**個人化が動いている** — 既定オンが実際に効いている
+- 8,818ms は 9.4MB の base に対する予測(7.9秒)どおり
+- **duty cycle も実物で効いている** — 次の学習を79秒遅らせている
+
+### アンインストール
+
+`%ProgramFiles%\Ohagey\unins000.exe`、または「アプリと機能」から。
+学習データは `%LOCALAPPDATA%\Ohagey\` にあり、これは消えない(決定 0024 / 0025 —
+消すのは設定アプリの「学習データを消去」)。
