@@ -332,6 +332,7 @@ void CCompositionProcessorEngine::RemoveVirtualKey(DWORD_PTR dwIndex)
 //----------------------------------------------------------------------------
 
 void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange& keystrokes,
+    const std::wstring& precedingText,
     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList)
 {
     if (keystrokes.GetLength() == 0)
@@ -363,7 +364,7 @@ void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange&
     // n_best 0 means "engine default" in ohagey.proto. Sending 0 keeps the
     // decision about how many candidates to produce in one place instead of
     // duplicating it here.
-    if (_engineClient.Convert(readingText, 0, std::wstring(), &result) != Ohagey::CallResult::Ok)
+    if (_engineClient.Convert(readingText, 0, precedingText, &result) != Ohagey::CallResult::Ok)
     {
         // No candidates. The engine may be starting, may have exited on its
         // idle timeout, or may have refused this reading; none of those are
@@ -504,7 +505,7 @@ void CCompositionProcessorEngine::GetReadingStrings(_Inout_ CSampleImeArray<CStr
 //
 //----------------------------------------------------------------------------
 
-void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch)
+void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch, const std::wstring& precedingText)
 {
     // [Ohagey] Rewritten: candidates come from the engine (decisions 0004-0007).
     //
@@ -521,7 +522,7 @@ void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCand
         return;
     }
 
-    GetCandidateListFromEngine(_keystrokeBuffer, pCandidateList);
+    GetCandidateListFromEngine(_keystrokeBuffer, precedingText, pCandidateList);
 }
 
 //+---------------------------------------------------------------------------

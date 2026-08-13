@@ -180,6 +180,12 @@ private:
     HRESULT _InvokeKeyHandler(_In_ ITfContext *pContext, UINT code, WCHAR wch, DWORD flags, _KEYSTROKE_STATE keyState);
 
     // function for the language property
+    // [Ohagey] Left context for the engine (decision 0034). 30 characters,
+    // matching ConversionService.precedingContextLength -- sending more would
+    // only be trimmed at the far end.
+    static const LONG PRECEDING_TEXT_MAX = 30;
+    HRESULT _GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext, _Out_ std::wstring *pText);
+
     BOOL _SetCompositionLanguage(TfEditCookie ec, _In_ ITfContext *pContext);
 
     // function for the display attribute

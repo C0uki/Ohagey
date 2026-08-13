@@ -386,6 +386,78 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 
 //+---------------------------------------------------------------------------
 //
+// _GetPrecedingText     [Ohagey]
+//
+// The committed text immediately before the composition (decision 0034).
+//
+// Zenzai takes it as `leftSideContext` and uses it to choose between readings
+// that are otherwise tied -- 「はし」 after 「川に」 is not the same word as
+// 「はし」 after 「ご飯を」. Nothing is learned from it, so unlike
+// personalisation there is nothing here that can be taught a mistake.
+//
+// Read fresh at each conversion rather than tracked as we go: the user can
+// click elsewhere, edit behind the caret, or switch documents between one
+// conversion and the next, and a cached copy would then be a confident answer
+// about the wrong place.
+//
+//----------------------------------------------------------------------------
+
+HRESULT CSampleIME::_GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext, _Out_ std::wstring *pText)
+{
+    pContext;
+    pText->clear();
+
+    if (_pComposition == nullptr)
+    {
+        return S_FALSE;
+    }
+
+    ITfRange* pRangeComposition = nullptr;
+    if (FAILED(_pComposition->GetRange(&pRangeComposition)) || pRangeComposition == nullptr)
+    {
+        return S_FALSE;
+    }
+
+    HRESULT hr = S_FALSE;
+    ITfRange* pRangeBefore = nullptr;
+    if (SUCCEEDED(pRangeComposition->Clone(&pRangeBefore)) && pRangeBefore != nullptr)
+    {
+        // Collapse onto the composition's start, then pull the start back: the
+        // range then covers the characters immediately before it. Near the top
+        // of a document ShiftStart simply moves less, which `shifted` reports
+        // and GetText respects.
+        if (SUCCEEDED(pRangeBefore->Collapse(ec, TF_ANCHOR_START)))
+        {
+            LONG shifted = 0;
+            if (SUCCEEDED(pRangeBefore->ShiftStart(ec, -PRECEDING_TEXT_MAX, &shifted, nullptr)) && shifted < 0)
+            {
+                WCHAR buffer[PRECEDING_TEXT_MAX + 1] = {'\0'};
+                ULONG fetched = 0;
+                if (SUCCEEDED(pRangeBefore->GetText(ec, 0, buffer, PRECEDING_TEXT_MAX, &fetched)) && fetched > 0)
+                {
+                    pText->assign(buffer, fetched);
+                    hr = S_OK;
+                }
+            }
+        }
+        pRangeBefore->Release();
+    }
+    pRangeComposition->Release();
+
+    // Cut at the last line break. Context is what the sentence is running on,
+    // and the paragraph above is a different sentence -- feeding it in would
+    // ask the model to continue something the user already finished.
+    const size_t lastBreak = pText->find_last_of(L"\r\n");
+    if (lastBreak != std::wstring::npos)
+    {
+        pText->erase(0, lastBreak + 1);
+    }
+
+    return hr;
+}
+
+//+---------------------------------------------------------------------------
+//
 // _HandleCompositionConvert
 //
 //----------------------------------------------------------------------------
@@ -401,7 +473,17 @@ HRESULT CSampleIME::_HandleCompositionConvert(TfEditCookie ec, _In_ ITfContext *
     //
     CCompositionProcessorEngine* pCompositionProcessorEngine = nullptr;
     pCompositionProcessorEngine = _pCompositionProcessorEngine;
-    pCompositionProcessorEngine->GetCandidateList(&candidateList, FALSE, isWildcardSearch);
+    // [Ohagey] What the user already wrote, to the left of what they are
+    // converting now (decision 0034).
+    //
+    // The protocol has carried this field since decision 0007 and the engine
+    // has used it since decision 0034 -- but the TSF side sent an empty string,
+    // so every request in a real session logged `preceding 0` and the feature
+    // was measured only in a harness. This is the missing end.
+    std::wstring precedingText;
+    _GetPrecedingText(ec, pContext, &precedingText);
+
+    pCompositionProcessorEngine->GetCandidateList(&candidateList, FALSE, isWildcardSearch, precedingText);
 
     // If there is no candlidate listin the current reading string, we don't do anything. Just wait for
     // next char to be ready for the conversion with it.

@@ -52,7 +52,9 @@ public:
     WCHAR GetVirtualKey(DWORD_PTR dwIndex);
 
     void GetReadingStrings(_Inout_ CSampleImeArray<CStringRange> *pReadingStrings, _Out_ BOOL *pIsWildcardIncluded);
-    void GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch);
+    // [Ohagey] precedingText is the already-committed text to the left of the
+    // composition; the engine uses it to disambiguate (decision 0034).
+    void GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch, const std::wstring& precedingText);
     void GetCandidateStringInConverted(CStringRange &searchString, _In_ CSampleImeArray<CCandidateListItem> *pCandidateList);
 
     // [Ohagey] Tells the engine which candidate the user settled on, so it can
@@ -177,6 +179,7 @@ private:
     // Resolves `keystrokes` (romaji) to kana and fills `pCandidateList` from
     // the engine's answer.
     void GetCandidateListFromEngine(const CStringRange& keystrokes,
+                                   const std::wstring& precedingText,
                                     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList);
     CStringRange _keystrokeBuffer;
 
