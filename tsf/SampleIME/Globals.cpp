@@ -228,22 +228,75 @@ extern const WCHAR FullWidthCharTable[] = {
 //---------------------------------------------------------------------
 // defined punctuation characters
 //---------------------------------------------------------------------
-extern const struct _PUNCTUATION PunctuationTable[14] = {
-    {L'!',  0xFF01},
-    {L'$',  0xFFE5},
-    {L'&',  0x2014},
-    {L'(',  0xFF08},
-    {L')',  0xFF09},
-    {L',',  0xFF0C},
-    {L'.',  0x3002},
-    {L':',  0xFF1A},
-    {L';',  0xFF1B},
-    {L'?',  0xFF1F},
-    {L'@',  0x00B7},
-    {L'\\', 0x3001},
-    {L'^',  0x2026},
-    {L'_',  0x2014}
+// [Ohagey] The Japanese kana-input punctuation, not the sample's Chinese set.
+//
+// This table is applied to a key *before* it can become part of a reading, so
+// whatever is here is what the user gets. The sample's entries were the
+// Simplified Chinese conventions, and they made ordinary symbols unusable:
+//
+//     ,  -> U+FF0C the Chinese comma, where Japanese wants U+3001
+//     \  -> U+3001 -- Chinese IMEs put the ideographic comma on backslash
+//     @  -> U+00B7    $ -> U+FFE5 (yuan)    & and _ -> U+2014    ^ -> U+2026
+//
+// So typing $ produced a currency sign and & produced an em dash. Reported as
+// the symbols not typing properly, which is exactly what it was.
+//
+// What is left is the five a Japanese IME maps, and nothing else: every other
+// ASCII symbol now reaches the document as itself. Widening them to full-width
+// forms is the double-byte toggle's job (IsDoubleSingleByte) -- a mode the user
+// chooses, not something a punctuation table should do behind their back.
+//
+// These agree with RomajiToKana, which already maps , . and / inside a reading.
+extern const struct _PUNCTUATION PunctuationTable[5] = {
+    {L',',  0x3001},   // ideographic comma
+    {L'.',  0x3002},   // ideographic full stop
+    {L'/',  0x30FB},   // katakana middle dot
+    {L'[',  0x300C},   // left corner bracket
+    {L']',  0x300D}    // right corner bracket
 };
+
+//+---------------------------------------------------------------------------
+//
+// IsSystemDarkTheme / DarkIconVariant     [Ohagey]
+//
+// Windows does not tint or invert a text service's icons, so a black glyph is
+// black on a dark taskbar. The only fix is to ship a light-on-dark set and
+// choose between them, which is what these two do.
+//
+//----------------------------------------------------------------------------
+
+BOOL IsSystemDarkTheme()
+{
+    // SystemUsesLightTheme, not AppsUseLightTheme: the two are set separately,
+    // and it is the *system* one that colours the taskbar these icons sit on.
+    // Absent (some managed images never write it) means light, which is the
+    // Windows default and the safer guess -- a black glyph on a light bar is
+    // right, while a white one there would be invisible.
+    DWORD light = 1;
+    DWORD size = sizeof(light);
+    if (RegGetValueW(HKEY_CURRENT_USER,
+                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                     L"SystemUsesLightTheme",
+                     RRF_RT_REG_DWORD, nullptr, &light, &size) != ERROR_SUCCESS)
+    {
+        return FALSE;
+    }
+    return light == 0;
+}
+
+int DarkIconVariant(int iconIndex)
+{
+    switch (iconIndex)
+    {
+    case IDI_IME_MODE_ON:  return IDI_IME_MODE_ON_DARK;
+    case IDI_IME_MODE_OFF: return IDI_IME_MODE_OFF_DARK;
+    // The width and punctuation buttons have no light set yet. Returning the
+    // original is right rather than merely safe: those buttons only appear on
+    // the detached language bar, and an icon that is hard to see there is a
+    // smaller problem than one that fails to load at all.
+    default:               return iconIndex;
+    }
+}
 
 //+---------------------------------------------------------------------------
 //

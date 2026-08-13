@@ -71,7 +71,11 @@ function Write-IcoFile {
 }
 
 function New-GlyphIcon {
-    param([string]$Glyph, [string]$Path, [single]$Fill = 0.78)
+    # -Light draws the glyph white instead of black, for the dark-theme set.
+    # Windows does not invert a text service's icons, so the black あ/A vanished
+    # into the dark taskbar; both sets ship and the DLL picks one at display
+    # time (CLangBarItemButton::GetIconImpl).
+    param([string]$Glyph, [string]$Path, [single]$Fill = 0.78, [switch]$Light)
 
     $streams = @()
     foreach ($size in $sizes) {
@@ -97,7 +101,8 @@ function New-GlyphIcon {
         $format.LineAlignment = [System.Drawing.StringAlignment]::Center
 
         $rect = [System.Drawing.RectangleF]::new([single]0, [single]0, [single]$size, [single]$size)
-        $g.DrawString($Glyph, $font, [System.Drawing.Brushes]::Black, $rect, $format)
+        $ink = if ($Light) { [System.Drawing.Brushes]::White } else { [System.Drawing.Brushes]::Black }
+        $g.DrawString($Glyph, $font, $ink, $rect, $format)
         $g.Dispose()
 
         $ms = [System.IO.MemoryStream]::new()
@@ -117,6 +122,10 @@ function New-GlyphIcon {
 # way as the one beside it rather than announcing a different language.
 New-GlyphIcon -Glyph "あ" -Path (Join-Path $Destination "ImeModeOn.ico")
 New-GlyphIcon -Glyph "A"  -Path (Join-Path $Destination "ImeModeOff.ico")
+
+# The same two in white, for a dark taskbar.
+New-GlyphIcon -Glyph "あ" -Path (Join-Path $Destination "ImeModeOnDark.ico")  -Light
+New-GlyphIcon -Glyph "A"  -Path (Join-Path $Destination "ImeModeOffDark.ico") -Light
 
 function New-OhagiIcon {
     param([string]$Path)

@@ -129,7 +129,7 @@ extern const GUID SampleIMEGuidCompartmentDoubleSingleByte;
 extern const GUID SampleIMEGuidCompartmentPunctuation;
 
 extern const WCHAR FullWidthCharTable[];
-extern const struct _PUNCTUATION PunctuationTable[14];
+extern const struct _PUNCTUATION PunctuationTable[5];
 
 extern const GUID SampleIMEGuidLangBarIMEMode;
 extern const GUID SampleIMEGuidLangBarDoubleSingleByte;
@@ -143,6 +143,10 @@ extern const GUID SampleIMEGuidCandUIElement;
 extern const WCHAR UnicodeByteOrderMark;
 extern const WCHAR KeywordDelimiter;
 extern const WCHAR StringDelimiter;
+
+// [Ohagey] Theme-aware language bar icons; see Globals.cpp.
+BOOL IsSystemDarkTheme();
+int DarkIconVariant(int iconIndex);
 
 extern const WCHAR ImeModeDescription[];
 extern const int ImeModeOnIcoIndex;

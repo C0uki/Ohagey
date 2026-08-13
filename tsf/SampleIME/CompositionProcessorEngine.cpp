@@ -992,27 +992,23 @@ BOOL CCompositionProcessorEngine::InitLanguageBar(_In_ CLangBarItemButton *pLang
 
 void CCompositionProcessorEngine::SetupPunctuationPair()
 {
-    // Punctuation pair
-    const int pair_count = 2;
-    CPunctuationPair punc_quotation_mark(L'"', 0x201C, 0x201D);
-    CPunctuationPair punc_apostrophe(L'\'', 0x2018, 0x2019);
-
-    CPunctuationPair puncPairs[pair_count] = {
-        punc_quotation_mark,
-        punc_apostrophe,
-    };
-
-    for (int i = 0; i < pair_count; ++i)
-    {
-        CPunctuationPair *pPuncPair = _PunctuationPair.Append();
-        *pPuncPair = puncPairs[i];
-    }
-
-    // Punctuation nest pair
-    CPunctuationNestPair punc_angle_bracket(L'<', 0x300A, 0x3008, L'>', 0x300B, 0x3009);
-
-    CPunctuationNestPair* pPuncNestPair = _PunctuationNestPair.Append();
-    *pPuncNestPair = punc_angle_bracket;
+    // [Ohagey] Empty, deliberately.
+    //
+    // The sample registered three substitutions that a Japanese IME must not
+    // make:
+    //
+    //   " -> U+201C/U+201D and ' -> U+2018/U+2019, alternating open and close.
+    //     Western typographic quotes. Anyone typing a quotation mark into code,
+    //     a search box or a path wants the one on the key.
+    //
+    //   < and > -> U+300A/U+3008 and U+300B/U+3009, the Chinese book-title
+    //     marks 《》 and 〈〉. Japanese uses 「」 for quotation, which is on the
+    //     bracket keys in PunctuationTable, and needs the comparison operators
+    //     to stay comparison operators.
+    //
+    // Both mechanisms are left in place — they are how a pairing IME would do
+    // this — but Japanese has nothing to put in them. `IsPunctuation` iterates
+    // empty arrays and falls through, so the keys reach the document unchanged.
 }
 
 void CCompositionProcessorEngine::InitializeSampleIMECompartment(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId)
