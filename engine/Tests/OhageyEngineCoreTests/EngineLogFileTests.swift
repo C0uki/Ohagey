@@ -128,3 +128,65 @@ final class EngineLogFileTests: XCTestCase {
         }
     }
 }
+
+/// The log must never become a transcript of what the user wrote.
+///
+/// Asserted rather than left to review: the summaries are one interpolation
+/// away from carrying the reading, and nothing else in the build would notice.
+final class RequestLogSummaryTests: XCTestCase {
+    private let secret = "ひみつのぶんしょう"
+
+    func testConvertNamesTheMethodAndLengthsButNotTheText() {
+        let summary = EngineRequest
+            .convert(reading: secret, nBest: 9, precedingText: secret)
+            .logSummary
+        XCTAssertFalse(summary.contains(secret), summary)
+        XCTAssertTrue(summary.hasPrefix("convert "), summary)
+        XCTAssertTrue(summary.contains("reading \(secret.count)"), summary)
+    }
+
+    func testCommitDoesNotCarryTheCommittedText() {
+        let summary = EngineRequest
+            .commit(reading: secret, text: secret, updateLearning: true)
+            .logSummary
+        XCTAssertFalse(summary.contains(secret), summary)
+        XCTAssertTrue(summary.contains("learn true"), summary)
+    }
+
+    func testRegisterWordDoesNotCarryTheWord() {
+        let summary = EngineRequest
+            .registerWord(reading: secret, surface: secret, partOfSpeech: "名詞")
+            .logSummary
+        XCTAssertFalse(summary.contains(secret), summary)
+    }
+
+    func testCandidatesAreCountedNotListed() {
+        let candidate = EngineCandidate(text: secret, reading: secret)
+        let summary = EngineResponse
+            .convert(candidates: [candidate, candidate], zenzaiUsed: true)
+            .logSummary
+        XCTAssertFalse(summary.contains(secret), summary)
+        XCTAssertTrue(summary.contains("2 candidates"), summary)
+    }
+}
+
+extension EngineLogFileTests {
+    /// The zone is a parameter because `TimeZone.current` is GMT on Swift for
+    /// Windows, and a log nine hours off with no zone printed is worse than no
+    /// log. Asserted so the parameter cannot quietly stop being used.
+    func testTimestampsAreInTheZoneItWasGiven() throws {
+        let tokyo = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let utc = try XCTUnwrap(TimeZone(identifier: "UTC"))
+
+        let a = EngineLogFile(url: url("tokyo.log"), processId: 1, timeZone: tokyo)
+        a.append("x")
+        a.close()
+        let b = EngineLogFile(url: url("utc.log"), processId: 1, timeZone: utc)
+        b.append("x")
+        b.close()
+
+        let hourInTokyo = try Int(XCTUnwrap(contents(of: url("tokyo.log")).dropFirst(11).prefix(2)))
+        let hourInUtc = try Int(XCTUnwrap(contents(of: url("utc.log")).dropFirst(11).prefix(2)))
+        XCTAssertEqual((hourInUtc! + 9) % 24, hourInTokyo!)
+    }
+}

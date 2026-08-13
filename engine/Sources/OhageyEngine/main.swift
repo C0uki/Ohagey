@@ -94,7 +94,7 @@ enum OhageyEngineMain {
                 effectiveBackend: selected.backend ?? settings.backend,
                 log: log
             )
-            let router = RequestRouter(handler: service)
+            let router = RequestRouter(handler: service, log: log)
 
             // Settings arrive through the registry, not by IPC (decision 0014).
             // Applied on the main actor because that is where the converter
@@ -157,7 +157,11 @@ enum OhageyEngineMain {
 
     // Opened lazily, on the first line: an engine started only to be told the
     // pipe is already taken should not leave a file behind.
-    private static let logFile = EngineLogFile(url: EnginePaths.logURL)
+    private static let logFile = EngineLogFile(
+        url: EnginePaths.logURL,
+        // Not TimeZone.current: it is GMT here. See LocalTimeZone.
+        timeZone: LocalTimeZone.current
+    )
 
     // `@Sendable` and a stored closure rather than a plain method: the accept
     // loop and every connection thread log, so this crosses threads.

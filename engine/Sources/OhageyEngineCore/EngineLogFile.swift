@@ -44,6 +44,7 @@ public final class EngineLogFile: @unchecked Sendable {
     private let url: URL
     private let maximumBytes: Int
     private let processId: Int32
+    private let formatter: DateFormatter
 
     // The accept loop and every connection thread log (main.swift passes one
     // closure to all of them), so appends genuinely race.
@@ -52,14 +53,41 @@ public final class EngineLogFile: @unchecked Sendable {
     private var bytesWritten = 0
     private var givenUp = false
 
+    /// - Parameter timeZone: what the timestamps are in.
+    ///
+    ///   Passed in rather than taken from `TimeZone.current`, which **returns
+    ///   GMT on Swift for Windows** — Foundation there cannot read the system
+    ///   zone. Measured on this machine: `TimeZone.current.identifier` is
+    ///   `GMT`, `secondsFromGMT()` is 0, while forcing `Asia/Tokyo` formats
+    ///   correctly, so the zone database is present and only the *current* zone
+    ///   is unavailable.
+    ///
+    ///   That produced the worst possible log: nine hours behind the machine
+    ///   that wrote it, printed without a zone, and therefore indistinguishable
+    ///   from local time. The first real session was read as 08:00 when it
+    ///   happened at 17:00.
+    ///
+    ///   The default stays `.current` so this stays portable and honest about
+    ///   what Foundation offers; `OhageyEngine` asks Windows itself and passes
+    ///   the answer in (decision 0033).
     public init(
         url: URL,
         maximumBytes: Int = EngineLogFile.defaultMaximumBytes,
-        processId: Int32 = ProcessInfo.processInfo.processIdentifier
+        processId: Int32 = ProcessInfo.processInfo.processIdentifier,
+        timeZone: TimeZone = .current
     ) {
         self.url = url
         self.maximumBytes = maximumBytes
         self.processId = processId
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
+        f.timeZone = timeZone
+        // Fixed rather than inherited: under a locale with a non-Gregorian
+        // calendar or non-ASCII digits, `yyyy` is not the year anyone reading
+        // a log is expecting.
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.calendar = Calendar(identifier: .gregorian)
+        self.formatter = f
     }
 
     /// Where the previous log is moved when the live one fills up.
@@ -72,7 +100,7 @@ public final class EngineLogFile: @unchecked Sendable {
         defer { lock.unlock() }
         guard !givenUp else { return }
 
-        let line = "\(Self.timestamp()) [\(processId)] \(message)\n"
+        let line = "\(timestamp()) [\(processId)] \(message)\n"
         guard let data = line.data(using: .utf8) else { return }
 
         if handle == nil { open() }
@@ -177,16 +205,9 @@ public final class EngineLogFile: @unchecked Sendable {
         open()
     }
 
-    private static let formatter: DateFormatter = {
-        let f = DateFormatter()
-        // Local time and no zone: this is read next to Event Viewer and the
-        // user's own account of when something happened, both of which are
-        // local.
-        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSS"
-        return f
-    }()
-
-    private static func timestamp() -> String {
+    // Called under `lock`, which is what makes sharing one DateFormatter across
+    // the accept loop and every connection thread safe.
+    private func timestamp() -> String {
         formatter.string(from: Date())
     }
 }

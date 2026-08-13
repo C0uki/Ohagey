@@ -186,3 +186,43 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_r_xbx.marisa -Dest ""{app}\models\lm_r_xbx.marisa"" -Sha256 31BC54FCB7041847028E58F6BAC52703BAC785FAC10C5B6B17079C312A76D059"; Flags: runhidden; StatusMsg: "Downloading personalisation model (3 of 5)..."
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_abx.marisa -Dest ""{app}\models\lm_u_abx.marisa"" -Sha256 9037787429C11D75903C9BB9F0C574E6DD146966D2800FE368DCDCAF1138ABC2"; Flags: runhidden; StatusMsg: "Downloading personalisation model (4 of 5)..."
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\download-model.ps1"" -Url https://github.com/C0uki/Ohagey/releases/download/base-lm-v1/lm_u_xbc.marisa -Dest ""{app}\models\lm_u_xbc.marisa"" -Sha256 D10C5413F543F7D8EC761ED81C99D4DE49C9608CCE003B2195DA6A218BB02FFD"; Flags: runhidden; StatusMsg: "Downloading personalisation model (5 of 5)..."
+
+[Code]
+// Stop the engine before replacing it.
+//
+// The engine is a background process of ours, started on demand by the TSF DLL
+// (decision 0015). It is not the user's application, and it holds nothing that
+// is not already on disk: learning is persisted as it goes, and personalisation
+// trains into a staging directory and publishes atomically. The next conversion
+// starts a fresh one.
+//
+// Without this, updating Ohagey while any application has the IME loaded fails
+// and **rolls the whole installation back**:
+//
+//   DeleteFile: The existing file appears to be in use (5). Retrying.
+//   ... An error occurred while trying to replace the existing file
+//   User canceled the installation process. Rolling back changes.
+//
+// That is not a rare case. The TSF client holds its pipe connection open for as
+// long as the IME is loaded, so the idle timeout never fires and the engine is
+// running essentially whenever anyone has typed since logging in.
+//
+// Deliberately not Inno's CloseApplications: RestartManager sees the TSF DLL
+// loaded into Discord, LINE, the shell, and offers to close *those*. Updating
+// an IME must not close the user's chat client (decision 0033). This closes
+// exactly one process, and it is ours.
+//
+// The DLL itself still cannot be replaced while it is loaded; that is what
+// `restartreplace` on it is for, and why an update can still ask for a sign-out.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+begin
+  Result := '';
+  // /F because it has no window to close politely; /IM so instances in other
+  // sessions on a shared machine are included. A failure is not fatal: if there
+  // was nothing to kill, taskkill returns non-zero and the install proceeds as
+  // it always did.
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM OhageyEngine.exe',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
