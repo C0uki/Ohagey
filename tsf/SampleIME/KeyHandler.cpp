@@ -119,7 +119,35 @@ HRESULT CSampleIME::_HandleCompositionInput(TfEditCookie ec, _In_ ITfContext *pC
     CCompositionProcessorEngine* pCompositionProcessorEngine = nullptr;
     pCompositionProcessorEngine = _pCompositionProcessorEngine;
 
-    if ((_pCandidateListUIPresenter != nullptr) && (_candidateMode != CANDIDATE_INCREMENTAL))
+    // [Ohagey] "A candidate window is up" is `_candidateMode`, not the pointer.
+    //
+    // This asks: is the user typing a character while a candidate list is
+    // showing? If so, settle what is there before starting the new one.
+    //
+    // The pointer cannot answer that. `_DeleteCandidateList` — which runs on
+    // every teardown path, including after a commit — calls
+    // `_EndCandidateList` and sets `_candidateMode = CANDIDATE_NONE`, but
+    // leaves `_pCandidateListUIPresenter` non-null. So once the user has
+    // converted **once**, this condition is true for every keystroke
+    // afterwards, and each one runs `_HandleCompositionFinalize`: the second
+    // character of the next word ends the composition, commits the first
+    // character on its own, and `_HandleCancel` purges the reading buffer.
+    // The reading can never grow past one character again, so conversion
+    // never happens a second time.
+    //
+    // That is the reported "変換が一回限り", and it is not new: the sample
+    // masked it by setting CANDIDATE_INCREMENTAL from the per-keystroke
+    // candidate fetch, which happened to make this condition false whenever
+    // the engine returned anything. Removing that fetch (see
+    // `_HandleCompositionInputWorker`) removed the mask, not the bug.
+    //
+    // Left as a mode test rather than fixed by deleting the presenter in
+    // `_DeleteCandidateList`: that runs from profile deactivation and from
+    // composition teardown, the object is reference counted and TSF may hold
+    // it, and this DLL lives inside the user's applications (decision 0017).
+    if ((_pCandidateListUIPresenter != nullptr)
+        && (_candidateMode != CANDIDATE_INCREMENTAL)
+        && (_candidateMode != CANDIDATE_NONE))
     {
         _HandleCompositionFinalize(ec, pContext, FALSE);
     }

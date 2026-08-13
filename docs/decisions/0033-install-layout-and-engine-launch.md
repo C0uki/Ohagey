@@ -537,3 +537,53 @@ Foundation/FileHandle.swift:709: Fatal error: 'try!' expression unexpectedly rai
 
 **テストが無ければ出荷まで残っていた。** そしてこれが落とすのは、
 利用者が文字を打っているプロセスである。
+
+## 追記(2026-08-04、その9)— 「変換が一回限り」の原因。**候補窓の有無をポインタで判定していた**
+
+`_HandleCompositionInput` の先頭にこれがある:
+
+```cpp
+if ((_pCandidateListUIPresenter != nullptr) && (_candidateMode != CANDIDATE_INCREMENTAL))
+{
+    _HandleCompositionFinalize(ec, pContext, FALSE);
+}
+```
+
+訊きたいことは「**候補窓が出ている最中に文字が打たれたか**」である。出ているなら、
+新しい語を始める前にいま出ているものを確定する。
+
+**ポインタはその質問に答えられない。** `_DeleteCandidateList` は
+`_EndCandidateList()` を呼んで `_candidateMode = CANDIDATE_NONE` にするが、
+**`_pCandidateListUIPresenter` を null にしない**。確定・取り消し・合成終了、
+どの経路も通る後始末がそれである。
+
+結果、**一度でも変換すると、以降すべての打鍵でこの条件が真になる。**
+
+| 打鍵 | 起きること |
+|---|---|
+| 確定した直後 | presenter は残る、mode は NONE |
+| 次の語の1文字目 | finalize が走る。まだ合成中でないので実害なし |
+| **2文字目** | finalize が走り、**合成が終わって1文字目だけが単独で確定**。`_HandleCancel` が読みバッファを消す |
+
+**読みが二度と1文字を超えられない。** だから変換は二度と起きない。
+報告された「変換が一回限り」はこれである。
+
+### これは私が入れたものではない — **隠していたものを外しただけ**
+
+その5で打鍵ごとの変換をやめたとき、`_CreateAndStartCandidate` の呼び出し元が消えた。
+あれは打鍵のたびに `_candidateMode = CANDIDATE_INCREMENTAL` を立てていたので、
+**エンジンが候補を返しさえすればこの条件が偽になっていた。**
+バグではなく**マスク**が消えた。元から壊れていた。
+
+### 直し方 — presenter を消すのではなく、mode で判定する
+
+`_DeleteCandidateList` で `delete` するほうが筋に見えるが、そこは
+プロファイル無効化からも合成の後始末からも呼ばれ、対象は参照カウント付きで
+TSF が握っている可能性がある。**この DLL は利用者のアプリの中で動く**(決定 0017)。
+条件を `_candidateMode` に寄せた — 候補窓が出ているかを知っているのは元々そちらである。
+
+### 学び
+
+**同じ事実を2つの場所で持つと、片方だけ更新される。** ここでは「候補窓が出ているか」を
+ポインタと mode の両方が持っていて、後始末は mode しか直さなかった。
+そして**間違ったほうを読んでいた**。
