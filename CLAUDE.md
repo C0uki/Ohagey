@@ -73,7 +73,7 @@ clone した fork を指すと `.package(path:)` に切り替わる。
 
 ### 実機で検証済み
 - Windows で `swift build` が通り `OhageyEngine.exe` が生成される
-- `swift test` **175件パス**
+- `swift test` **189件パス**
 - **実クライアントとの往復**: 名前付きパイプ経由で `Ping` / `Convert` が動作。
   `へんかん` → 変換/返還/… を返す(辞書の実ロードと変換を確認)
 - **6クライアント同時接続** — 全員が自分の `request_id` で正しく応答を受け取る

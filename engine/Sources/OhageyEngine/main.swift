@@ -21,6 +21,14 @@ enum OhageyEngineMain {
     // call at the bottom of the file needs no await.
     @MainActor
     static func main() {
+        // First line of every session, and the reason the log carries a pid:
+        // several processes start and exit over a day (decision 0015) and all
+        // of them append here. Naming the binary answers "which build is
+        // actually running", which was unanswerable from inside the machine
+        // when the installer turned out to be re-registering an old DLL
+        // (decision 0033).
+        log("starting: \(CommandLine.arguments.first ?? "unknown path")")
+
         do {
             try EnginePaths.ensureUserDataDirectoryExists()
         } catch {
@@ -147,11 +155,22 @@ enum OhageyEngineMain {
         #endif
     }
 
+    // Opened lazily, on the first line: an engine started only to be told the
+    // pipe is already taken should not leave a file behind.
+    private static let logFile = EngineLogFile(url: EnginePaths.logURL)
+
     // `@Sendable` and a stored closure rather than a plain method: the accept
     // loop and every connection thread log, so this crosses threads.
     private static let log: @Sendable (String) -> Void = { message in
-        // Console logging only. No telemetry, no crash reporting, nothing
+        // Console and a local file. No telemetry, no crash reporting, nothing
         // leaves the machine (decision 0016).
+        //
+        // The console half is for developers running the engine by hand. In
+        // the shipped arrangement the engine is started by a TSF DLL inside
+        // the application being typed in, which has no console at all — so
+        // without the file, a real session says nothing about itself. Never
+        // put what the user typed in here; see EngineLogFile.
+        logFile.append(message)
         print("OhageyEngine: \(message)")
         // Flush every line. stdout is block-buffered once redirected to a file,
         // and this process usually ends by idle timeout or by being killed —

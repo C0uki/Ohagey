@@ -273,6 +273,21 @@ public enum EnginePaths {
         }
     }
 
+    /// Diagnostic log (decision 0033).
+    ///
+    /// The engine is normally started by a TSF DLL inside someone else's
+    /// process — Notepad, a browser — which has no console. Everything it says
+    /// about itself goes nowhere, so a real session leaves no trace at all and
+    /// the only reports available are what the user noticed. Written here so
+    /// there is something to read afterwards.
+    ///
+    /// Beside the learning data rather than under `%ProgramFiles%`: this is
+    /// per-user, and the engine runs without write access to its own
+    /// installation directory.
+    public static var logURL: URL {
+        userDataDirectory.appendingPathComponent("engine.log")
+    }
+
     /// The model download is allowed to fail at install time (decision 0008);
     /// when it is missing the engine falls back to dictionary-only conversion
     /// rather than refusing to start.
