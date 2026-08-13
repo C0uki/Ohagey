@@ -731,7 +731,24 @@ void CCompositionProcessorEngine::SetupPreserved(_In_ ITfThreadMgr *pThreadMgr, 
     SetPreservedKey(Global::SampleIMEGuidImeModePreserveKey, preservedKeyImeMode, Global::ImeModeDescription, &_PreservedKey_IMEMode);
     AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_AUTO, 0);
     AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ENLW, 0);
+
+    // 英数. Registering VK_CAPITAL alone was not enough -- reported as the key
+    // still doing nothing -- so the whole family the JIS keycap can arrive as
+    // is registered:
+    //
+    //   VK_OEM_ATTN (0xF0) is VK_DBE_ALPHANUMERIC, which is what the 英数 key
+    //     reports while an IME is active. It is almost certainly the one that
+    //     was missing.
+    //   VK_CAPITAL, plain and with Shift, because which of the two the key
+    //     produces depends on the layout driver, and on a JIS keyboard 英数 is
+    //     the primary legend either way.
+    //
+    // Registering several costs one table entry each and removes the guesswork;
+    // a key that never arrives simply never fires.
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ATTN, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ATTN, TF_MOD_SHIFT);
     AddPreservedKey(&_PreservedKey_IMEMode, VK_CAPITAL, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_CAPITAL, TF_MOD_SHIFT);
 
     TF_PRESERVEDKEY preservedKeyDoubleSingleByte;
     preservedKeyDoubleSingleByte.uVKey = VK_SPACE;
