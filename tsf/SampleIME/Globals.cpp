@@ -159,7 +159,7 @@ extern const WCHAR StringDelimiter  = L'\"';
 //---------------------------------------------------------------------
 // defined item in setting file table [PreservedKey] section
 //---------------------------------------------------------------------
-extern const WCHAR ImeModeDescription[] = L"かな/英数の切り替え (Shift)";
+extern const WCHAR ImeModeDescription[] = L"かな/英数の切り替え (半角/全角、英数)";
 extern const int ImeModeOnIcoIndex = IME_MODE_ON_ICON_INDEX;
 extern const int ImeModeOffIcoIndex = IME_MODE_OFF_ICON_INDEX;
 
@@ -228,31 +228,63 @@ extern const WCHAR FullWidthCharTable[] = {
 //---------------------------------------------------------------------
 // defined punctuation characters
 //---------------------------------------------------------------------
-// [Ohagey] The Japanese kana-input punctuation, not the sample's Chinese set.
+// [Ohagey] The symbols a Japanese keyboard produces in kana mode.
 //
-// This table is applied to a key *before* it can become part of a reading, so
-// whatever is here is what the user gets. The sample's entries were the
-// Simplified Chinese conventions, and they made ordinary symbols unusable:
+// Two rounds of wrong here. The sample's table was the Simplified Chinese set
+// -- , to U+FF0C, backslash to U+3001, $ to a currency sign, & to an em dash.
+// Replacing it with only the five punctuation marks went too far the other
+// way: in kana mode a Japanese IME widens the symbols too, so ! came out
+// half-width where every other IME on the machine gives ！.
 //
-//     ,  -> U+FF0C the Chinese comma, where Japanese wants U+3001
-//     \  -> U+3001 -- Chinese IMEs put the ideographic comma on backslash
-//     @  -> U+00B7    $ -> U+FFE5 (yuan)    & and _ -> U+2014    ^ -> U+2026
+// This is the JIS 106/109 set, matching Microsoft IME's defaults:
 //
-// So typing $ produced a currency sign and & produced an em dash. Reported as
-// the symbols not typing properly, which is exactly what it was.
+//   the five that are not merely widened -- , . / [ ] become 、。・「」;
+//   backslash becomes the yen sign, which is what the key is labelled;
+//   quote and apostrophe take the typographic closing forms;
+//   tilde becomes the wave dash U+301C, not the fullwidth tilde;
+//   everything else takes its U+FF00-block twin.
 //
-// What is left is the five a Japanese IME maps, and nothing else: every other
-// ASCII symbol now reaches the document as itself. Widening them to full-width
-// forms is the double-byte toggle's job (IsDoubleSingleByte) -- a mode the user
-// chooses, not something a punctuation table should do behind their back.
+// Letters and digits are absent on purpose: letters are the reading, and
+// digits stay half-width, which is what Microsoft IME does and what anyone
+// typing a number wants.
 //
-// These agree with RomajiToKana, which already maps , . and / inside a reading.
-extern const struct _PUNCTUATION PunctuationTable[5] = {
-    {L',',  0x3001},   // ideographic comma
-    {L'.',  0x3002},   // ideographic full stop
-    {L'/',  0x30FB},   // katakana middle dot
-    {L'[',  0x300C},   // left corner bracket
-    {L']',  0x300D}    // right corner bracket
+// '-' is absent too, and that is the point of the keystroke table entry beside
+// it: the minus key has to reach the reading buffer so コーヒー can be typed.
+//
+// Applied only while the IME is open (see KeyEventSink) -- in direct input
+// every one of these has to arrive as itself.
+extern const struct _PUNCTUATION PunctuationTable[31] = {
+    {L'!',   0xFF01},   // ！
+    {L'"',   0x201D},   // ”
+    {L'#',   0xFF03},   // ＃
+    {L'$',   0xFF04},   // ＄
+    {L'%',   0xFF05},   // ％
+    {L'&',   0xFF06},   // ＆
+    {L'\'',  0x2019},  // ’
+    {L'(',   0xFF08},   // （
+    {L')',   0xFF09},   // ）
+    {L'*',   0xFF0A},   // ＊
+    {L'+',   0xFF0B},   // ＋
+    {L',',   0x3001},   // 、
+    {L'.',   0x3002},   // 。
+    {L'/',   0x30FB},   // ・
+    {L':',   0xFF1A},   // ：
+    {L';',   0xFF1B},   // ；
+    {L'<',   0xFF1C},   // ＜
+    {L'=',   0xFF1D},   // ＝
+    {L'>',   0xFF1E},   // ＞
+    {L'?',   0xFF1F},   // ？
+    {L'@',   0xFF20},   // ＠
+    {L'[',   0x300C},   // 「
+    {L'\\',  0xFFE5},   // ￥
+    {L']',   0x300D},   // 」
+    {L'^',   0xFF3E},   // ＾
+    {L'_',   0xFF3F},   // ＿
+    {L'`',   0xFF40},   // ｀
+    {L'{',   0xFF5B},   // ｛
+    {L'|',   0xFF5C},   // ｜
+    {L'}',   0xFF5D},   // ｝
+    {L'~',   0x301C}    // 〜
 };
 
 //+---------------------------------------------------------------------------

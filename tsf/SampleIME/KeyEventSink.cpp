@@ -142,7 +142,14 @@ BOOL CSampleIME::_IsKeyEaten(_In_ ITfContext *pContext, UINT codeIn, _Out_ UINT 
     //
     // Punctuation
     //
-    if (pCompositionProcessorEngine->IsPunctuation(wch))
+    // [Ohagey] Only while the IME is open.
+    //
+    // The sample let this run whenever the punctuation compartment was on,
+    // independently of whether the IME was taking input at all -- a Chinese
+    // IME treats punctuation width as its own mode. For Japanese it means
+    // that in direct input, where every keystroke must reach the document
+    // untouched, typing ! still produced ！.
+    if (isOpen && pCompositionProcessorEngine->IsPunctuation(wch))
     {
         if ((_candidateMode == CANDIDATE_NONE) && isPunctuation)
         {

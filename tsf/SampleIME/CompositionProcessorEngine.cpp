@@ -688,7 +688,7 @@ void CCompositionProcessorEngine::SetupKeystroke()
 
 void CCompositionProcessorEngine::SetKeystrokeTable(_Inout_ CSampleImeArray<_KEYSTROKE> *pKeystroke)
 {
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < ARRAYSIZE(_keystrokeTable); i++)
     {
         _KEYSTROKE* pKS = nullptr;
 
@@ -709,10 +709,29 @@ void CCompositionProcessorEngine::SetKeystrokeTable(_Inout_ CSampleImeArray<_KEY
 
 void CCompositionProcessorEngine::SetupPreserved(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId)
 {
+    // [Ohagey] The keys a Japanese keyboard actually has.
+    //
+    // The sample toggled input mode on Shift pressed and released alone -- the
+    // Simplified Chinese convention. On a Japanese keyboard that is both wrong
+    // and hostile: 半角/全角 and 英数 are *printed on the keycaps* and did
+    // nothing, while Shift, which everyone presses to type a capital, flipped
+    // the mode.
+    //
+    // 半角/全角 arrives as VK_KANJI on a 106/109 layout. VK_OEM_AUTO and
+    // VK_OEM_ENLW are the same key as some drivers and remappers report it;
+    // registering all three costs nothing and means the key works wherever it
+    // comes from.
+    //
+    // VK_CAPITAL with no modifier is the 英数 key. On a JIS keyboard 英数 is
+    // the primary legend and CapsLock is the shifted one, which is why this is
+    // bound bare -- Shift+CapsLock is left alone and still toggles caps.
     TF_PRESERVEDKEY preservedKeyImeMode;
-    preservedKeyImeMode.uVKey = VK_SHIFT;
-    preservedKeyImeMode.uModifiers = _TF_MOD_ON_KEYUP_SHIFT_ONLY;
+    preservedKeyImeMode.uVKey = VK_KANJI;
+    preservedKeyImeMode.uModifiers = 0;
     SetPreservedKey(Global::SampleIMEGuidImeModePreserveKey, preservedKeyImeMode, Global::ImeModeDescription, &_PreservedKey_IMEMode);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_AUTO, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ENLW, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_CAPITAL, 0);
 
     TF_PRESERVEDKEY preservedKeyDoubleSingleByte;
     preservedKeyDoubleSingleByte.uVKey = VK_SPACE;
@@ -736,6 +755,23 @@ void CCompositionProcessorEngine::SetupPreserved(_In_ ITfThreadMgr *pThreadMgr, 
 // SetKeystrokeTable
 //
 //----------------------------------------------------------------------------
+
+// [Ohagey] A second (third, fourth) key for the same toggle.
+//
+// InitPreservedKey already walks TSFPreservedKeyTable, so several keys can
+// share one GUID and one description; the sample simply never needed more than
+// one. 半角/全角 does: it reaches us as VK_KANJI, VK_OEM_AUTO or VK_OEM_ENLW
+// depending on the driver, and all of them mean the same thing to the user.
+void CCompositionProcessorEngine::AddPreservedKey(_Inout_ XPreservedKey *pXPreservedKey, UINT vKey, UINT modifiers)
+{
+    TF_PRESERVEDKEY *pKey = pXPreservedKey->TSFPreservedKeyTable.Append();
+    if (!pKey)
+    {
+        return;
+    }
+    pKey->uVKey = vKey;
+    pKey->uModifiers = modifiers;
+}
 
 void CCompositionProcessorEngine::SetPreservedKey(const CLSID clsid, TF_PRESERVEDKEY & tfPreservedKey, _In_z_ LPCWSTR pwszDescription, _Out_ XPreservedKey *pXPreservedKey)
 {
@@ -1433,6 +1469,20 @@ void CCompositionProcessorEngine::InitKeyStrokeTable()
         _keystrokeTable[i].Modifiers = 0;
         _keystrokeTable[i].Function = FUNCTION_INPUT;
     }
+
+    // [Ohagey] The long-vowel key, which the sample had no use for.
+    //
+    // A pinyin IME needs the 26 letters and nothing else. Japanese needs one
+    // more: the reading of コーヒー or データ contains ー, and it is typed with
+    // the minus key. Without this entry the key never reaches the reading
+    // buffer -- it falls through to the punctuation path, which settles the
+    // composition and inserts a character beside it, so those words cannot be
+    // typed at all.
+    //
+    // RomajiToKana has mapped '-' to ー from the start; nothing fed it.
+    _keystrokeTable[26].VirtualKey = VK_OEM_MINUS;
+    _keystrokeTable[26].Modifiers = 0;
+    _keystrokeTable[26].Function = FUNCTION_INPUT;
 }
 
 void CCompositionProcessorEngine::ShowAllLanguageBarIcons()

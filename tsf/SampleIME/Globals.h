@@ -129,7 +129,7 @@ extern const GUID SampleIMEGuidCompartmentDoubleSingleByte;
 extern const GUID SampleIMEGuidCompartmentPunctuation;
 
 extern const WCHAR FullWidthCharTable[];
-extern const struct _PUNCTUATION PunctuationTable[5];
+extern const struct _PUNCTUATION PunctuationTable[31];
 
 extern const GUID SampleIMEGuidLangBarIMEMode;
 extern const GUID SampleIMEGuidLangBarDoubleSingleByte;

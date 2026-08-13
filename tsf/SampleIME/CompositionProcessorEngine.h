@@ -123,6 +123,7 @@ private:
 	void InitializeSampleIMECompartment(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId);
 
     class XPreservedKey;
+    void AddPreservedKey(_Inout_ XPreservedKey *pXPreservedKey, UINT vKey, UINT modifiers);
     void SetPreservedKey(const CLSID clsid, TF_PRESERVEDKEY & tfPreservedKey, _In_z_ LPCWSTR pwszDescription, _Out_ XPreservedKey *pXPreservedKey);
     BOOL InitPreservedKey(_In_ XPreservedKey *pXPreservedKey, _In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId);
     BOOL CheckShiftKeyOnly(_In_ CSampleImeArray<TF_PRESERVEDKEY> *pTSFPreservedKeyTable);
@@ -147,7 +148,8 @@ private:
             Function = FUNCTION_NONE;
         }
     };
-    _KEYSTROKE _keystrokeTable[26];
+    // 26 letters plus the long-vowel key; see InitKeyStrokeTable.
+    _KEYSTROKE _keystrokeTable[27];
 
     CTableDictionaryEngine* _pTableDictionaryEngine;
 
