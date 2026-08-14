@@ -120,3 +120,43 @@ FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES 
   WinSDK 非依存にしてあるのは、**「後から誰かが利便性のために許可を広げても誰も気づかない」**
   という壊れ方をテストで止めるため(`PipeSecurityTests`、12件)。
 - `engine/Sources/OhageyEngine/PipeServer.swift` — SID 取得、パイプ作成フラグ。
+
+## 追記(2026-08-04)— UWP / AppContainer から実際に繋がった
+
+最後まで残っていた未検証項目。**Microsoft Store の検索ボックス**から打って確認した:
+
+```
+18:42:47 client connected (pid 25272)   ← WinStore.App(AppContainer)
+18:42:47 #1 convert (reading 4, preceding 0) -> 9 candidates (zenzai true) in 258ms
+18:42:48 #2 commit (reading 4, text 3, learn true) -> ok
+18:42:53 #3 convert (reading 5, preceding 4) -> 9 candidates in 180ms
+```
+
+**この決定の ACL がそのまま効いている。** 変換も確定も左文脈も動く。
+クライアント側のアクセスマスクも設計どおりで、`GENERIC_READ | GENERIC_WRITE` を
+避けてある(そちらだと `FILE_CREATE_PIPE_INSTANCE` まで要求してしまい、
+AC には与えていないので拒否される)。
+
+pid をログに出すまで**この確認はできなかった**。「client connected」だけでは、
+別の窓での成功と試している窓での拒否が同じに見える。
+
+### 🔴 ただし — **AppContainer はエンジンを起動できない**
+
+最初の試行は「打てるが変換ができない」だった。原因は ACL ではなく、
+**エンジンが動いていなかった**ことである:
+
+```
+18:26:02 starting / listening
+18:31:02 idle for 300s with no client — exiting (decision 0015)
+   ← この間に Store で試された。かなは出るが候補は来ない
+18:38:58 starting            ← 別の(サンドボックス外の)アプリが起動した
+```
+
+`CreateProcess` は AppContainer から禁じられている。つまり
+**決定 0015 のオンデマンド起動は、サンドボックス外のクライアントにしか使えない。**
+
+利用者から見えるのは「**打てるのに変換だけ効かない**」で、これは
+**エラーにならない**(`GetCandidateList` は接続失敗を「候補なし」として扱う)。
+
+`IdleTimeoutSeconds = 0` にしたら Store から普通に動いた。**決定 0015 と
+この決定は緊張関係にある** — 解き方は次の判断に回す。

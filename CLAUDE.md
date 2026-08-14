@@ -106,6 +106,8 @@ clone した fork を指すと `.package(path:)` に切り替わる。
 - 設定のホットリロード(decision 0014 / 0035)— HKCU から読み込み、即時反映、
   再起動が要る項目の通知、新規プロファイルでのキー作成まで確認
 - パイプ ACL を稼働中のパイプから読み戻して設計と一致を確認(decision 0031)
+- **UWP / AppContainer から実接続**(decision 0031 の追記)。Microsoft Store の
+  検索ボックスから `convert` / `commit` / 左文脈まで動作。接続元 pid をログに出して確認した
 - **左文脈が実機で届く**(decision 0034 / 0033 の追記18)。`tsf.log` と `engine.log` が
   同じ時刻で `moved -2 / fetched 2` → `preceding 2` を示す。改行で切るので行頭では 0 になる
 
@@ -205,7 +207,10 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
 
 ### 未検証
-- UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
+- 🔴 **AppContainer からはエンジンを起動できない**(決定 0031 の追記)。
+  `CreateProcess` が禁じられているので、エンジンが落ちていると UWP アプリでは
+  **打てるのに変換だけ効かない**(エラーにはならない)。決定 0015 の
+  オンデマンド起動と緊張関係にあり、解き方は未決
 
 
 ### 未着手
