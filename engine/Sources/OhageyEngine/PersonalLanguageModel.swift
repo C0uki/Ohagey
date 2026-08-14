@@ -83,6 +83,17 @@ final class PersonalLanguageModel {
                 at: PersonalizationLayout.directory,
                 withIntermediateDirectories: true
             )
+
+            // Created empty, on purpose. A folder the user is meant to drop
+            // files into is not a feature until it exists: told about
+            // `personal\import`, the first thing anyone does is look for it,
+            // and finding nothing there reads as "not in this build". Making
+            // it costs an empty directory.
+            try? fileManager.createDirectory(
+                at: PersonalizationLayout.importDirectory,
+                withIntermediateDirectories: true
+            )
+
             discardPartialGenerations()
             baseIsReady = try ensureBaseModel()
             // Counted once here rather than on each commit; see `corpusLines`.

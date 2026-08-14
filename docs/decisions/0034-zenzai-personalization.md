@@ -2459,3 +2459,17 @@ Tuner が MinHash と前方一致(70%)で重複を落とすのは、**スクロ�
 `corpusLimit` と実際の利用を考えると起こりにくいが、起きたときは
 「同一行の本数に上限を設ける」が正しい直し方である(重複を消すのではなく)。
 **測ってから入れる。**
+
+### 実機で確認した(2026-08-04)
+
+```
+personalisation: imported 4 lines from a dropped file
+personalisation: generation 15 published (59 lines, 6443ms)
+corpus.txt  52 -> 60 行(確定4 + 取り込み4)
+personal\import\done\sample.txt   ← 消さずに移動された
+```
+
+**フォルダは空でも作る。** 最初の版は列挙するだけだったので、
+`personal\import` は**存在しなかった** — 置き場所を教えられた人が最初にやるのは
+見に行くことで、無ければ「このビルドには入っていない」と読む。
+機能はフォルダが在って初めて機能である。空のディレクトリ1つの費用しかかからない。
