@@ -9,6 +9,7 @@
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
 #include "../Ohagey/RomajiKana.h"
+#include "../Ohagey/OhageyLog.h"
 #include "TableDictionaryEngine.h"
 #include "DictionarySearch.h"
 #include "TfInputProcessorProfile.h"
@@ -236,6 +237,10 @@ BOOL CCompositionProcessorEngine::SetupLanguageProfile(LANGID langid, REFGUID gu
     SetupLanguageBar(pThreadMgr, tfClientId, isSecureMode);
     SetupKeystroke();
     SetupConfiguration();
+
+    // [Ohagey] Which build this process is running, before anything else it
+    // might report. See OhageyLog.h.
+    Ohagey::LogModuleIdentity();
 
     // Start the engine now rather than at the first conversion (decision 0033).
     // It returns immediately and holds no connection; by the time the user has

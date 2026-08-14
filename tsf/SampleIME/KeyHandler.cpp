@@ -366,6 +366,9 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
     else
     {
         // Finalize current text store strings
+        Ohagey::Log("finalize: unconverted path, composing %d, mode %d, presenter %d",
+                    _IsComposing() ? 1 : 0, (int)_candidateMode,
+                    _pCandidateListUIPresenter ? 1 : 0);
         if (_IsComposing())
         {
             ULONG fetched = 0;
@@ -373,13 +376,16 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 
             if (FAILED(pContext->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &tfSelection, &fetched)) || fetched != 1)
             {
+                Ohagey::Log("finalize: no selection");
                 return S_FALSE;
             }
 
             ITfRange* pRangeComposition = nullptr;
             if (SUCCEEDED(_pComposition->GetRange(&pRangeComposition)))
             {
-                if (_IsRangeCovered(ec, tfSelection.range, pRangeComposition))
+                const BOOL covered = _IsRangeCovered(ec, tfSelection.range, pRangeComposition);
+                Ohagey::Log("finalize: range covered %d", covered ? 1 : 0);
+                if (covered)
                 {
                     // [Ohagey] Read before the composition is ended: after
                     // `_EndComposition` there is no range to ask.
@@ -401,6 +407,7 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
                                                              PRECEDING_TEXT_MAX, &length))
                         && length > 0)
                     {
+                        Ohagey::Log("finalize: committing %lu chars unconverted", length);
                         CStringRange committedRange;
                         committedRange.Set(committed, length);
 
