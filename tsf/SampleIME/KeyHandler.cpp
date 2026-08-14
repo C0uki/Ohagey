@@ -381,6 +381,37 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
             {
                 if (_IsRangeCovered(ec, tfSelection.range, pRangeComposition))
                 {
+                    // [Ohagey] Read before the composition is ended: after
+                    // `_EndComposition` there is no range to ask.
+                    //
+                    // 無変換確定 is text the user wrote, so it belongs in the
+                    // corpus the personal model trains on (decisions 0024 /
+                    // 0025). The pair it teaches the learning store is reading
+                    // = surface, which cannot change a conversion's ranking —
+                    // but it does make the kana form itself rise as a
+                    // candidate for that reading, which is what Microsoft IME
+                    // does after the same keystroke.
+                    //
+                    // Before `_HandleCancel` below, which purges the keystroke
+                    // buffer `NotifyCommitted` derives the reading from — the
+                    // same ordering constraint as the other two call sites.
+                    WCHAR committed[PRECEDING_TEXT_MAX + 1] = {'\0'};
+                    ULONG length = 0;
+                    if (SUCCEEDED(pRangeComposition->GetText(ec, 0, committed,
+                                                             PRECEDING_TEXT_MAX, &length))
+                        && length > 0)
+                    {
+                        CStringRange committedRange;
+                        committedRange.Set(committed, length);
+
+                        CCompositionProcessorEngine* pEngine = _pCompositionProcessorEngine;
+                        if (pEngine)
+                        {
+                            pEngine->NotifyCommitted(committedRange,
+                                                     _IsSecureMode() ? FALSE : TRUE);
+                        }
+                    }
+
                     _EndComposition(pContext);
                 }
 
