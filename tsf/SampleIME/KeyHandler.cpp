@@ -311,7 +311,18 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 {
     HRESULT hr = S_OK;
 
-    if (isCandidateList && _pCandidateListUIPresenter)
+    // [Ohagey] `_candidateMode`, again, for the same reason as in
+    // `_HandleCompositionInput`: the presenter outlives the window it drew.
+    //
+    // Without it, Enter on plain kana — 無変換で確定 — took the candidate
+    // branch, asked a list that had already ended for its selection, got
+    // nothing, and fell through to `_HandleCancel`, which **threw the kana
+    // away**. It worked exactly until the user's first conversion, because
+    // that is when the pointer stops being null and never becomes null again.
+    //
+    // Reported as not being able to commit without converting, which is what
+    // it was: the composition was discarded rather than committed.
+    if (isCandidateList && _pCandidateListUIPresenter && (_candidateMode != CANDIDATE_NONE))
     {
         // Finalize selected candidate string from CCandidateListUIPresenter
         DWORD_PTR candidateLen = 0;
