@@ -156,7 +156,10 @@ final class ConversionService {
         // engine receives the reading as-is.
         composing.insertAtCursorPosition(reading, inputStyle: .direct)
 
-        let results = converter.requestCandidates(composing, options: makeOptions(nBest: nBest))
+        let results = converter.requestCandidates(
+            composing,
+            options: makeOptions(nBest: nBest, precedingText: precedingText)
+        )
         // `N_best` steers upstream's lattice search; it does not cap
         // `mainResults`, which also carries the special candidates (katakana,
         // romaji and single-character forms) appended after the ranked ones.
@@ -189,8 +192,6 @@ final class ConversionService {
         // TODO: map per-bunsetsu segments so the client can support segment-wise
         // reconversion (`Candidate.segments` in ohagey.proto). Requires checking
         // what the pinned version exposes on its candidate type.
-        // TODO: thread `precedingText` into the request once the pinned version's
-        // context API is confirmed — Zenzai's prediction quality depends on it.
     }
 
     /// Feeds a confirmed candidate back into the learning store.
@@ -272,6 +273,14 @@ final class ConversionService {
     /// so a long session cannot grow it without limit.
     private static let recentCandidatesLimit = 8
 
+    /// Characters of already-typed text handed to Zenzai as context.
+    ///
+    /// Thirty, matching azooKey-Desktop's `ContextLength.conversion`. Following
+    /// a value chosen by the people who trained the model beats inventing one:
+    /// too little leaves the ambiguity it was meant to resolve, and too much
+    /// spends a context window that the lattice also needs.
+    private static let precedingContextLength = 30
+
     private func remember(reading: String, candidates: [Candidate]) {
         recentCandidates.removeAll { $0.reading == reading }
         recentCandidates.insert((reading: reading, candidates: candidates), at: 0)
@@ -280,7 +289,7 @@ final class ConversionService {
         }
     }
 
-    private func makeOptions(nBest: Int) -> ConvertRequestOptions {
+    private func makeOptions(nBest: Int, precedingText: String) -> ConvertRequestOptions {
         // `withDefaultDictionary` rather than the plain initializer: it fills in
         // `dictionaryResourceURL` (bundled dictionary) and `textReplacer`
         // (emoji dictionary), both of which are required and have no sensible
@@ -299,7 +308,7 @@ final class ConversionService {
             // Both point at %LOCALAPPDATA%\Ohagey\ (decision 0024).
             memoryDirectoryURL: EnginePaths.userDataDirectory,
             sharedContainerURL: EnginePaths.userDataDirectory,
-            zenzaiMode: makeZenzaiMode(),
+            zenzaiMode: makeZenzaiMode(precedingText: precedingText),
             metadata: .init(versionString: OhageyEngineVersion.string)
         )
     }
@@ -309,7 +318,7 @@ final class ConversionService {
     /// (decision 0008).
     // ZenzaiMode is nested inside ConvertRequestOptions in 0.8.5, so it cannot
     // be named unqualified.
-    private func makeZenzaiMode() -> ConvertRequestOptions.ZenzaiMode {
+    private func makeZenzaiMode(precedingText: String) -> ConvertRequestOptions.ZenzaiMode {
         guard EnginePaths.isModelAvailable else { return .off }
         return .on(
             weight: EnginePaths.modelURL,
@@ -317,7 +326,24 @@ final class ConversionService {
             // No default upstream, so it has to be passed explicitly. nil until
             // enough has been committed to train on, and whenever the user has
             // switched personalisation off (decision 0034).
-            personalizationMode: personalModel.personalizationMode(settings: settings)
+            personalizationMode: personalModel.personalizationMode(settings: settings),
+            // ── The text already on screen, handed to Zenzai ────────────────
+            //
+            // `precedingText` has been on the wire since the first version of
+            // ohagey.proto and was going nowhere: the field arrived, and the
+            // conversion was built without it. Zenzai takes it as
+            // `leftSideContext` and uses it to decide between readings that are
+            // ambiguous on their own — which is most of the interesting ones.
+            //
+            // Trimmed to the last 30 characters, matching azooKey-Desktop's
+            // `ContextLength.conversion`. More is not obviously better: the
+            // model has a 512-token context shared with the lattice, and the
+            // sentence being typed is what disambiguates the next word.
+            versionDependentMode: .v3(.init(
+                leftSideContext: precedingText.isEmpty
+                    ? nil
+                    : String(precedingText.suffix(Self.precedingContextLength))
+            ))
         )
         // NOTE: `settings.backend` is deliberately not consulted here.
         // `ZenzaiMode` exposes no backend/GPU-offload field, so the compute

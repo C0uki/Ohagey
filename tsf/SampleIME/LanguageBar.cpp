@@ -433,19 +433,27 @@ HRESULT CLangBarItemButton::GetIconImpl(_Out_ HICON *phIcon)
         desiredSize = _isSecureMode ? 24 : 16;
     }
 
-    if (isOn && !(status & TF_LBI_STATUS_DISABLED))
+    const int wanted = (isOn && !(status & TF_LBI_STATUS_DISABLED))
+        ? _onIconIndex
+        : _offIconIndex;
+
+    // [Ohagey] Pick the set that can be seen on the current taskbar.
+    //
+    // Windows does not invert a text service's icons, and ours are black
+    // glyphs, so under the dark theme あ/A were black on near-black — reported
+    // as hard to read. There is no "monochrome, tint me" icon format for a
+    // language bar button; the only way is to ship both and choose.
+    //
+    // Read here rather than cached at activation because this is called each
+    // time the shell wants the icon, including after the user changes theme.
+    // A cached answer would leave the wrong set on screen until the next
+    // sign-in, which is the kind of staleness nobody connects to a setting
+    // they changed hours ago.
+    const int index = Global::IsSystemDarkTheme() ? Global::DarkIconVariant(wanted) : wanted;
+
+    if (Global::dllInstanceHandle)
     {
-        if (Global::dllInstanceHandle)
-        {
-            *phIcon = reinterpret_cast<HICON>(LoadImage(Global::dllInstanceHandle, MAKEINTRESOURCE(_onIconIndex), IMAGE_ICON, desiredSize, desiredSize, 0));
-        }
-    }
-    else
-    {
-        if (Global::dllInstanceHandle)
-        {
-            *phIcon = reinterpret_cast<HICON>(LoadImage(Global::dllInstanceHandle, MAKEINTRESOURCE(_offIconIndex), IMAGE_ICON, desiredSize, desiredSize, 0));
-        }
+        *phIcon = reinterpret_cast<HICON>(LoadImage(Global::dllInstanceHandle, MAKEINTRESOURCE(index), IMAGE_ICON, desiredSize, desiredSize, 0));
     }
 
     return (*phIcon != NULL) ? S_OK : E_FAIL;

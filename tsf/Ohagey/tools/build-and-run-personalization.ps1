@@ -44,6 +44,13 @@ $sources = @(
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""
+# Without the base model this harness asserts that personalisation moved the
+# target and is told, truthfully, that it did not — because there is nothing to
+# personalise with. Stop instead of producing that FAIL (decision 0034).
+. (Join-Path $here "base-lm-status.ps1")
+Assert-OhageyBaseLm -Required
+
+Write-Host ""
 # The harness takes its arguments positionally, so a gap has to be filled
 # rather than skipped. "-" stands for "not given": PowerShell drops an empty
 # string when calling a native executable, which silently shifts every later

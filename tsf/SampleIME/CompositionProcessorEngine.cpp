@@ -236,7 +236,6 @@ BOOL CCompositionProcessorEngine::SetupLanguageProfile(LANGID langid, REFGUID gu
     SetupLanguageBar(pThreadMgr, tfClientId, isSecureMode);
     SetupKeystroke();
     SetupConfiguration();
-    SetupDictionaryFile();
 
     // Start the engine now rather than at the first conversion (decision 0033).
     // It returns immediately and holds no connection; by the time the user has
@@ -333,6 +332,7 @@ void CCompositionProcessorEngine::RemoveVirtualKey(DWORD_PTR dwIndex)
 //----------------------------------------------------------------------------
 
 void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange& keystrokes,
+    const std::wstring& precedingText,
     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList)
 {
     if (keystrokes.GetLength() == 0)
@@ -364,7 +364,7 @@ void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange&
     // n_best 0 means "engine default" in ohagey.proto. Sending 0 keeps the
     // decision about how many candidates to produce in one place instead of
     // duplicating it here.
-    if (_engineClient.Convert(readingText, 0, std::wstring(), &result) != Ohagey::CallResult::Ok)
+    if (_engineClient.Convert(readingText, 0, precedingText, &result) != Ohagey::CallResult::Ok)
     {
         // No candidates. The engine may be starting, may have exited on its
         // idle timeout, or may have refused this reading; none of those are
@@ -505,7 +505,7 @@ void CCompositionProcessorEngine::GetReadingStrings(_Inout_ CSampleImeArray<CStr
 //
 //----------------------------------------------------------------------------
 
-void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch)
+void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch, const std::wstring& precedingText)
 {
     // [Ohagey] Rewritten: candidates come from the engine (decisions 0004-0007).
     //
@@ -522,7 +522,7 @@ void CCompositionProcessorEngine::GetCandidateList(_Inout_ CSampleImeArray<CCand
         return;
     }
 
-    GetCandidateListFromEngine(_keystrokeBuffer, pCandidateList);
+    GetCandidateListFromEngine(_keystrokeBuffer, precedingText, pCandidateList);
 }
 
 //+---------------------------------------------------------------------------
@@ -689,7 +689,7 @@ void CCompositionProcessorEngine::SetupKeystroke()
 
 void CCompositionProcessorEngine::SetKeystrokeTable(_Inout_ CSampleImeArray<_KEYSTROKE> *pKeystroke)
 {
-    for (int i = 0; i < 26; i++)
+    for (int i = 0; i < ARRAYSIZE(_keystrokeTable); i++)
     {
         _KEYSTROKE* pKS = nullptr;
 
@@ -710,10 +710,46 @@ void CCompositionProcessorEngine::SetKeystrokeTable(_Inout_ CSampleImeArray<_KEY
 
 void CCompositionProcessorEngine::SetupPreserved(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId)
 {
+    // [Ohagey] The keys a Japanese keyboard actually has.
+    //
+    // The sample toggled input mode on Shift pressed and released alone -- the
+    // Simplified Chinese convention. On a Japanese keyboard that is both wrong
+    // and hostile: 半角/全角 and 英数 are *printed on the keycaps* and did
+    // nothing, while Shift, which everyone presses to type a capital, flipped
+    // the mode.
+    //
+    // 半角/全角 arrives as VK_KANJI on a 106/109 layout. VK_OEM_AUTO and
+    // VK_OEM_ENLW are the same key as some drivers and remappers report it;
+    // registering all three costs nothing and means the key works wherever it
+    // comes from.
+    //
+    // VK_CAPITAL with no modifier is the 英数 key. On a JIS keyboard 英数 is
+    // the primary legend and CapsLock is the shifted one, which is why this is
+    // bound bare -- Shift+CapsLock is left alone and still toggles caps.
     TF_PRESERVEDKEY preservedKeyImeMode;
-    preservedKeyImeMode.uVKey = VK_SHIFT;
-    preservedKeyImeMode.uModifiers = _TF_MOD_ON_KEYUP_SHIFT_ONLY;
+    preservedKeyImeMode.uVKey = VK_KANJI;
+    preservedKeyImeMode.uModifiers = 0;
     SetPreservedKey(Global::SampleIMEGuidImeModePreserveKey, preservedKeyImeMode, Global::ImeModeDescription, &_PreservedKey_IMEMode);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_AUTO, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ENLW, 0);
+
+    // 英数. Registering VK_CAPITAL alone was not enough -- reported as the key
+    // still doing nothing -- so the whole family the JIS keycap can arrive as
+    // is registered:
+    //
+    //   VK_OEM_ATTN (0xF0) is VK_DBE_ALPHANUMERIC, which is what the 英数 key
+    //     reports while an IME is active. It is almost certainly the one that
+    //     was missing.
+    //   VK_CAPITAL, plain and with Shift, because which of the two the key
+    //     produces depends on the layout driver, and on a JIS keyboard 英数 is
+    //     the primary legend either way.
+    //
+    // Registering several costs one table entry each and removes the guesswork;
+    // a key that never arrives simply never fires.
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ATTN, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_OEM_ATTN, TF_MOD_SHIFT);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_CAPITAL, 0);
+    AddPreservedKey(&_PreservedKey_IMEMode, VK_CAPITAL, TF_MOD_SHIFT);
 
     TF_PRESERVEDKEY preservedKeyDoubleSingleByte;
     preservedKeyDoubleSingleByte.uVKey = VK_SPACE;
@@ -737,6 +773,23 @@ void CCompositionProcessorEngine::SetupPreserved(_In_ ITfThreadMgr *pThreadMgr, 
 // SetKeystrokeTable
 //
 //----------------------------------------------------------------------------
+
+// [Ohagey] A second (third, fourth) key for the same toggle.
+//
+// InitPreservedKey already walks TSFPreservedKeyTable, so several keys can
+// share one GUID and one description; the sample simply never needed more than
+// one. 半角/全角 does: it reaches us as VK_KANJI, VK_OEM_AUTO or VK_OEM_ENLW
+// depending on the driver, and all of them mean the same thing to the user.
+void CCompositionProcessorEngine::AddPreservedKey(_Inout_ XPreservedKey *pXPreservedKey, UINT vKey, UINT modifiers)
+{
+    TF_PRESERVEDKEY *pKey = pXPreservedKey->TSFPreservedKeyTable.Append();
+    if (!pKey)
+    {
+        return;
+    }
+    pKey->uVKey = vKey;
+    pKey->uModifiers = modifiers;
+}
 
 void CCompositionProcessorEngine::SetPreservedKey(const CLSID clsid, TF_PRESERVEDKEY & tfPreservedKey, _In_z_ LPCWSTR pwszDescription, _Out_ XPreservedKey *pXPreservedKey)
 {
@@ -987,106 +1040,29 @@ BOOL CCompositionProcessorEngine::InitLanguageBar(_In_ CLangBarItemButton *pLang
 
 //+---------------------------------------------------------------------------
 //
-// SetupDictionaryFile
-//
-//----------------------------------------------------------------------------
-
-BOOL CCompositionProcessorEngine::SetupDictionaryFile()
-{	
-    // Not yet registered
-    // Register CFileMapping
-    WCHAR wszFileName[MAX_PATH] = {'\0'};
-    DWORD cchA = GetModuleFileName(Global::dllInstanceHandle, wszFileName, ARRAYSIZE(wszFileName));
-    size_t iDicFileNameLen = cchA + wcslen(TEXTSERVICE_DIC);
-    WCHAR *pwszFileName = new (std::nothrow) WCHAR[iDicFileNameLen + 1];
-    if (!pwszFileName)
-    {
-        goto ErrorExit;
-    }
-    *pwszFileName = L'\0';
-
-    // find the last '/'
-    while (cchA--)
-    {
-        WCHAR wszChar = wszFileName[cchA];
-        if (wszChar == '\\' || wszChar == '/')
-        {
-            StringCchCopyN(pwszFileName, iDicFileNameLen + 1, wszFileName, cchA + 1);
-            StringCchCatN(pwszFileName, iDicFileNameLen + 1, TEXTSERVICE_DIC, wcslen(TEXTSERVICE_DIC));
-            break;
-        }
-    }
-
-    // create CFileMapping object
-    if (_pDictionaryFile == nullptr)
-    {
-        _pDictionaryFile = new (std::nothrow) CFileMapping();
-        if (!_pDictionaryFile)
-        {
-            goto ErrorExit;
-        }
-    }
-    if (!(_pDictionaryFile)->CreateFile(pwszFileName, GENERIC_READ, OPEN_EXISTING, FILE_SHARE_READ))
-    {
-        goto ErrorExit;
-    }
-
-    _pTableDictionaryEngine = new (std::nothrow) CTableDictionaryEngine(GetLocale(), _pDictionaryFile);
-    if (!_pTableDictionaryEngine)
-    {
-        goto ErrorExit;
-    }
-
-    delete []pwszFileName;
-    return TRUE;
-ErrorExit:
-    if (pwszFileName)
-    {
-        delete []pwszFileName;
-    }
-    return FALSE;
-}
-
-//+---------------------------------------------------------------------------
-//
-// GetDictionaryFile
-//
-//----------------------------------------------------------------------------
-
-CFile* CCompositionProcessorEngine::GetDictionaryFile()
-{
-    return _pDictionaryFile;
-}
-
-//+---------------------------------------------------------------------------
-//
 // SetupPunctuationPair
 //
 //----------------------------------------------------------------------------
 
 void CCompositionProcessorEngine::SetupPunctuationPair()
 {
-    // Punctuation pair
-    const int pair_count = 2;
-    CPunctuationPair punc_quotation_mark(L'"', 0x201C, 0x201D);
-    CPunctuationPair punc_apostrophe(L'\'', 0x2018, 0x2019);
-
-    CPunctuationPair puncPairs[pair_count] = {
-        punc_quotation_mark,
-        punc_apostrophe,
-    };
-
-    for (int i = 0; i < pair_count; ++i)
-    {
-        CPunctuationPair *pPuncPair = _PunctuationPair.Append();
-        *pPuncPair = puncPairs[i];
-    }
-
-    // Punctuation nest pair
-    CPunctuationNestPair punc_angle_bracket(L'<', 0x300A, 0x3008, L'>', 0x300B, 0x3009);
-
-    CPunctuationNestPair* pPuncNestPair = _PunctuationNestPair.Append();
-    *pPuncNestPair = punc_angle_bracket;
+    // [Ohagey] Empty, deliberately.
+    //
+    // The sample registered three substitutions that a Japanese IME must not
+    // make:
+    //
+    //   " -> U+201C/U+201D and ' -> U+2018/U+2019, alternating open and close.
+    //     Western typographic quotes. Anyone typing a quotation mark into code,
+    //     a search box or a path wants the one on the key.
+    //
+    //   < and > -> U+300A/U+3008 and U+300B/U+3009, the Chinese book-title
+    //     marks 《》 and 〈〉. Japanese uses 「」 for quotation, which is on the
+    //     bracket keys in PunctuationTable, and needs the comparison operators
+    //     to stay comparison operators.
+    //
+    // Both mechanisms are left in place — they are how a pairing IME would do
+    // this — but Japanese has nothing to put in them. `IsPunctuation` iterates
+    // empty arrays and falls through, so the keys reach the document unchanged.
 }
 
 void CCompositionProcessorEngine::InitializeSampleIMECompartment(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId)
@@ -1511,6 +1487,20 @@ void CCompositionProcessorEngine::InitKeyStrokeTable()
         _keystrokeTable[i].Modifiers = 0;
         _keystrokeTable[i].Function = FUNCTION_INPUT;
     }
+
+    // [Ohagey] The long-vowel key, which the sample had no use for.
+    //
+    // A pinyin IME needs the 26 letters and nothing else. Japanese needs one
+    // more: the reading of コーヒー or データ contains ー, and it is typed with
+    // the minus key. Without this entry the key never reaches the reading
+    // buffer -- it falls through to the punctuation path, which settles the
+    // composition and inserts a character beside it, so those words cannot be
+    // typed at all.
+    //
+    // RomajiToKana has mapped '-' to ー from the start; nothing fed it.
+    _keystrokeTable[26].VirtualKey = VK_OEM_MINUS;
+    _keystrokeTable[26].Modifiers = 0;
+    _keystrokeTable[26].Function = FUNCTION_INPUT;
 }
 
 void CCompositionProcessorEngine::ShowAllLanguageBarIcons()

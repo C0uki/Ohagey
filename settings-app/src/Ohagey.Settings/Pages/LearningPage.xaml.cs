@@ -42,6 +42,34 @@ public sealed partial class LearningPage : Page
         PersonalizationNote.Text = settings.LearningEnabled
             ? "確定した語句を控えて学習し直します。切ると、その控えも消えます。"
             : "学習がオフのあいだは使えません。";
+        ShowBaseModelStatus(settings);
+    }
+
+    /// <summary>
+    /// Says whether the base language model personalisation needs is actually
+    /// installed (decision 0034).
+    /// </summary>
+    /// <remarks>
+    /// Re-read on every change rather than once, because the message depends on
+    /// the switch: with personalisation off this is a note, and with it on and
+    /// the model missing it is the reason nothing is happening.
+    ///
+    /// This is the failure this project has walked into twice — the absence is
+    /// invisible at the point where the effect is expected, so it reads as the
+    /// feature not working rather than as a missing file.
+    /// </remarks>
+    private void ShowBaseModelStatus(EngineSettings settings)
+    {
+        var installed = ModelState.IsBaseLanguageModelInstalled;
+        var wanted = settings.PersonalizationActive;
+
+        BaseModelNotice.Title = installed
+            ? "個人化用のモデル"
+            : wanted ? "個人化は動作しません" : "個人化用のモデルがありません";
+        BaseModelNotice.Message = ModelState.DescribeBaseLanguageModel(wanted);
+        BaseModelNotice.Severity = !installed && wanted
+            ? InfoBarSeverity.Warning
+            : InfoBarSeverity.Informational;
     }
 
     private void OnToggled(object sender, RoutedEventArgs e) => Save();
@@ -69,9 +97,17 @@ public sealed partial class LearningPage : Page
         // Shown before the button is pressed. Erase is not undoable, and a
         // number is the cheapest way to say whether this is a session's worth
         // of typing or a year's.
+        // Megabytes once it is megabytes. Personalisation trains by resuming
+        // from the base model, so each generation is base-sized — around ten
+        // megabytes, against a corpus of a few tens of kilobytes. Reporting
+        // "約 9600 KB" would be arithmetically right and useless.
+        var size = bytes >= 1024 * 1024
+            ? $"{bytes / 1024.0 / 1024.0:0.#} MB"
+            : $"{bytes / 1024} KB";
         EraseSummary.Text = bytes == 0
             ? "消去できる学習データはありません。"
-            : $"現在の学習データ: 約 {bytes / 1024} KB。"
+            : $"現在の学習データ: 約 {size}。"
+              + "大半は個人化のモデルで、確定した文章そのものはごく一部です。"
               + "登録したユーザー辞書は消えません。";
         EraseButton.IsEnabled = bytes > 0;
     }

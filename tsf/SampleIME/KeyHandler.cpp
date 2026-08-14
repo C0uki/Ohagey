@@ -11,6 +11,7 @@
 #include "SampleIME.h"
 #include "CandidateListUIPresenter.h"
 #include "CompositionProcessorEngine.h"
+#include "../Ohagey/OhageyLog.h"
 
 //////////////////////////////////////////////////////////////////////
 //
@@ -119,7 +120,35 @@ HRESULT CSampleIME::_HandleCompositionInput(TfEditCookie ec, _In_ ITfContext *pC
     CCompositionProcessorEngine* pCompositionProcessorEngine = nullptr;
     pCompositionProcessorEngine = _pCompositionProcessorEngine;
 
-    if ((_pCandidateListUIPresenter != nullptr) && (_candidateMode != CANDIDATE_INCREMENTAL))
+    // [Ohagey] "A candidate window is up" is `_candidateMode`, not the pointer.
+    //
+    // This asks: is the user typing a character while a candidate list is
+    // showing? If so, settle what is there before starting the new one.
+    //
+    // The pointer cannot answer that. `_DeleteCandidateList` — which runs on
+    // every teardown path, including after a commit — calls
+    // `_EndCandidateList` and sets `_candidateMode = CANDIDATE_NONE`, but
+    // leaves `_pCandidateListUIPresenter` non-null. So once the user has
+    // converted **once**, this condition is true for every keystroke
+    // afterwards, and each one runs `_HandleCompositionFinalize`: the second
+    // character of the next word ends the composition, commits the first
+    // character on its own, and `_HandleCancel` purges the reading buffer.
+    // The reading can never grow past one character again, so conversion
+    // never happens a second time.
+    //
+    // That is the reported "変換が一回限り", and it is not new: the sample
+    // masked it by setting CANDIDATE_INCREMENTAL from the per-keystroke
+    // candidate fetch, which happened to make this condition false whenever
+    // the engine returned anything. Removing that fetch (see
+    // `_HandleCompositionInputWorker`) removed the mask, not the bug.
+    //
+    // Left as a mode test rather than fixed by deleting the presenter in
+    // `_DeleteCandidateList`: that runs from profile deactivation and from
+    // composition teardown, the object is reference counted and TSF may hold
+    // it, and this DLL lives inside the user's applications (decision 0017).
+    if ((_pCandidateListUIPresenter != nullptr)
+        && (_candidateMode != CANDIDATE_INCREMENTAL)
+        && (_candidateMode != CANDIDATE_NONE))
     {
         _HandleCompositionFinalize(ec, pContext, FALSE);
     }
@@ -187,34 +216,35 @@ HRESULT CSampleIME::_HandleCompositionInputWorker(_In_ CCompositionProcessorEngi
         }
     }
 
+    // [Ohagey] Typing does not convert.
     //
-    // Get candidate string from composition processor engine
+    // The sample asked the dictionary for candidates on every keystroke and
+    // popped the candidate window open as you typed. That is how a pinyin IME
+    // works: there is no useful intermediate form, so you are always choosing
+    // from a list. Japanese has one -- the kana above -- and conversion is a
+    // thing the user asks for, with space.
     //
-    CSampleImeArray<CCandidateListItem> candidateList;
+    // Keeping the sample's behaviour was not just stylistically wrong, it was
+    // slow. Every keystroke became a full round trip to the engine, and every
+    // request rebuilds the lattice from nothing (decision 0034 stops the
+    // composition first, to keep the candidate order from oscillating). That
+    // is a measured 137ms each. Typing `nihongo` spent seven of them, and the
+    // engine had burned twelve seconds of CPU after a few words of testing --
+    // which is exactly what "sluggish" felt like from the keyboard.
+    //
+    // So: show the kana, and wait to be asked. `_HandleCompositionConvert`
+    // does the conversion when the user presses the conversion key.
+    //
+    // A candidate window left over from a previous conversion is emptied
+    // rather than left standing: the reading just changed under it, so what
+    // it is showing is an answer to a question nobody is asking any more.
+    isWildcardIncluded;
 
-    pCompositionProcessorEngine->GetCandidateList(&candidateList, TRUE, FALSE);
-
-    if ((candidateList.Count()))
-    {
-        hr = _CreateAndStartCandidate(pCompositionProcessorEngine, ec, pContext);
-        if (SUCCEEDED(hr))
-        {
-            _pCandidateListUIPresenter->_ClearList();
-            _pCandidateListUIPresenter->_SetText(&candidateList, TRUE);
-        }
-    }
-    else if (_pCandidateListUIPresenter)
+    if (_pCandidateListUIPresenter)
     {
         _pCandidateListUIPresenter->_ClearList();
     }
-    else if (readingStrings.Count() && isWildcardIncluded)
-    {
-        hr = _CreateAndStartCandidate(pCompositionProcessorEngine, ec, pContext);
-        if (SUCCEEDED(hr))
-        {
-            _pCandidateListUIPresenter->_ClearList();
-        }
-    }
+
     return hr;
 }
 //+---------------------------------------------------------------------------
@@ -357,6 +387,103 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 
 //+---------------------------------------------------------------------------
 //
+// _GetPrecedingText     [Ohagey]
+//
+// The committed text immediately before the composition (decision 0034).
+//
+// Zenzai takes it as `leftSideContext` and uses it to choose between readings
+// that are otherwise tied -- 「はし」 after 「川に」 is not the same word as
+// 「はし」 after 「ご飯を」. Nothing is learned from it, so unlike
+// personalisation there is nothing here that can be taught a mistake.
+//
+// Read fresh at each conversion rather than tracked as we go: the user can
+// click elsewhere, edit behind the caret, or switch documents between one
+// conversion and the next, and a cached copy would then be a confident answer
+// about the wrong place.
+//
+//----------------------------------------------------------------------------
+
+HRESULT CSampleIME::_GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext, _Out_ std::wstring *pText)
+{
+    pContext;
+    pText->clear();
+
+    if (_pComposition == nullptr)
+    {
+        Ohagey::Log("preceding: no composition");
+        return S_FALSE;
+    }
+
+    ITfRange* pRangeComposition = nullptr;
+    const HRESULT hrRange = _pComposition->GetRange(&pRangeComposition);
+    if (FAILED(hrRange) || pRangeComposition == nullptr)
+    {
+        Ohagey::Log("preceding: GetRange 0x%08X", hrRange);
+        return S_FALSE;
+    }
+
+    HRESULT hr = S_FALSE;
+    ITfRange* pRangeBefore = nullptr;
+    if (SUCCEEDED(pRangeComposition->Clone(&pRangeBefore)) && pRangeBefore != nullptr)
+    {
+        // Collapse onto the composition's start, then pull the start back: the
+        // range then covers the characters immediately before it. Near the top
+        // of a document ShiftStart simply moves less, and GetText respects that.
+        if (SUCCEEDED(pRangeBefore->Collapse(ec, TF_ANCHOR_START)))
+        {
+            // `shifted` is required by the signature but deliberately not
+            // tested. The first version gated on `shifted < 0`, assuming the
+            // count comes back signed for a backward shift. Notepad's text
+            // store does report it signed -- the log shows -2, -4, -7 -- so
+            // that guard was **not** what kept this empty; the build under
+            // test was simply never the one loaded. The guard is gone anyway:
+            // the interface does not promise a sign, and there is nothing to
+            // protect against, because a start that did not move leaves an
+            // empty range and GetText returns nothing.
+            LONG shifted = 0;
+            const HRESULT hrShift = pRangeBefore->ShiftStart(ec, -PRECEDING_TEXT_MAX, &shifted, nullptr);
+            if (SUCCEEDED(hrShift))
+            {
+                WCHAR buffer[PRECEDING_TEXT_MAX + 1] = {'\0'};
+                ULONG fetched = 0;
+                const HRESULT hrText = pRangeBefore->GetText(ec, 0, buffer, PRECEDING_TEXT_MAX, &fetched);
+                // Counts and HRESULTs only -- never the characters. See OhageyLog.h.
+                Ohagey::Log("preceding: shift 0x%08X moved %ld, GetText 0x%08X fetched %lu",
+                            hrShift, shifted, hrText, fetched);
+                if (SUCCEEDED(hrText) && fetched > 0)
+                {
+                    pText->assign(buffer, fetched);
+                    hr = S_OK;
+                }
+            }
+            else
+            {
+                Ohagey::Log("preceding: ShiftStart 0x%08X", hrShift);
+            }
+        }
+        else
+        {
+            Ohagey::Log("preceding: Collapse failed");
+        }
+        pRangeBefore->Release();
+    }
+    pRangeComposition->Release();
+
+    // Cut at the last line break. Context is what the sentence is running on,
+    // and the paragraph above is a different sentence -- feeding it in would
+    // ask the model to continue something the user already finished.
+    const size_t lastBreak = pText->find_last_of(L"\r\n");
+    if (lastBreak != std::wstring::npos)
+    {
+        pText->erase(0, lastBreak + 1);
+    }
+
+    Ohagey::Log("preceding: returning %zu chars", pText->size());
+    return hr;
+}
+
+//+---------------------------------------------------------------------------
+//
 // _HandleCompositionConvert
 //
 //----------------------------------------------------------------------------
@@ -372,7 +499,17 @@ HRESULT CSampleIME::_HandleCompositionConvert(TfEditCookie ec, _In_ ITfContext *
     //
     CCompositionProcessorEngine* pCompositionProcessorEngine = nullptr;
     pCompositionProcessorEngine = _pCompositionProcessorEngine;
-    pCompositionProcessorEngine->GetCandidateList(&candidateList, FALSE, isWildcardSearch);
+    // [Ohagey] What the user already wrote, to the left of what they are
+    // converting now (decision 0034).
+    //
+    // The protocol has carried this field since decision 0007 and the engine
+    // has used it since decision 0034 -- but the TSF side sent an empty string,
+    // so every request in a real session logged `preceding 0` and the feature
+    // was measured only in a harness. This is the missing end.
+    std::wstring precedingText;
+    _GetPrecedingText(ec, pContext, &precedingText);
+
+    pCompositionProcessorEngine->GetCandidateList(&candidateList, FALSE, isWildcardSearch, precedingText);
 
     // If there is no candlidate listin the current reading string, we don't do anything. Just wait for
     // next char to be ready for the conversion with it.

@@ -35,6 +35,23 @@
                     NavigateUri="https://creativecommons.org/licenses/by-sa/4.0/" />
             </StackPanel>
 
+            <!-- Ohagey trains this one itself, from Japanese Wikipedia. It
+                 replaced Miwa-Keita/base_n5_lm, which stated no licence and
+                 shipped four of the five files personalisation needs
+                 (decisions 0009 / 0034). Being CC BY-SA it lands under the
+                 same arrangement as the Zenzai weights, so the attribution
+                 belongs here for the same reason. -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="個人化用の言語モデル" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock TextWrapping="Wrap"
+                           Text="個人化を有効にした場合、日本語版ウィキペディアの記事から作成した n-gram 言語モデルを使用します。&#x0a;このモデルとその元になった文章は CC BY-SA 4.0 で提供されており、おはぎー本体 (MIT) とは別のライセンスです。" />
+                <HyperlinkButton
+                    Content="モデルと元コーパスの配布元"
+                    NavigateUri="https://github.com/C0uki/Ohagey/releases/tag/base-lm-v1" />
+                <HyperlinkButton
+                    Content="日本語版ウィキペディア"
+                    NavigateUri="https://ja.wikipedia.org/" />
+            </StackPanel>
             <StackPanel Spacing="8">
                 <TextBlock Text="変換エンジン" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <TextBlock TextWrapping="Wrap"

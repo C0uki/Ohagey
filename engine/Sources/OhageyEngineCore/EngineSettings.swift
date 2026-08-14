@@ -35,24 +35,41 @@ public struct EngineSettings: Sendable, Equatable {
     /// plain-text corpus of committed phrases on disk in order to retrain from
     /// it. Switching learning off switches this off too — never the reverse.
     ///
-    /// ── Off by default (decision 0034, addendum 11) ────────────────────────
+    /// ── On by default, since the base model ships (decision 0034) ─────────
     ///
-    /// It works — a confirmed candidate does climb to the top, which is the
-    /// whole claim decision 0034 rests on. It also breaks conversions the user
-    /// never touched: measured against 32 readings with known-correct answers,
-    /// confirming one phrase cost **15 to 18** of the 30 that had been right.
-    /// A corpus 200 times larger moved that from 18 to 15, so it is not the
-    /// personal model being under-trained; the two language models being mixed
-    /// are on scales that do not subtract meaningfully. Turning alpha down to
-    /// where it stops breaking things is also where it stops working.
+    /// It was off for a month, and the reason was measured: confirming one
+    /// phrase cost 15 to 18 of 30 otherwise-correct conversions. That turned
+    /// out to be a consequence of *how the personal model was built*, not of
+    /// the feature. Trained from nothing it assigns the smoothing floor to
+    /// every word the user has not typed, and subtracting the base then
+    /// penalises the whole rest of the language. Trained by resuming from the
+    /// base it is the same model with the user's counts added, the difference
+    /// outside their own text is 0.00 logits, and the evaluation set comes
+    /// through untouched — 30 of 30 — while the confirmed candidate still
+    /// climbs to the top.
     ///
-    /// So it ships off, and stays in the settings app for anyone who wants it.
-    /// Learning itself is untouched and still on by default — the converter's
-    /// own store keeps working, which is what decision 0025 is about.
+    /// Resuming needs a base model with all five files, which the published
+    /// one does not have. Ohagey now trains and ships its own, so the
+    /// condition holds on an ordinary installation.
     ///
-    /// One consequence worth knowing: with this off, no plain-text corpus of
-    /// what the user typed is written at all.
-    public var personalizationEnabled: Bool = false
+    /// `personalizationMode` refuses to apply anything when the base cannot
+    /// be resumed from, so this being on cannot reintroduce the damage on a
+    /// machine where the download failed: the feature does nothing there
+    /// rather than doing harm.
+    ///
+    /// ── What being on costs the user ──────────────────────────────────────
+    ///
+    /// A plain-text file of the phrases they confirmed, kept so the model can
+    /// be retrained from it. The converter's own learning store records the
+    /// same thing, but opaquely; this one can be read in Notepad. It lives
+    /// under `%LOCALAPPDATA%`, the settings app erases it, and switching
+    /// either switch off deletes it (decision 0025).
+    ///
+    /// Retraining also costs about a second and 48 MB of peak memory per
+    /// megabyte of base — the reason the shipped base is 9.4 MB rather than
+    /// the 42.6 MB of the published one, and the reason runs are rate-limited
+    /// to a tenth of the machine (`PersonalizationLayout.trainingDutyCycle`).
+    public var personalizationEnabled: Bool = true
     /// How hard the personal model is allowed to push Zenzai's ranking.
     ///
     /// azooKey-Desktop, which ships the same converter and the same base
@@ -217,10 +234,58 @@ public enum EnginePaths {
 
     /// Whether the base model is installed.
     public static var isBaseLanguageModelAvailable: Bool {
+        hasBaseLanguageModel(suffixes: baseLanguageModelSuffixes)
+    }
+
+    /// The fifth file, needed only to *continue* training from the base.
+    ///
+    /// `SwiftTrainer(baseFilePattern:)` loads all five; inference reads four.
+    /// Kept as its own list rather than folded into the one above so that a
+    /// base model which cannot be resumed from is still perfectly usable for
+    /// what it is mostly for.
+    public static let baseLanguageModelResumeSuffixes =
+        baseLanguageModelSuffixes + ["_c_bc"]
+
+    /// Whether the personal model can be trained *starting from* the base.
+    ///
+    /// This is the difference between the two ways of building a personal
+    /// model, and it decides how the mixing behaves (decision 0034):
+    ///
+    /// - Trained from nothing, the personal model assigns the smoothing floor
+    ///   to every token the user has not typed. Subtracting the base then
+    ///   produces a large penalty on the whole rest of the language, which is
+    ///   what breaks unrelated conversions.
+    /// - Resumed from the base, it starts as a copy of the base and the user's
+    ///   text only adds counts. Anything they have not typed keeps the base's
+    ///   own probability, the difference is ~0, and there is nothing to
+    ///   subtract.
+    ///
+    /// False for `Miwa-Keita/base_n5_lm`, which publishes only four files —
+    /// which is why decision 0034 records this route as blocked for that model.
+    public static var isBaseLanguageModelResumable: Bool {
+        hasBaseLanguageModel(suffixes: baseLanguageModelResumeSuffixes)
+    }
+
+    private static func hasBaseLanguageModel(suffixes: [String]) -> Bool {
         let prefix = baseLanguageModelPrefix
-        return baseLanguageModelSuffixes.allSatisfy {
+        return suffixes.allSatisfy {
             FileManager.default.fileExists(atPath: "\(prefix)\($0).marisa")
         }
+    }
+
+    /// Diagnostic log (decision 0033).
+    ///
+    /// The engine is normally started by a TSF DLL inside someone else's
+    /// process — Notepad, a browser — which has no console. Everything it says
+    /// about itself goes nowhere, so a real session leaves no trace at all and
+    /// the only reports available are what the user noticed. Written here so
+    /// there is something to read afterwards.
+    ///
+    /// Beside the learning data rather than under `%ProgramFiles%`: this is
+    /// per-user, and the engine runs without write access to its own
+    /// installation directory.
+    public static var logURL: URL {
+        userDataDirectory.appendingPathComponent("engine.log")
     }
 
     /// The model download is allowed to fail at install time (decision 0008);

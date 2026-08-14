@@ -52,7 +52,9 @@ public:
     WCHAR GetVirtualKey(DWORD_PTR dwIndex);
 
     void GetReadingStrings(_Inout_ CSampleImeArray<CStringRange> *pReadingStrings, _Out_ BOOL *pIsWildcardIncluded);
-    void GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch);
+    // [Ohagey] precedingText is the already-committed text to the left of the
+    // composition; the engine uses it to disambiguate (decision 0034).
+    void GetCandidateList(_Inout_ CSampleImeArray<CCandidateListItem> *pCandidateList, BOOL isIncrementalWordSearch, BOOL isWildcardSearch, const std::wstring& precedingText);
     void GetCandidateStringInConverted(CStringRange &searchString, _In_ CSampleImeArray<CCandidateListItem> *pCandidateList);
 
     // [Ohagey] Tells the engine which candidate the user settled on, so it can
@@ -123,6 +125,7 @@ private:
 	void InitializeSampleIMECompartment(_In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId);
 
     class XPreservedKey;
+    void AddPreservedKey(_Inout_ XPreservedKey *pXPreservedKey, UINT vKey, UINT modifiers);
     void SetPreservedKey(const CLSID clsid, TF_PRESERVEDKEY & tfPreservedKey, _In_z_ LPCWSTR pwszDescription, _Out_ XPreservedKey *pXPreservedKey);
     BOOL InitPreservedKey(_In_ XPreservedKey *pXPreservedKey, _In_ ITfThreadMgr *pThreadMgr, TfClientId tfClientId);
     BOOL CheckShiftKeyOnly(_In_ CSampleImeArray<TF_PRESERVEDKEY> *pTSFPreservedKeyTable);
@@ -132,8 +135,6 @@ private:
     void KeyboardOpenCompartmentUpdated(_In_ ITfThreadMgr *pThreadMgr);
 
     
-    BOOL SetupDictionaryFile();
-    CFile* GetDictionaryFile();
 
 private:
     struct _KEYSTROKE
@@ -149,7 +150,8 @@ private:
             Function = FUNCTION_NONE;
         }
     };
-    _KEYSTROKE _keystrokeTable[26];
+    // 26 letters plus the long-vowel key; see InitKeyStrokeTable.
+    _KEYSTROKE _keystrokeTable[27];
 
     CTableDictionaryEngine* _pTableDictionaryEngine;
 
@@ -177,6 +179,7 @@ private:
     // Resolves `keystrokes` (romaji) to kana and fills `pCandidateList` from
     // the engine's answer.
     void GetCandidateListFromEngine(const CStringRange& keystrokes,
+                                   const std::wstring& precedingText,
                                     _Inout_ CSampleImeArray<CCandidateListItem>* pCandidateList);
     CStringRange _keystrokeBuffer;
 

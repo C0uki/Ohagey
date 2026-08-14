@@ -426,7 +426,10 @@ HRESULT CSampleIME::GetLayout(_Out_ TKBLayoutType *ptkblayoutType, _Out_ WORD *p
     if ((ptkblayoutType != nullptr) && (pwPreferredLayoutId != nullptr))
     {
         *ptkblayoutType = TKBLT_OPTIMIZED;
-        *pwPreferredLayoutId = TKBL_OPT_SIMPLIFIED_CHINESE_PINYIN;
+        // Which on-screen keyboard Windows offers on a tablet. The pinyin
+        // layout the sample asked for has no kana and no conversion key, so
+        // Ohagey was unusable by touch while looking fine with a keyboard.
+        *pwPreferredLayoutId = TKBL_OPT_JAPANESE_ABC;
         hr = S_OK;
     }
     return hr;
