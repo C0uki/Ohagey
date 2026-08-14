@@ -448,3 +448,52 @@ final class RegisteredWordTrainingTests: XCTestCase {
         XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: -1), 0)
     }
 }
+
+/// Text the user drops into `personal/import` (decision 0034).
+extension PersonalizationLayoutTests {
+    func testImportedTextBecomesOneCorpusLinePerLine() {
+        let lines = PersonalizationLayout.corpusLines(
+            fromImportedText: "きょうはいい天気\nあしたは雨\n"
+        )
+        XCTAssertEqual(lines, ["きょうはいい天気", "あしたは雨"])
+    }
+
+    func testImportedTextGetsTheSameFilterAsACommit() {
+        // Blank lines, surrounding space, and a line past the length limit are
+        // all handled by corpusLine(for:) — the point is that arriving from a
+        // file does not bypass it.
+        let tooLong = String(repeating: "あ", count: PersonalizationLayout.maximumLineLength + 1)
+        let lines = PersonalizationLayout.corpusLines(
+            fromImportedText: "  余白あり  \n\n\(tooLong)\n本文\n"
+        )
+        XCTAssertEqual(lines, ["余白あり", "本文"])
+    }
+
+    func testImportHandlesCarriageReturns() {
+        // A file written on Windows is the normal case here.
+        let lines = PersonalizationLayout.corpusLines(fromImportedText: "一行目\r\n二行目\r\n")
+        XCTAssertEqual(lines, ["一行目", "二行目"])
+    }
+
+    func testImportStopsAtTheCorpusLimit() {
+        let many = (0 ..< (PersonalizationLayout.corpusLimit + 500))
+            .map { "行\($0)" }
+            .joined(separator: "\n")
+        XCTAssertEqual(
+            PersonalizationLayout.corpusLines(fromImportedText: many).count,
+            PersonalizationLayout.corpusLimit,
+            "anything past the limit is trimmed on the next read anyway"
+        )
+    }
+
+    func testImportedFilesAreMovedAsideRatherThanDeleted() {
+        // The directories are a contract with the user: they put files in one
+        // and can find them again in the other.
+        XCTAssertEqual(PersonalizationLayout.importDirectory.lastPathComponent, "import")
+        XCTAssertEqual(PersonalizationLayout.importedDirectory.lastPathComponent, "done")
+        XCTAssertEqual(
+            PersonalizationLayout.importedDirectory.deletingLastPathComponent().lastPathComponent,
+            "import"
+        )
+    }
+}

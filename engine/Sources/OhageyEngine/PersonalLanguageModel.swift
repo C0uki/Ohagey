@@ -312,6 +312,44 @@ final class PersonalLanguageModel {
         startTraining(settings: settings)
     }
 
+    /// Folds any text the user dropped into `personal/import` into the corpus.
+    ///
+    /// Every failure is skipped rather than reported: this runs behind typing,
+    /// and a file that cannot be read costs the user the vocabulary they hoped
+    /// for, not their IME. The count goes in the log so a file that taught
+    /// nothing is at least visible — with the number of lines, never the text.
+    private func ingestImports() {
+        let fm = FileManager.default
+        guard let entries = try? fm.contentsOfDirectory(
+            at: PersonalizationLayout.importDirectory,
+            includingPropertiesForKeys: nil
+        ) else { return }
+
+        for file in entries
+        where file.pathExtension.lowercased() == PersonalizationLayout.importFileExtension {
+            guard let text = try? String(contentsOf: file, encoding: .utf8) else {
+                log("personalisation: could not read an imported file — skipping it")
+                continue
+            }
+
+            let lines = PersonalizationLayout.corpusLines(fromImportedText: text)
+            for line in lines {
+                appendToCorpus(line)
+            }
+            corpusLines += lines.count
+            log("personalisation: imported \(lines.count) lines from a dropped file")
+
+            // Moved even when it contributed nothing, or it would be re-read on
+            // every training run forever.
+            try? fm.createDirectory(at: PersonalizationLayout.importedDirectory,
+                                    withIntermediateDirectories: true)
+            let destination = PersonalizationLayout.importedDirectory
+                .appendingPathComponent(file.lastPathComponent)
+            try? fm.removeItem(at: destination)
+            try? fm.moveItem(at: file, to: destination)
+        }
+    }
+
     private func appendToCorpus(_ line: String) {
         let url = PersonalizationLayout.corpusURL
         guard let data = (line + "\n").data(using: .utf8) else { return }
@@ -366,6 +404,13 @@ final class PersonalLanguageModel {
     /// user who corrects a word ten times in a row gets one of those
     /// corrections learned and nine dropped.
     private func startTraining(settings: EngineSettings) {
+        // Picked up here rather than on a watcher: this is already the heavy
+        // path, it runs every few commits, and a folder the user drops a file
+        // into does not need to be noticed within the second. A watcher would
+        // be another thread inside a process that has to stay responsive while
+        // someone types.
+        ingestImports()
+
         let wait = nextRunNotBefore.timeIntervalSinceNow
         if wait > 0 {
             guard !deferredRunQueued else { return }

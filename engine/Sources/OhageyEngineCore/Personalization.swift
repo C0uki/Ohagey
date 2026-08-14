@@ -157,6 +157,58 @@ public enum PersonalizationLayout {
         return flattened
     }
 
+    // MARK: - Importing text the user chooses
+
+    /// Where a user drops text to teach the IME (decision 0034).
+    ///
+    /// ── Why a folder and not a capture ─────────────────────────────────────
+    ///
+    /// The corpus is otherwise built only from what the user confirms while
+    /// typing, which is accurate but narrow: a phrase has to be typed before it
+    /// can be learned, so the model is always behind the vocabulary of someone
+    /// who writes about the same subject every day.
+    ///
+    /// azooKey solves this on macOS with Tuner, which records text from every
+    /// visible application through the accessibility APIs. That is a different
+    /// kind of thing to keep on disk -- passwords, other people's messages,
+    /// somebody's diagnosis -- and none of it was typed by the user. Being
+    /// entirely offline (decision 0016) does not answer that.
+    ///
+    /// A folder does. What lands in the corpus is what the user put there, one
+    /// deliberate act per file, and they can see exactly what it was.
+    public static var importDirectory: URL {
+        directory.appendingPathComponent("import", isDirectory: true)
+    }
+
+    /// Where imported files are moved once read.
+    ///
+    /// Moved rather than deleted: the user chose these, and a tool that
+    /// silently eats the file you handed it is one nobody trusts twice. Moved
+    /// rather than left in place so the next run does not learn them again --
+    /// which would double their weight for no reason the user could see.
+    public static var importedDirectory: URL {
+        importDirectory.appendingPathComponent("done", isDirectory: true)
+    }
+
+    public static let importFileExtension = "txt"
+
+    /// The corpus lines a dropped file contributes.
+    ///
+    /// Each line goes through the same filter as a commit, so length limits and
+    /// the no-embedded-newlines rule hold however the text arrived. Capped at
+    /// the corpus limit because anything beyond it would be trimmed away on the
+    /// next read anyway — better to stop early than to write megabytes that are
+    /// discarded before they teach anything.
+    public static func corpusLines(fromImportedText text: String) -> [String] {
+        Array(
+            text
+                .split(whereSeparator: { $0.isNewline })
+                .lazy
+                .compactMap { corpusLine(for: String($0)) }
+                .prefix(corpusLimit)
+        )
+    }
+
     // MARK: - How often to retrain
 
     /// Fewest commits that can trigger a training run.
