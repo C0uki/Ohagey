@@ -15,6 +15,42 @@ namespace Ohagey
         // interesting lines are always the last ones.
         const LONGLONG kMaximumBytes = 1 << 20;
 
+        // -1 not yet asked, 0 off, 1 on.
+        volatile LONG g_enabled = -1;
+
+        // Off unless HKCU\Software\Ohagey\DiagnosticLog is a non-zero DWORD.
+        //
+        // This runs on the typing path, inside the user's applications, and
+        // opens a file twice per conversion. That is the right price while
+        // chasing something and no price worth paying the rest of the time: a
+        // shipped IME has no business touching the disk on every space bar
+        // because a maintainer once needed to see an HRESULT.
+        //
+        // Read once and cached -- a registry query per line would cost more
+        // than the writing does. Turning it on therefore applies to
+        // applications started afterwards, which is worth knowing when the
+        // file stays empty: the same trap as replacing the DLL.
+        bool Enabled()
+        {
+            const LONG cached = g_enabled;
+            if (cached >= 0)
+            {
+                return cached != 0;
+            }
+
+            DWORD value = 0;
+            DWORD size = sizeof(value);
+            LONG on = 0;
+            if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Ohagey", L"DiagnosticLog",
+                             RRF_RT_REG_DWORD, nullptr, &value, &size) == ERROR_SUCCESS
+                && value != 0)
+            {
+                on = 1;
+            }
+            InterlockedExchange(&g_enabled, on);
+            return on != 0;
+        }
+
         bool LogPath(wchar_t* buffer, size_t count)
         {
             PWSTR local = nullptr;
@@ -30,6 +66,11 @@ namespace Ohagey
 
     void Log(const char* format, ...)
     {
+        if (!Enabled())
+        {
+            return;
+        }
+
         wchar_t path[MAX_PATH] = {L'\0'};
         if (!LogPath(path, ARRAYSIZE(path)))
         {
