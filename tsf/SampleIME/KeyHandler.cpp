@@ -11,6 +11,7 @@
 #include "SampleIME.h"
 #include "CandidateListUIPresenter.h"
 #include "CompositionProcessorEngine.h"
+#include "../Ohagey/OhageyLog.h"
 
 //////////////////////////////////////////////////////////////////////
 //
@@ -409,12 +410,15 @@ HRESULT CSampleIME::_GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext
 
     if (_pComposition == nullptr)
     {
+        Ohagey::Log("preceding: no composition");
         return S_FALSE;
     }
 
     ITfRange* pRangeComposition = nullptr;
-    if (FAILED(_pComposition->GetRange(&pRangeComposition)) || pRangeComposition == nullptr)
+    const HRESULT hrRange = _pComposition->GetRange(&pRangeComposition);
+    if (FAILED(hrRange) || pRangeComposition == nullptr)
     {
+        Ohagey::Log("preceding: GetRange 0x%08X", hrRange);
         return S_FALSE;
     }
 
@@ -424,21 +428,42 @@ HRESULT CSampleIME::_GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext
     {
         // Collapse onto the composition's start, then pull the start back: the
         // range then covers the characters immediately before it. Near the top
-        // of a document ShiftStart simply moves less, which `shifted` reports
-        // and GetText respects.
+        // of a document ShiftStart simply moves less, and GetText respects that.
         if (SUCCEEDED(pRangeBefore->Collapse(ec, TF_ANCHOR_START)))
         {
+            // `shifted` is required by the signature but deliberately not
+            // tested. The first version gated on `shifted < 0`, assuming the
+            // count comes back signed for a backward shift. Notepad's text
+            // store does report it signed -- the log shows -2, -4, -7 -- so
+            // that guard was **not** what kept this empty; the build under
+            // test was simply never the one loaded. The guard is gone anyway:
+            // the interface does not promise a sign, and there is nothing to
+            // protect against, because a start that did not move leaves an
+            // empty range and GetText returns nothing.
             LONG shifted = 0;
-            if (SUCCEEDED(pRangeBefore->ShiftStart(ec, -PRECEDING_TEXT_MAX, &shifted, nullptr)) && shifted < 0)
+            const HRESULT hrShift = pRangeBefore->ShiftStart(ec, -PRECEDING_TEXT_MAX, &shifted, nullptr);
+            if (SUCCEEDED(hrShift))
             {
                 WCHAR buffer[PRECEDING_TEXT_MAX + 1] = {'\0'};
                 ULONG fetched = 0;
-                if (SUCCEEDED(pRangeBefore->GetText(ec, 0, buffer, PRECEDING_TEXT_MAX, &fetched)) && fetched > 0)
+                const HRESULT hrText = pRangeBefore->GetText(ec, 0, buffer, PRECEDING_TEXT_MAX, &fetched);
+                // Counts and HRESULTs only -- never the characters. See OhageyLog.h.
+                Ohagey::Log("preceding: shift 0x%08X moved %ld, GetText 0x%08X fetched %lu",
+                            hrShift, shifted, hrText, fetched);
+                if (SUCCEEDED(hrText) && fetched > 0)
                 {
                     pText->assign(buffer, fetched);
                     hr = S_OK;
                 }
             }
+            else
+            {
+                Ohagey::Log("preceding: ShiftStart 0x%08X", hrShift);
+            }
+        }
+        else
+        {
+            Ohagey::Log("preceding: Collapse failed");
         }
         pRangeBefore->Release();
     }
@@ -453,6 +478,7 @@ HRESULT CSampleIME::_GetPrecedingText(TfEditCookie ec, _In_ ITfContext *pContext
         pText->erase(0, lastBreak + 1);
     }
 
+    Ohagey::Log("preceding: returning %zu chars", pText->size());
     return hr;
 }
 
