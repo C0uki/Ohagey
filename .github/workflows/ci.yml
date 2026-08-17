@@ -188,6 +188,55 @@ jobs:
           }
           Write-Host "all four COM exports present"
 
+      # 走らせるもの: エンジンもパイプもプロファイルも要らない自己検査。
+      #
+      # ワイヤの試験がここにあるのは、**更新のたびに必ず混在が起きる**からである
+      # (決定 0032 の追記)。インストーラが走った瞬間にエンジンは入れ替わるが、
+      # TSF DLL は全アプリに読み込まれていて置き換えられず、再起動を待つ。
+      # その間、この機械上のすべての変換が「新しいエンジン × 古いクライアント」
+      # である。手書きの reader がそれに耐えるかは、実機を待たずに確かめられる。
+      - name: Selftests (kana, wire format)
+        run: |
+          ./tsf/Ohagey/tools/build-and-run-kana.ps1
+          if ($LASTEXITCODE -ne 0) { throw "kana selftest failed" }
+          ./tsf/Ohagey/tools/build-and-run-wire.ps1
+          if ($LASTEXITCODE -ne 0) { throw "wire selftest failed" }
+
+      # インストーラを実際にコンパイルする（決定 0019 / 0033）。
+      #
+      # ここが守るのは「配布物が組み立てられること」であって、中身の正しさでは
+      # ない。それでも入れているのは、**壊れ方が黙っているから**である。実際に
+      # 2回踏んだ:
+      #
+      #   * [Files] の3件中2件のパスが実在しないものを指していた。誰も iscc を
+      #     走らせていなかったので、気づいたのは実機で組んだときだった。
+      #   * [Setup] セクションごと消えたまま commit してマージした。
+      #
+      # どちらも `iscc` を1回走らせれば即座に落ちる。
+      #
+      # 設定アプリだけは CI では作れない（WinUI 3 の PRI 生成に Visual Studio の
+      # MSBuild が要る）ので、そこだけ define で外す。**出荷構成は define 無しの
+      # 側**なので、外すほうに明示的な指定が要る。
+      - name: Package the installer
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed" }
+
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
+
+          & $iscc /DCiWithoutSettingsApp installer\ohagey.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+          # 出来たことだけでなく、中身が入っていることも見る。空に近い setup.exe
+          # は「[Files] が全部 skip された」の見た目であり、それは緑にしてよい
+          # 状態ではない。
+          $setup = "installer\Output\ohagey-setup.exe"
+          if (-not (Test-Path $setup)) { throw "no installer produced" }
+          $mb = (Get-Item $setup).Length / 1MB
+          Write-Host ("installer: {0:N1} MB" -f $mb)
+          if ($mb -lt 1) { throw "installer is only $mb MB — the payload is missing" }
+
   # 設定アプリのロジック部分（決定 0013 / 0035 / 0036）。
   #
   # UI ではなくロジックだけを見るジョブ。設定スキーマと辞書フォーマットは

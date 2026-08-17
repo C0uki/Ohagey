@@ -91,7 +91,18 @@ Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe";
 ; a runtime after installation (decision 0016).
 ;
 ; The TFM and RID are part of the path and change with them.
+; Excluded only when CI asks. The settings app is WinUI 3, and building it
+; needs the Visual Studio MSBuild that generates the PRI resources -- more
+; than the packaging check is there to prove.
+;
+; Phrased as #ifndef rather than #ifdef on purpose: **the shipping
+; configuration is the one with no defines**. Opting the component *out*
+; takes a deliberate flag, so a release cannot quietly go out without the
+; settings app the way it could if inclusion were the thing you had to
+; remember to ask for.
+#ifndef CiWithoutSettingsApp
 Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+#endif
 ;
 ; Backend DLLs (decision 0028). The engine picks one at startup via the DLL
 ; search path, so each backend needs its own subdirectory.
