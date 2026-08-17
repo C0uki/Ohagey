@@ -213,8 +213,13 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   オンデマンド起動と緊張関係にあり、解き方は未決
 
 
+- **CUDA / Vulkan が実機で動く**(decision 0028 の追記)。3つとも読み込まれて変換し、
+  CUDA は GPU にも載る(0 → 93 MiB、`nvidia-smi` が compute app として認識)。
+  速さは cpu 195ms / cuda 147ms / vulkan 150ms(範囲は重ならない)。
+  🔴 **出荷するなら vulkan** — 22.6MB で cuda(977MB)と同じ速さ、しかも GPU を選ばない
+
 ### 未着手
-- CUDA / Vulkan バックエンドの実機動作(プレビルドの取得までは確認済み)
+- CI での `iscc` パッケージング
 
 ## ビルドとテスト
 
