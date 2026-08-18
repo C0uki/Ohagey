@@ -4,6 +4,8 @@ Windows向け日本語IME。azooKeyの変換エンジン(AzooKeyKanaKanjiConvert
 流用し、TSF層・UI・配布まわりは新規実装。
 
 **作業を始める前に必ず読むこと:**
+- `docs/handover.md` — **引き継ぎ書。ここから読む** — いまどこにいるか、作業の型、
+  既知の限界、次にやること
 - `docs/decisions/README.md` — 設計判断の全一覧(なぜそう決めたか)
 - `docs/roadmap.md` — フェーズ別の進捗と残タスク、未解決の設計課題
 - `docs/local-setup.md` — ビルド手順、**動作確認済みのバージョン組み合わせ**、
