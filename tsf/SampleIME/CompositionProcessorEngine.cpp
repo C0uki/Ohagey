@@ -302,6 +302,46 @@ BOOL CCompositionProcessorEngine::AddVirtualKey(WCHAR wch)
 //     none.
 //----------------------------------------------------------------------------
 
+// RemoveLastKana     [Ohagey]
+//
+// Backspace deletes one **kana**, not one keystroke.
+//
+// The sample removed the last virtual key, which for pinyin is exactly what the
+// user sees on screen: one letter typed, one letter shown. Japanese is typed in
+// romaji and shown in kana, so those are different units, and removing one
+// keystroke left the composition mid-syllable:
+//
+//     おはぎ  (ohagi)  -> backspace -> おはg  (ohag)
+//
+// Reported exactly that way. What a Japanese IME does is delete the whole kana:
+//
+//     おはぎ           -> backspace -> おは
+//
+// Done by popping keystrokes until the rendered reading is one character
+// shorter, rather than by a reverse table. `ohagi` -> `ohag` still renders
+// three characters (`おはg`, the unresolved consonant shows as itself), so
+// counting keystrokes cannot work and counting the *result* can. The loop is
+// bounded by the buffer, so an input that never shortens empties it instead of
+// spinning.
+void CCompositionProcessorEngine::RemoveLastKana()
+{
+    const DWORD_PTR length = _keystrokeBuffer.GetLength();
+    if (length == 0)
+    {
+        return;
+    }
+
+    // The rule itself is in RomajiKana, where it can be tested without a
+    // profile, a pipe or a text store (`build-and-run-kana.ps1`).
+    const std::wstring romaji(_keystrokeBuffer.Get(), static_cast<size_t>(length));
+    const size_t keep = Ohagey::RomajiLengthAfterBackspace(romaji);
+
+    for (DWORD_PTR i = length; i > keep; --i)
+    {
+        RemoveVirtualKey(i - 1);
+    }
+}
+
 void CCompositionProcessorEngine::RemoveVirtualKey(DWORD_PTR dwIndex)
 {
     DWORD_PTR srgKeystrokeBufLen = _keystrokeBuffer.GetLength();

@@ -46,6 +46,8 @@ public:
 
     BOOL AddVirtualKey(WCHAR wch);
     void RemoveVirtualKey(DWORD_PTR dwIndex);
+    // [Ohagey] Backspace deletes a kana, not a keystroke. See the definition.
+    void RemoveLastKana();
     void PurgeVirtualKey();
 
     DWORD_PTR GetVirtualKeyLength() { return _keystrokeBuffer.GetLength(); }

@@ -93,4 +93,26 @@ namespace Ohagey
     // asked to convert; this is what the user is looking at, and someone who
     // has typed `ky` needs to see that they typed it.
     std::wstring RomajiToDisplay(const std::wstring& romaji);
+
+    // How much romaji to keep when backspace deletes one **kana**.
+    //
+    // Backspace removes one character of what the user is looking at, which is
+    // `RomajiToDisplay` — not one keystroke. Those are the same thing in a
+    // pinyin IME and different in a Japanese one:
+    //
+    //     おはぎ  (ohagi)  -> one keystroke -> おはg   the reported bug
+    //                      -> one kana     -> おは
+    //
+    // Computed by shortening the romaji until the display shortens, rather
+    // than by a reverse table: `ohagi` -> `ohag` still displays three
+    // characters, because an unresolved consonant shows as itself. Counting
+    // keystrokes cannot see that; counting the result can.
+    //
+    // ⚠️ A syllable with no shorter spelling collapses further than one kana:
+    // `kyo` displays きょ, and no prefix of `kyo` displays き, so backspace
+    // lands on `k`. Keeping き would mean rewriting the buffer to `ki`, i.e.
+    // storing kana rather than what was typed — a larger change than this bug
+    // asks for, and one that would make the composition disagree with the
+    // keystrokes behind it.
+    size_t RomajiLengthAfterBackspace(const std::wstring& romaji);
 }

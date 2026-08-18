@@ -41,6 +41,19 @@ namespace
                ok ? "" : ("  expected " + Utf8(expected)).c_str());
     }
 
+    // Backspace deletes one character of what is on screen, not one keystroke.
+    void ExpectBackspace(const wchar_t* romaji, const wchar_t* expectedDisplay)
+    {
+        const size_t keep = RomajiLengthAfterBackspace(romaji);
+        const std::wstring left(std::wstring(romaji).substr(0, keep));
+        const std::wstring got = RomajiToDisplay(left);
+        const bool ok = (got == expectedDisplay);
+        if (!ok) ++g_failures;
+        printf("  [%s] %-12s -> %-14s%s\n", ok ? "PASS" : "FAIL",
+               Utf8(romaji).c_str(), Utf8(got).c_str(),
+               ok ? "" : ("  expected " + Utf8(expectedDisplay)).c_str());
+    }
+
     void Expect(bool ok, const char* what)
     {
         printf("  [%s] %s\n", ok ? "PASS" : "FAIL", what);
@@ -189,6 +202,23 @@ int main()
         Expect(!c.Append(L'1'), "digits are rejected outright");
         Expect(c.IsEmpty(), "and consume nothing");
     }
+
+    printf("\nbackspace deletes a kana, not a keystroke\n");
+    // The reported bug: ohagi lost one keystroke and showed おはg.
+    ExpectBackspace(L"ohagi", L"おは");
+    ExpectBackspace(L"aiueo", L"あいうえ");
+    ExpectBackspace(L"a", L"");
+    ExpectBackspace(L"", L"");
+    // A lone consonant is the whole of what is shown, so it goes on its own.
+    ExpectBackspace(L"ohag", L"おは");
+    // Sokuon: って is two shown characters.
+    ExpectBackspace(L"tte", L"t");
+    // A trailing lone n shows as ん, so it is one character like any other.
+    ExpectBackspace(L"hon", L"ほ");
+    // No prefix of `kyo` shows き, so this collapses to `k`. Documented on
+    // RomajiLengthAfterBackspace: keeping き would mean storing kana instead
+    // of what was typed.
+    ExpectBackspace(L"kyo", L"k");
 
     printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASSED" : "FAILED",
            g_failures, g_failures == 1 ? "" : "s");

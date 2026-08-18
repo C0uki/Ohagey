@@ -664,7 +664,8 @@ HRESULT CSampleIME::_HandleCompositionBackspace(TfEditCookie ec, _In_ ITfContext
 
     if (vKeyLen)
     {
-        pCompositionProcessorEngine->RemoveVirtualKey(vKeyLen - 1);
+        // [Ohagey] One kana, not one keystroke — see RemoveLastKana.
+        pCompositionProcessorEngine->RemoveLastKana();
 
         if (pCompositionProcessorEngine->GetVirtualKeyLength())
         {

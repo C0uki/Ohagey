@@ -273,3 +273,21 @@ namespace Ohagey
         return Feed(romaji).Display();
     }
 }
+
+size_t Ohagey::RomajiLengthAfterBackspace(const std::wstring& romaji)
+{
+    if (romaji.empty())
+    {
+        return 0;
+    }
+
+    const size_t shown = RomajiToDisplay(romaji).length();
+    for (size_t keep = romaji.length() - 1; keep > 0; --keep)
+    {
+        if (RomajiToDisplay(romaji.substr(0, keep)).length() < shown)
+        {
+            return keep;
+        }
+    }
+    return 0;
+}
