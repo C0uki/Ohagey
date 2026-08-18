@@ -7,14 +7,7 @@
 #
 # Needs the azooKey build of llama.cpp: upstream's cannot load the zenz model,
 # and this measures nothing without it. See docs/local-setup.md.
-# `-Reading` matters more than it looks. Personalisation cannot move the
-# first character of a candidate, so a reading whose alternatives all differ
-# there measures the learning store alone. The default does exactly that;
-# "きかいをつくる" offers 機会をつくる and 機会を作る, which share 機会を.
-# `-SettleSeconds` has to grow with the base model: one retraining run takes
-# about a second per megabyte of base (1.4 MB -> 1.2s, 42.6 MB -> 41s), and
-# measuring before it lands looks exactly like personalisation not working.
-param([string]$Reading = '', [int]$SettleSeconds = 20, [switch]$KeepIntermediates)
+param([switch]$KeepIntermediates)
 
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
@@ -44,12 +37,6 @@ New-Item -ItemType Directory -Force $out | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 $key = "HKCU:\Software\Ohagey"
-# Reported, not required: the first phase (learning store only) is a real
-# measurement either way, and it is the second phase — the one whose whole point
-# is the personal model — that the base model decides (decision 0034).
-. (Join-Path $here "base-lm-status.ps1")
-Assert-OhageyBaseLm
-
 $saved = $null
 if (Test-Path $key) { $saved = Get-ItemProperty $key }
 
@@ -67,8 +54,7 @@ try {
         New-Item -Path $key -Force | Out-Null
         New-ItemProperty -Path $key -Name "LearningEnabled" -Value 1 -PropertyType DWord -Force | Out-Null
         New-ItemProperty -Path $key -Name "PersonalizationEnabled" -Value $phase.Personalization -PropertyType DWord -Force | Out-Null
-        $reading = if ($Reading) { $Reading } else { 'きしゃのきしゃ' }
-        & "$out\engine-learning.exe" $phase.Label $reading $SettleSeconds
+        & "$out\engine-learning.exe" $phase.Label
     }
 } finally {
     Stop-Engine

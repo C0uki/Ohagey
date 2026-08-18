@@ -41,49 +41,6 @@ public enum EngineRequest: Equatable, Sendable {
     case ping
 }
 
-extension EngineRequest {
-    /// One line naming this request, safe to write to the diagnostic log.
-    ///
-    /// ── Lengths, never the text ────────────────────────────────────────────
-    ///
-    /// `engine.log` must not become a transcript of what the user wrote (see
-    /// EngineLogFile), so no reading, candidate or committed string appears
-    /// here — only how long each was.
-    ///
-    /// The lengths are the point. "変換が一回限り" is a claim about which
-    /// requests arrive and what shape they are in, and the leading suspicion is
-    /// that after the first conversion the TSF side can never build a reading
-    /// longer than one character. A column of `reading 1` answers that from a
-    /// real session; the words themselves would add nothing to it.
-    public var logSummary: String {
-        switch self {
-        case .convert(let reading, let nBest, let precedingText):
-            return "convert (reading \(reading.count), preceding \(precedingText.count), n_best \(nBest))"
-        case .commit(let reading, let text, let updateLearning):
-            return "commit (reading \(reading.count), text \(text.count), learn \(updateLearning))"
-        case .registerWord(let reading, let surface, _):
-            return "register_word (reading \(reading.count), surface \(surface.count))"
-        case .ping:
-            return "ping"
-        }
-    }
-}
-
-extension EngineResponse {
-    /// How a request came out, in the same no-text terms as `logSummary`.
-    public var logSummary: String {
-        switch self {
-        case .convert(let candidates, let zenzaiUsed):
-            return "\(candidates.count) candidates (zenzai \(zenzaiUsed))"
-        case .failure(let error):
-            // The code and the message are ours, not the user's text.
-            return "failed: \(error.code) \(error.message)"
-        case .commit, .registerWord, .ping:
-            return "ok"
-        }
-    }
-}
-
 /// A single conversion candidate as the engine sees it.
 public struct EngineCandidate: Equatable, Sendable {
     public var text: String

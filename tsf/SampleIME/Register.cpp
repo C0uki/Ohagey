@@ -12,9 +12,7 @@ static const WCHAR RegInfo_Prefix_CLSID[] = L"CLSID\\";
 static const WCHAR RegInfo_Key_InProSvr32[] = L"InProcServer32";
 static const WCHAR RegInfo_Key_ThreadModel[] = L"ThreadingModel";
 
-// The name Windows shows in the input method list and the language bar.
-// Japanese, because that is who the list is for.
-static const WCHAR TEXTSERVICE_DESC[] = L"おはぎー";
+static const WCHAR TEXTSERVICE_DESC[] = L"Sample IME";
 
 static const GUID SupportCategories[] = {
     GUID_TFCAT_TIP_KEYBOARD,

@@ -53,27 +53,6 @@ HRESULT CSampleIME::_HandleCandidateFinalize(TfEditCookie ec, _In_ ITfContext *p
         {
             return hr;
         }
-
-        // [Ohagey] Tell the engine what was chosen (decisions 0024 / 0025).
-        //
-        // This is the path a user actually takes: convert, pick, Enter. It was
-        // the one path that never reported the choice — `NotifyCommitted` was
-        // wired only into `_HandleCompositionFinalize`, which handles the other
-        // branch. So learning was never fed by ordinary typing at all, and
-        // `%LOCALAPPDATA%\Ohagey\personal\corpus.txt` stayed absent after real
-        // sessions. The engine's request log confirmed it from the far end:
-        // conversions arrived, commits never did.
-        //
-        // Before `_HandleComplete`, which purges the keystroke buffer the
-        // reading is derived from — the same ordering constraint as the other
-        // call site. Secure mode suppresses learning: on the logon screen or a
-        // UAC prompt, remembering what was typed is wrong whatever the user's
-        // setting says.
-        CCompositionProcessorEngine* pEngine = _pCompositionProcessorEngine;
-        if (pEngine)
-        {
-            pEngine->NotifyCommitted(candidateString, _IsSecureMode() ? FALSE : TRUE);
-        }
     }
 
 NoPresenter:
@@ -225,15 +204,6 @@ HRESULT CSampleIME::_HandleCandidateArrowKey(TfEditCookie ec, _In_ ITfContext *p
 {
     ec;
     pContext;
-
-    // [Ohagey] Guarded. The sample dereferenced this unconditionally because
-    // only the arrow keys reached it; the conversion key now comes here too. A
-    // null dereference inside Notepad is what decision 0017 exists to prevent,
-    // and the SEH net is a last resort rather than a substitute for the check.
-    if (_pCandidateListUIPresenter == nullptr)
-    {
-        return S_FALSE;
-    }
 
     _pCandidateListUIPresenter->AdviseUIChangedByArrowKey(keyFunction);
 

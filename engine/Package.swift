@@ -1,46 +1,18 @@
 // swift-tools-version:6.1
 // 6.1 is required for package traits (`traits:` below), which upstream uses to
 // gate the Zenzai/llama.cpp dependency. 5.10 rejects that API.
-import Foundation
 import PackageDescription
 
 // No `platforms:` declaration: SPM's platform list only describes Apple
 // deployment targets, and an empty array is rejected outright
 // ("supported platforms can't be empty"). Ohagey targets Windows x64 only
 // (decision 0018), which SPM expresses through the toolchain, not this field.
-
-// ── Building against a local checkout of the converter ─────────────────────
-//
-// Set OHAGEY_CONVERTER_PATH to a clone of the fork and the build uses that
-// instead of the pinned revision. The directory has to be named
-// AzooKeyKanaKanjiConverter: SwiftPM takes a path dependency's identity from
-// the last path component, not from the manifest, so any other name fails
-// with "unknown package" against every target that depends on it.
-//
-// This exists because there is no other way to change the converter and see
-// the result. SwiftPM treats `.build/checkouts/` as a cache it owns: editing a
-// file in there and rebuilding prints "Build complete" in under a second and
-// links the previous binary. Decision 0034 recorded a set of measurements that
-// had to be retracted for exactly that reason — they were taken against a
-// source change that was never compiled.
-//
-// Only for development. Nothing ships from a path dependency: the variable is
-// unset in CI and on any machine that has not deliberately set it, and
-// `swift build` then resolves the pinned revision as before. It is safe to
-// have here in a way `OHAGEY_MODEL_PATH` is not (decision 0008), because this
-// is read by the build system on a developer's machine rather than by a
-// shipped process that inherits a caller's environment.
-let converterCheckout = ProcessInfo.processInfo.environment["OHAGEY_CONVERTER_PATH"]
-    .flatMap { $0.isEmpty ? nil : $0 }
-
 let package = Package(
     name: "OhageyEngine",
     products: [
         .executable(name: "OhageyEngine", targets: ["OhageyEngine"]),
         // A diagnostic, not part of the product. See Sources/OhageyLMProbe.
         .executable(name: "OhageyLMProbe", targets: ["OhageyLMProbe"]),
-        // Also a diagnostic. See Sources/OhageyLMTrain.
-        .executable(name: "OhageyLMTrain", targets: ["OhageyLMTrain"]),
     ],
     dependencies: [
         // AzooKeyKanaKanjiConverter — a fork of the 0.8.5 tag, pinned by commit
@@ -50,9 +22,7 @@ let package = Package(
         // by revision rather than branch so the build stays reproducible, and
         // still tied to llama.cpp b4846 exactly as decision 0028 requires — the
         // fork point is 0.8.5 itself.
-        converterCheckout.map {
-            Package.Dependency.package(path: $0, traits: ["Zenzai"])
-        } ?? .package(
+        .package(
             url: "https://github.com/C0uki/AzooKeyKanaKanjiConverter",
             revision: "fdaaa9a1dff92109e7b1d88521fe8993b14df2a3",
             traits: ["Zenzai"]
@@ -90,25 +60,6 @@ let package = Package(
         // Deliberately not a mode of the engine: it has no business being
         // reachable from a running IME, and the installer ships
         // OhageyEngine.exe alone.
-        // Trains an n-gram model from a text file, so a base model can be
-        // built here rather than taken from a repository that publishes four
-        // of the five files and no licence (decision 0034, option 3).
-        //
-        // Same reasoning as OhageyLMProbe for keeping it out of the engine.
-        .executableTarget(
-            name: "OhageyLMTrain",
-            dependencies: [
-                .product(name: "EfficientNGram", package: "AzooKeyKanaKanjiConverter"),
-            ],
-            path: "Sources/OhageyLMTrain",
-            swiftSettings: [
-                .swiftLanguageMode(.v5),
-                // EfficientNGram reaches llama.cpp through a package built
-                // with C++ interop, and Swift will not import such a module
-                // without it.
-                .interoperabilityMode(.Cxx)
-            ]
-        ),
         .executableTarget(
             name: "OhageyLMProbe",
             dependencies: [

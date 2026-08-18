@@ -170,10 +170,7 @@ HRESULT CSearchCandidateProvider::GetSearchCandidatesImpl(BSTR bstrQuery, BSTR b
     }
 
     CSampleImeArray<CCandidateListItem> candidateList;
-    // [Ohagey] No left context here: this is the reverse-conversion provider
-    // (ITfFnSearchCandidateProvider), which another text service calls with a
-    // string and no document position. There is no text to its left to read.
-    pCompositionProcessorEngine->GetCandidateList(&candidateList, TRUE, FALSE, std::wstring());
+    pCompositionProcessorEngine->GetCandidateList(&candidateList, TRUE, FALSE);
 
     int cCand = min(candidateList.Count(), FAKECANDIDATENUMBER);
     if (0 < cCand)

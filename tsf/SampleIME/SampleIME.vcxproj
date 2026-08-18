@@ -77,7 +77,6 @@
     <ClCompile Include="..\Ohagey\OhageyWire.cpp" />
     <ClCompile Include="..\Ohagey\CandidateRenderer.cpp" />
     <ClCompile Include="..\Ohagey\CandidateSurface.cpp" />
-    <ClCompile Include="..\Ohagey\OhageyLog.cpp" />
     <ClCompile Include="..\Ohagey\OhageySeh.cpp" />
     <ClCompile Include="..\Ohagey\CandidateTheme.cpp" />
     <ClCompile Include="..\Ohagey\RomajiKana.cpp" />

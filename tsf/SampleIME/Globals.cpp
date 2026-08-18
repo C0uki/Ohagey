@@ -159,24 +159,24 @@ extern const WCHAR StringDelimiter  = L'\"';
 //---------------------------------------------------------------------
 // defined item in setting file table [PreservedKey] section
 //---------------------------------------------------------------------
-extern const WCHAR ImeModeDescription[] = L"かな/英数の切り替え (半角/全角、英数)";
+extern const WCHAR ImeModeDescription[] = L"Chinese/English input (Shift)";
 extern const int ImeModeOnIcoIndex = IME_MODE_ON_ICON_INDEX;
 extern const int ImeModeOffIcoIndex = IME_MODE_OFF_ICON_INDEX;
 
-extern const WCHAR DoubleSingleByteDescription[] = L"全角/半角 (Shift+Space)";
+extern const WCHAR DoubleSingleByteDescription[] = L"Double/Single byte (Shift+Space)";
 extern const int DoubleSingleByteOnIcoIndex = IME_DOUBLE_ON_INDEX;
 extern const int DoubleSingleByteOffIcoIndex = IME_DOUBLE_OFF_INDEX;
 
-extern const WCHAR PunctuationDescription[] = L"句読点の全角/半角 (Ctrl+.)";
+extern const WCHAR PunctuationDescription[] = L"Chinese/English punctuation (Ctrl+.)";
 extern const int PunctuationOnIcoIndex = IME_PUNCTUATION_ON_INDEX;
 extern const int PunctuationOffIcoIndex = IME_PUNCTUATION_OFF_INDEX;
 
 //---------------------------------------------------------------------
 // defined item in setting file table [LanguageBar] section
 //---------------------------------------------------------------------
-extern const WCHAR LangbarImeModeDescription[] = L"入力モード";
-extern const WCHAR LangbarDoubleSingleByteDescription[] = L"文字幅";
-extern const WCHAR LangbarPunctuationDescription[] = L"句読点";
+extern const WCHAR LangbarImeModeDescription[] = L"Conversion mode";
+extern const WCHAR LangbarDoubleSingleByteDescription[] = L"Character width";
+extern const WCHAR LangbarPunctuationDescription[] = L"Punctuation";
 
 //---------------------------------------------------------------------
 // windows class / titile / atom
@@ -228,107 +228,22 @@ extern const WCHAR FullWidthCharTable[] = {
 //---------------------------------------------------------------------
 // defined punctuation characters
 //---------------------------------------------------------------------
-// [Ohagey] The symbols a Japanese keyboard produces in kana mode.
-//
-// Two rounds of wrong here. The sample's table was the Simplified Chinese set
-// -- , to U+FF0C, backslash to U+3001, $ to a currency sign, & to an em dash.
-// Replacing it with only the five punctuation marks went too far the other
-// way: in kana mode a Japanese IME widens the symbols too, so ! came out
-// half-width where every other IME on the machine gives ！.
-//
-// This is the JIS 106/109 set, matching Microsoft IME's defaults:
-//
-//   the five that are not merely widened -- , . / [ ] become 、。・「」;
-//   backslash becomes the yen sign, which is what the key is labelled;
-//   quote and apostrophe take the typographic closing forms;
-//   tilde becomes the wave dash U+301C, not the fullwidth tilde;
-//   everything else takes its U+FF00-block twin.
-//
-// Letters and digits are absent on purpose: letters are the reading, and
-// digits stay half-width, which is what Microsoft IME does and what anyone
-// typing a number wants.
-//
-// '-' is absent too, and that is the point of the keystroke table entry beside
-// it: the minus key has to reach the reading buffer so コーヒー can be typed.
-//
-// Applied only while the IME is open (see KeyEventSink) -- in direct input
-// every one of these has to arrive as itself.
-extern const struct _PUNCTUATION PunctuationTable[31] = {
-    {L'!',   0xFF01},   // ！
-    {L'"',   0x201D},   // ”
-    {L'#',   0xFF03},   // ＃
-    {L'$',   0xFF04},   // ＄
-    {L'%',   0xFF05},   // ％
-    {L'&',   0xFF06},   // ＆
-    {L'\'',  0x2019},  // ’
-    {L'(',   0xFF08},   // （
-    {L')',   0xFF09},   // ）
-    {L'*',   0xFF0A},   // ＊
-    {L'+',   0xFF0B},   // ＋
-    {L',',   0x3001},   // 、
-    {L'.',   0x3002},   // 。
-    {L'/',   0x30FB},   // ・
-    {L':',   0xFF1A},   // ：
-    {L';',   0xFF1B},   // ；
-    {L'<',   0xFF1C},   // ＜
-    {L'=',   0xFF1D},   // ＝
-    {L'>',   0xFF1E},   // ＞
-    {L'?',   0xFF1F},   // ？
-    {L'@',   0xFF20},   // ＠
-    {L'[',   0x300C},   // 「
-    {L'\\',  0xFFE5},   // ￥
-    {L']',   0x300D},   // 」
-    {L'^',   0xFF3E},   // ＾
-    {L'_',   0xFF3F},   // ＿
-    {L'`',   0xFF40},   // ｀
-    {L'{',   0xFF5B},   // ｛
-    {L'|',   0xFF5C},   // ｜
-    {L'}',   0xFF5D},   // ｝
-    {L'~',   0x301C}    // 〜
+extern const struct _PUNCTUATION PunctuationTable[14] = {
+    {L'!',  0xFF01},
+    {L'$',  0xFFE5},
+    {L'&',  0x2014},
+    {L'(',  0xFF08},
+    {L')',  0xFF09},
+    {L',',  0xFF0C},
+    {L'.',  0x3002},
+    {L':',  0xFF1A},
+    {L';',  0xFF1B},
+    {L'?',  0xFF1F},
+    {L'@',  0x00B7},
+    {L'\\', 0x3001},
+    {L'^',  0x2026},
+    {L'_',  0x2014}
 };
-
-//+---------------------------------------------------------------------------
-//
-// IsSystemDarkTheme / DarkIconVariant     [Ohagey]
-//
-// Windows does not tint or invert a text service's icons, so a black glyph is
-// black on a dark taskbar. The only fix is to ship a light-on-dark set and
-// choose between them, which is what these two do.
-//
-//----------------------------------------------------------------------------
-
-BOOL IsSystemDarkTheme()
-{
-    // SystemUsesLightTheme, not AppsUseLightTheme: the two are set separately,
-    // and it is the *system* one that colours the taskbar these icons sit on.
-    // Absent (some managed images never write it) means light, which is the
-    // Windows default and the safer guess -- a black glyph on a light bar is
-    // right, while a white one there would be invisible.
-    DWORD light = 1;
-    DWORD size = sizeof(light);
-    if (RegGetValueW(HKEY_CURRENT_USER,
-                     L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                     L"SystemUsesLightTheme",
-                     RRF_RT_REG_DWORD, nullptr, &light, &size) != ERROR_SUCCESS)
-    {
-        return FALSE;
-    }
-    return light == 0;
-}
-
-int DarkIconVariant(int iconIndex)
-{
-    switch (iconIndex)
-    {
-    case IDI_IME_MODE_ON:  return IDI_IME_MODE_ON_DARK;
-    case IDI_IME_MODE_OFF: return IDI_IME_MODE_OFF_DARK;
-    // The width and punctuation buttons have no light set yet. Returning the
-    // original is right rather than merely safe: those buttons only appear on
-    // the detached language bar, and an icon that is hard to see there is a
-    // smaller problem than one that fails to load at all.
-    default:               return iconIndex;
-    }
-}
 
 //+---------------------------------------------------------------------------
 //

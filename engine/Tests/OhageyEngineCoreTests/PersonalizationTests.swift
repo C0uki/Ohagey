@@ -262,17 +262,16 @@ final class PersonalizationLayoutTests: XCTestCase {
 // MARK: - Settings
 
 final class PersonalizationSettingsTests: XCTestCase {
-    func testBothLearningSwitchesAreOnByDefault() {
-        // They were deliberately different for a month: personalisation broke
-        // 15 to 18 of 30 known-correct conversions when one phrase was
-        // confirmed. That was how the personal model was built — from nothing
-        // rather than by resuming from a base — and Ohagey now ships a base it
-        // can resume from, which leaves the same measurement at 30 of 30.
+    func testLearningIsOnByDefaultAndPersonalisationIsNot() {
+        // Deliberately different, and the difference is the whole of decision
+        // 0034's addendum 11: learning works and is wanted; personalisation
+        // works and costs more than it gives — measured at 15 to 18 of 30
+        // known-correct conversions broken by confirming a single phrase.
         //
-        // Pinned so that flipping either one back is a decision someone makes
-        // here, with the decision log open, rather than an edit nobody notices.
+        // Pinned in one test so that "tidying up" the two into agreement fails
+        // here rather than shipping.
         XCTAssertTrue(EngineSettings.default.learningEnabled)
-        XCTAssertTrue(EngineSettings.default.personalizationActive)
+        XCTAssertFalse(EngineSettings.default.personalizationActive)
     }
 
     func testTurningLearningOffAlsoTurnsPersonalizationOff() {
@@ -321,30 +320,17 @@ final class PersonalizationSettingsTests: XCTestCase {
         XCTAssertEqual(EngineSettings.maximumPersonalizationAlpha, 1.5, accuracy: 1e-9)
     }
 
-    func testASettingsKeyThatSaysNothingAboutItTakesTheDefault() {
+    func testASettingsKeyThatSaysNothingAboutItLeavesItOff() {
         // A settings app older than this feature writes neither value, and the
-        // default stands in (decision 0014's leniency rule).
-        //
-        // That default is now on, which is only safe because the engine
-        // refuses to personalise unless the base model can be resumed from:
-        // an upgrade that has not fetched the base yet inherits a switch that
-        // does nothing, not one that damages conversions.
+        // default stands in (decision 0014's leniency rule). That default is
+        // now off, so someone upgrading into this version does not silently
+        // acquire a feature that breaks their conversions.
         let settings = EngineSettings(values: [
             SettingsSchema.Key.learningEnabled: .number(1),
             SettingsSchema.Key.backend: .text("cpu"),
         ])
-        XCTAssertTrue(settings.personalizationActive)
-        XCTAssertEqual(settings.personalizationAlpha, EngineSettings.default.personalizationAlpha)
-    }
-
-    func testAStoreThatTurnsItOffKeepsItOff() {
-        // The half that matters now the default flipped: someone who switched
-        // it off must not have it switched back on by an upgrade.
-        let settings = EngineSettings(values: [
-            SettingsSchema.Key.learningEnabled: .number(1),
-            SettingsSchema.Key.personalizationEnabled: .number(0),
-        ])
         XCTAssertFalse(settings.personalizationActive)
+        XCTAssertEqual(settings.personalizationAlpha, EngineSettings.default.personalizationAlpha)
     }
 
     func testAStoreThatTurnsItOnGetsIt() {
@@ -420,31 +406,5 @@ final class RegisteredWordTrainingTests: XCTestCase {
 
         let flattened = PersonalizationLayout.trainingLines(forRegisteredWords: ["前半\n後半"])
         XCTAssertEqual(Set(flattened), ["前半 後半"])
-    }
-
-    // MARK: - How often a run may happen (decision 0034)
-
-    func testTheCooldownIsProportionalToTheRunItFollows() {
-        // The whole point: the interval is set by what the last run actually
-        // cost, so it adjusts to the base model and to the machine without
-        // anyone tuning a constant.
-        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 1.2), 10.8, accuracy: 0.001)
-        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 41.0), 369.0, accuracy: 0.001)
-    }
-
-    func testTheCooldownHonoursTheStatedDutyCycle() {
-        // run / (run + cooldown) has to come out as the budget, or the
-        // comment on `trainingDutyCycle` is a lie.
-        for run in [0.5, 1.2, 7.9, 41.0] {
-            let share = run / (run + PersonalizationLayout.cooldownSeconds(afterRunOf: run))
-            XCTAssertEqual(share, PersonalizationLayout.trainingDutyCycle, accuracy: 0.0001)
-        }
-    }
-
-    func testAZeroLengthRunDoesNotHoldAnythingUp() {
-        // Nothing measurable was spent, so there is nothing to pay back — and
-        // a clock that reports 0 must not freeze training.
-        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 0), 0)
-        XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: -1), 0)
     }
 }

@@ -395,68 +395,6 @@ swift run   -Xlinker -LC:\src\Ohagey\backends
 > Windows で開発者モードが無効だと `unable to create symbolic link at .build\debug` という
 > 警告が出るが無害。実体は `.build\x86_64-unknown-windows-msvc\debug\OhageyEngine.exe`。
 
-## 変換器そのものを触るとき — `OHAGEY_CONVERTER_PATH`
-
-**`.build/checkouts/` の中を編集しても反映されない。** SwiftPM はあそこを自分の管理下の
-キャッシュとして扱うので、編集して `swift build` しても1秒で「Build complete」と言い、
-**前のバイナリをそのままリンクする**。決定 0034 は、これに気づかず取った測定を
-まるごと撤回している。
-
-fork をクローンして `OHAGEY_CONVERTER_PATH` を指すと、`.package(path:)` に切り替わる:
-
-```powershell
-git clone --recurse-submodules https://github.com/C0uki/AzooKeyKanaKanjiConverter C:\swb\AzooKeyKanaKanjiConverter
-cd C:\swb\AzooKeyKanaKanjiConverter
-git checkout fdaaa9a1dff92109e7b1d88521fe8993b14df2a3
-git submodule update --init --recursive
-
-$env:OHAGEY_CONVERTER_PATH = "C:\swb\AzooKeyKanaKanjiConverter"
-swift build --scratch-path C:\swb\13x
-```
-
-踏むところが4つある:
-
-1. **ディレクトリ名は `AzooKeyKanaKanjiConverter` でなければならない。**
-   SwiftPM は path 依存の identity をマニフェストではなく**最後のパス要素**から取る。
-   他の名前だと、依存する全ターゲットが `unknown package 'AzooKeyKanaKanjiConverter'`
-   で落ちる
-2. **scratch を分けること**(上では `C:\swb\13x`)。同じ scratch で pin と path を
-   行き来すると、そのたびに全部ビルドし直しになる
-3. **`backends\cpu\` を新しい scratch の出力ディレクトリにコピーすること。**
-   エンジンは exe の隣の `backends\<name>\` を見る(決定 0028):
-
-   ```powershell
-   Copy-Item <repo>\backends\cpu\*.dll C:\swb\13x\x86_64-unknown-windows-msvc\debug\backends\cpu\
-   ```
-
-   忘れると **「Zenzai モデルは読めているのに変換が空で返る」**という紛らわしい
-   落ち方をする。起動ログに `backend: cpu is not installed` と出るので、そこを見ること
-
-4. **`engine/Package.resolved` が書き換わる。** path 依存には pin が無いので、
-   上書きビルドを回すと converter の pin が **`Package.resolved` から消える**。
-   環境変数を外して普通にビルドし直せば戻るが、**その差分をコミットしないこと** —
-   pin が落ちた `Package.resolved` は、他の全員のビルドから再現性を奪う。
-   `git status` に出ていたら `git checkout -- engine/Package.resolved` で戻す
-
-環境変数を外せば pin されたリビジョンに戻る。**CI と出荷ビルドは常にそちら**である。
-
-編集が本当に効いているかは、まず**明らかに壊れる版**をビルドして確かめるとよい
-(決定 0034 の 2026-08-04 追記その3 では、混合項に 0 を掛けた版で確かめた)。
-
-## インストーラを組む(`iscc`)
-
-```powershell
-winget install JRSoftware.InnoSetup
-& "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" installer\ohagey.iss
-```
-
-**`winget` は `%LOCALAPPDATA%\Programs\Inno Setup 6\` に入れる。**
-`C:\Program Files (x86)\Inno Setup 6\` を探しても無い(6.7.3 で確認)。
-
-> ⚠️ **`iscc` は間違いを教えてくれない種類のものがある。** `AppId` に
-> `{{REPLACE-WITH-GENERATED-GUID}}` と書いたままでもコンパイルは通り、
-> リテラル文字列としてそのまま製品に入る。
-
 ## 残っている注意点
 
 **ビルドが通ったことと、正しく動くことは別**。以下はまだ検証されていない。
@@ -494,44 +432,6 @@ OhageyEngine: Zenzai model found at C:/swb/models/ggml-model-Q5_K_M.gguf
 > `ProgramFiles` 環境変数を差し替える手は**使えない**。Windows は新規プロセス生成時に
 > この変数をレジストリから再設定するので、子プロセスには元の値しか渡らない(実測)。
 > `OHAGEY_MODEL_PATH` はまさにこれが理由で用意してある。
-
-### base 言語モデルの配置 — **これが無いと個人化は完全に無効**
-
-個人化(決定 0034)には zenz の重みとは**別に** base の n-gram モデルが要る。
-出荷物ではインストーラが `{app}\models\` に入れる(決定 0008 の追記)。開発機では
-インストーラを通さないので、自分で取ってきて `OHAGEY_BASE_LM_PATH` に
-**接尾辞と拡張子を除いた接頭辞**を渡す:
-
-```bat
-for %f in (lm_c_abc lm_r_xbx lm_u_abx lm_u_xbc) do curl -L --create-dirs ^
-  -o C:\swb\base_n5_lm\%f.marisa ^
-  https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/%f.marisa
-
-set OHAGEY_BASE_LM_PATH=C:\swb\base_n5_lm\lm
-```
-
-インストーラと同じ検証を掛けたければ `installer\download-model.ps1` を直接呼べる
-(`-Sha256` は `installer\ohagey.iss` に固定してある値):
-
-```powershell
-powershell -NoProfile -File installer\download-model.ps1 `
-  -Url https://huggingface.co/Miwa-Keita/base_n5_lm/resolve/main/lm_r_xbx.marisa `
-  -Dest C:\swb\base_n5_lm\lm_r_xbx.marisa `
-  -Sha256 F9594D23E2F15A8E6D51811F15B23E23BFC7CEFD24B8B1C06F3F0366CE5BF555
-```
-
-**`OHAGEY_MODEL_PATH` と同じく debug ビルドでしか効かない。** release が見るのは
-`%ProgramFiles%\Ohagey\models\lm_*.marisa` だけである。
-
-半日これで潰した(決定 0034 の 2026-08-04 追記)。**無いときの症状が「エラー」ではなく
-「個人化が何もしない」**なので、測定地点からは見えない。起動ログには出る:
-
-```
-OhageyEngine: personalisation: no base language model installed — falling back to an empty one, which is INERT: ...
-OhageyEngine: personalisation: using the installed base language model
-```
-
-個人化を主題にするハーネスは `tsf/Ohagey/tools/base-lm-status.ps1` で不在を検出する。
 
 変換品質は辞書のみとは明確に別物:
 

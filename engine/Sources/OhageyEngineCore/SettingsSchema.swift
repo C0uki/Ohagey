@@ -67,20 +67,6 @@ public enum SettingsSchema {
         public static let backend = "Backend"
         public static let zenzaiInferenceLimit = "ZenzaiInferenceLimit"
         public static let idleTimeoutSeconds = "IdleTimeoutSeconds"
-
-        /// Non-zero turns on the TSF side's diagnostic log (decision 0033).
-        ///
-        /// Listed here even though nothing in Swift reads it. This enum is the
-        /// registry contract, and a name that only exists in the C++ half is a
-        /// name someone reuses: the settings app has to be able to offer the
-        /// switch, and the next person adding a value has to be able to see it
-        /// is taken.
-        ///
-        /// Read by `OhageyTSF.dll`, which lives inside the user's applications
-        /// and writes on the typing path, so it is off by default. The engine's
-        /// own log is not gated: it runs in a process of its own, one line per
-        /// request, and it is what made real-machine diagnosis possible at all.
-        public static let diagnosticLog = "DiagnosticLog"
     }
 
     /// Inference steps per request.

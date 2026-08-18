@@ -70,31 +70,4 @@ final class EnginePathsTests: XCTestCase {
         XCTAssertFalse(EnginePaths.honorsModelPathOverride)
         #endif
     }
-
-    // MARK: - The base language model's two file lists (decision 0034)
-
-    /// Resuming needs one file more than inference, not a different set.
-    func testResumingNeedsTheInferenceFilesPlusCBC() {
-        XCTAssertEqual(
-            Set(EnginePaths.baseLanguageModelResumeSuffixes)
-                .subtracting(EnginePaths.baseLanguageModelSuffixes),
-            ["_c_bc"]
-        )
-        XCTAssertEqual(EnginePaths.baseLanguageModelSuffixes.count, 4)
-        XCTAssertEqual(EnginePaths.baseLanguageModelResumeSuffixes.count, 5)
-    }
-
-    /// The base and the personal model are the same shape.
-    ///
-    /// `trainNGram(resumeFilePattern:)` loads a base with `SwiftTrainer` and
-    /// writes a personal model with the same writer, so the two lists have to
-    /// agree. If they drifted, a resumed run would load a missing trie as an
-    /// empty dictionary and train from nothing while looking exactly like a
-    /// resumed run — the failure that is impossible to see from the outside.
-    func testTheBaseAndPersonalModelsHaveTheSameFiles() {
-        XCTAssertEqual(
-            Set(EnginePaths.baseLanguageModelResumeSuffixes),
-            Set(PersonalizationLayout.modelSuffixes)
-        )
-    }
 }

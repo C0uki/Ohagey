@@ -316,24 +316,7 @@ HRESULT CKeyStateCandidate::HandleKeyFinalizeCandidatelistAndInput(KeyHandlerEdi
 //_HandleCandidateConvert
 HRESULT CKeyStateCandidate::HandleKeyConvert(KeyHandlerEditSessionDTO dto)
 {
-    // [Ohagey] The conversion key, pressed while candidates are showing, moves
-    // down the list. That is what "変換が一回限り" was.
-    //
-    // The sample sent it to `_HandleCandidateConvert`, which builds a *phrase*
-    // from the selected candidate — pinyin behaviour, and it depended on the
-    // table dictionary that the engine replaced. With no phrase list to build,
-    // that path falls through to `_HandleCandidateFinalize`, so the second
-    // press **committed candidate 1** instead of offering candidate 2.
-    //
-    // From the keyboard that is exactly "one shot": space converts, space again
-    // settles it, and nothing reaches the rest of the list. The engine had been
-    // answering perfectly all along — the real session's log shows three
-    // conversions, readings of 5, 4 and 3 characters, nine candidates each.
-    //
-    // Down rather than a Japanese-specific handler of our own: this is the same
-    // movement the arrow key already performs, and the candidate window's
-    // notion of selection, paging and wrap-around should have one implementation.
-    return _pTextService->_HandleCandidateArrowKey(dto.ec, dto.pContext, FUNCTION_MOVE_DOWN);
+    return _pTextService->_HandleCandidateConvert(dto.ec, dto.pContext);
 }
 
 //_HandleCancel

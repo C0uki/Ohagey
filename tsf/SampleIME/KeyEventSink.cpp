@@ -73,6 +73,9 @@ BOOL CSampleIME::_IsKeyEaten(_In_ ITfContext *pContext, UINT codeIn, _Out_ UINT 
     CCompartment CompartmentDoubleSingleByte(_pThreadMgr, _tfClientId, Global::SampleIMEGuidCompartmentDoubleSingleByte);
     CompartmentDoubleSingleByte._GetCompartmentBOOL(isDoubleSingleByte);
 
+    BOOL isPunctuation = FALSE;
+    CCompartment CompartmentPunctuation(_pThreadMgr, _tfClientId, Global::SampleIMEGuidCompartmentPunctuation);
+    CompartmentPunctuation._GetCompartmentBOOL(isPunctuation);
 
     if (pKeyState)
     {
@@ -106,22 +109,8 @@ BOOL CSampleIME::_IsKeyEaten(_In_ ITfContext *pContext, UINT codeIn, _Out_ UINT 
         }
     }
 
-    // [Ohagey] Closed means closed: eat nothing.
-    //
-    // The sample carried on whenever the width or punctuation compartment was
-    // set, because in a Chinese IME those are modes in their own right that
-    // apply whether or not the IME is taking input.
-    //
-    // In Japanese there is no such thing. 直接入力 -- the A on the taskbar --
-    // means the keyboard reaches the document untouched, and every
-    // transformation below belongs to kana mode. Left as it was, a width
-    // toggle that had been flipped at some point (Shift+Space does it, and is
-    // easy to hit while typing a capital) kept converting *after* the user had
-    // switched to A: reported as English still coming out full-width in A mode.
-    //
-    // The touch keyboard's page keys are already handled above and are the one
-    // exception, which is what the return value carries.
-    if (!isOpen)
+    // if the keyboard is closed, we don't eat keys, with the exception of the touch keyboard specials keys
+    if (!isOpen && !isDoubleSingleByte && !isPunctuation)
     {
         return isTouchKeyboardSpecialKeys;
     }
@@ -153,27 +142,9 @@ BOOL CSampleIME::_IsKeyEaten(_In_ ITfContext *pContext, UINT codeIn, _Out_ UINT 
     //
     // Punctuation
     //
-    // [Ohagey] Open, and not choosing a candidate. Nothing else.
-    //
-    // Two conditions were wrong here, in opposite directions.
-    //
-    // The sample ran this whenever the *punctuation compartment* was on, with
-    // no regard for whether the IME was taking input -- a Chinese IME treats
-    // punctuation width as a mode of its own. In direct input, where every
-    // keystroke has to reach the document untouched, that turned ! into ！.
-    //
-    // Adding `isOpen` fixed that and exposed the other half: the compartment
-    // was also *required*, and when it is off the whole table does nothing.
-    // Japanese has no such mode. Microsoft IME has no "kana input, but the
-    // symbols stay half-width" setting, because the way to type a half-width
-    // symbol is to leave kana input -- which `isOpen` already covers. So the
-    // compartment is not consulted: in kana mode the symbols widen, always.
-    //
-    // Reported as ! @ ^ still coming out half-width after the table itself was
-    // corrected. The table was right; nothing was reading it.
-    if (isOpen && pCompositionProcessorEngine->IsPunctuation(wch))
+    if (pCompositionProcessorEngine->IsPunctuation(wch))
     {
-        if (_candidateMode == CANDIDATE_NONE)
+        if ((_candidateMode == CANDIDATE_NONE) && isPunctuation)
         {
             if (pKeyState)
             {

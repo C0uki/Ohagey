@@ -108,36 +108,23 @@ final class PersonalLanguageModel {
     /// mixing mean anything.
     ///
     /// When it is missing, an empty base is generated so personalisation still
-    /// runs rather than being switched off entirely. **Measured, that fallback
-    /// is inert**: `ZenzContext` adds `alpha * (log p_personal - log p_base)`,
-    /// and a base that scores every token identically leaves the personal model
-    /// pushing against nothing. Forty confirmations of one phrase moved its rank
-    /// not at all and broke none of the 30 other eval items — against 2位→1位
-    /// and 18 broken with the real base (decision 0034).
-    ///
-    /// So this is not "weaker personalisation", it is none, and it is kept only
-    /// because switching the feature off mid-session would be a larger surprise
-    /// than leaving it running. It is a fallback, not a design, and the log says
-    /// so.
+    /// runs rather than being switched off entirely. That is a much weaker
+    /// arrangement and it is worth being clear why: `ZenzContext` adds
+    /// `alpha * (log p_personal - log p_base)`, and a base that scores every
+    /// token identically leaves the personal model pushing against nothing. It
+    /// was measured as ineffective for an ordinary correction and destructive
+    /// for a heavily repeated one — see decision 0034. It is a fallback, not a
+    /// design.
     private func ensureBaseModel() throws -> Bool {
         if EnginePaths.isBaseLanguageModelAvailable {
             usesRealBaseModel = true
-            if EnginePaths.isBaseLanguageModelResumable {
-                log("personalisation: using the installed base language model")
-            } else {
-                // Loud, because everything else looks fine: the model is
-                // there, it loads, and the switch in the settings app is
-                // available. It just cannot be continued from, and the only
-                // personal model we could build without that is the one
-                // measured to break 8-18 of 30 conversions.
-                log("personalisation: the installed base language model cannot be resumed from (no _c_bc) — personalisation will do nothing rather than train a model that damages unrelated conversions (decision 0034)")
-            }
+            log("personalisation: using the installed base language model")
             return true
         }
         usesRealBaseModel = false
 
         if baseModelExists() { return true }
-        log("personalisation: no base language model installed — falling back to an empty one, which is INERT: it will neither improve nor damage the ranking (decision 0034)")
+        log("personalisation: no base language model installed — falling back to an empty one, which is much weaker (decision 0034)")
 
         log("personalisation: building the empty base model")
         let staging = PersonalizationLayout.directory
@@ -229,39 +216,15 @@ final class PersonalLanguageModel {
         // calibration problem behind all of this is understood (decision 0034,
         // addendum 10). 3rd with the rest of the language intact beats 1st with
         // half of it broken.
-        // ── And nothing happens unless the base can be resumed from ────────
-        //
-        // This is the guard that keeps the switch from being a trap.
-        //
-        // A personal model trained from nothing assigns the smoothing floor
-        // to every token the user has not typed, and subtracting the base
-        // then penalises the whole rest of the language: 8 to 18 of 30
-        // otherwise-correct conversions lost, measured. Trained by resuming
-        // from the base it is the same model plus the user's counts, the
-        // difference outside their own text is 0.00 logits, and the same
-        // measurement breaks nothing while still promoting the target.
-        //
-        // The difference is one file. `Miwa-Keita/base_n5_lm` publishes four
-        // and `SwiftTrainer(baseFilePattern:)` needs five, so on a machine
-        // with the shipped base the only personal model we can build is the
-        // harmful one. Rather than let the setting produce that, it produces
-        // nothing — the user gets no personalisation instead of a worse IME,
-        // and the settings app says which it is.
-        //
-        // `usesRealBaseModel` matters as much as the file count: the empty
-        // base generated when none is installed has all five files and
-        // resuming from it is training from nothing by another name.
         guard settings.personalizationActive,
               baseIsReady,
-              usesRealBaseModel,
-              EnginePaths.isBaseLanguageModelResumable,
               let generation = publishedGeneration
         else { return nil }
 
         return .init(
-            // Always the installed one: the guard above has already refused
-            // every other case.
-            baseNgramLanguageModel: EnginePaths.baseLanguageModelPrefix,
+            baseNgramLanguageModel: usesRealBaseModel
+                ? EnginePaths.baseLanguageModelPrefix
+                : PersonalizationLayout.basePrefix,
             personalNgramLanguageModel: PersonalizationLayout.modelPrefix(generation: generation),
             n: Self.ngramOrder,
             d: Self.discount,
@@ -279,17 +242,6 @@ final class PersonalLanguageModel {
     /// `nonisolated` because the training run reads them from off the main
     /// actor. Without it these inherit the type's isolation, which is a warning
     /// today and an error in the Swift 6 language mode.
-    /// When the next training run may start.
-    ///
-    /// Set from the duration of the last one (see
-    /// `PersonalizationLayout.cooldownSeconds`). Distant past by default so
-    /// the first run is never delayed.
-    private var nextRunNotBefore = Date.distantPast
-
-    /// Whether a deferred run is already queued, so a burst of commits
-    /// queues one and not forty.
-    private var deferredRunQueued = false
-
     private nonisolated static let ngramOrder = 5
     private nonisolated static let discount = 0.75
 
@@ -359,34 +311,7 @@ final class PersonalLanguageModel {
         startTraining(settings: settings)
     }
 
-    /// Starts a run, or queues one for when the cooldown is up.
-    ///
-    /// The cooldown delays rather than cancels: the commits that asked for
-    /// this run stay counted, and it happens later. Cancelling would mean a
-    /// user who corrects a word ten times in a row gets one of those
-    /// corrections learned and nine dropped.
     private func startTraining(settings: EngineSettings) {
-        let wait = nextRunNotBefore.timeIntervalSinceNow
-        if wait > 0 {
-            guard !deferredRunQueued else { return }
-            deferredRunQueued = true
-            log("personalisation: deferring the next training run by \(Int(wait.rounded()))s"
-                + " to stay under \(Int(PersonalizationLayout.trainingDutyCycle * 100))% of the machine")
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                guard let self else { return }
-                self.deferredRunQueued = false
-                // Re-checked rather than assumed: personalisation may have
-                // been switched off while this was waiting (decision 0025).
-                guard settings.personalizationActive, self.baseIsReady, !self.isTraining else { return }
-                self.beginTraining(settings: settings)
-            }
-            return
-        }
-        beginTraining(settings: settings)
-    }
-
-    private func beginTraining(settings: EngineSettings) {
         // The corpus only when it is allowed to exist. Registered words are
         // always included: they are an explicit instruction rather than a
         // record of what someone typed, so switching learning off must not
@@ -406,35 +331,18 @@ final class PersonalLanguageModel {
         isTraining = true
         unlearnedCommits = 0
 
-        // ── Continue from the base model when there is one to continue from ──
-        //
-        // Read here, on the main actor, rather than inside the detached task:
-        // it is a filesystem check against state the task must not race with.
-        //
-        // Nil is the ordinary case today and the reason personalisation costs
-        // what it does. See `EnginePaths.isBaseLanguageModelResumable`.
-        let resumeFrom = EnginePaths.isBaseLanguageModelResumable
-            ? EnginePaths.baseLanguageModelPrefix
-            : nil
-
         // Detached, at utility priority: this is a second of CPU that must not
         // come out of the time budget for the keystroke that triggered it.
         Task.detached(priority: .utility) { [fileManager] in
             let started = DispatchTime.now().uptimeNanoseconds
-            let trained = Self.train(
-                generation: generation,
-                lines: lines,
-                resumeFrom: resumeFrom,
-                fileManager: fileManager
-            )
+            let trained = Self.train(generation: generation, lines: lines, fileManager: fileManager)
             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
             await MainActor.run {
                 self.finishTraining(
                     generation: generation,
                     succeeded: trained,
                     lines: lines.count,
-                    milliseconds: elapsed,
-                    settings: settings
+                    milliseconds: elapsed
                 )
             }
         }
@@ -449,7 +357,6 @@ final class PersonalLanguageModel {
     private nonisolated static func train(
         generation: Int,
         lines: [String],
-        resumeFrom: String?,
         fileManager: FileManager
     ) -> Bool {
         let staging = PersonalizationLayout.incompleteGenerationDirectory(generation)
@@ -459,16 +366,11 @@ final class PersonalLanguageModel {
             try? fileManager.removeItem(at: staging)
             try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
 
-            // `resumeFilePattern` is what decides whether this is a model of
-            // the user's text or a copy of the language with the user's text
-            // added to it. The second is the one that can be subtracted from
-            // the base without punishing every word they have not typed.
             trainNGram(
                 lines: lines,
                 n: ngramOrder,
                 baseFilePattern: PersonalizationLayout.modelPattern,
-                outputDir: staging.path,
-                resumeFilePattern: resumeFrom
+                outputDir: staging.path
             )
 
             // Refuse to publish an incomplete set rather than discovering it
@@ -496,20 +398,9 @@ final class PersonalLanguageModel {
         generation: Int,
         succeeded: Bool,
         lines: Int,
-        milliseconds: Double,
-        // Carried through the round trip rather than re-read: the settings
-        // this run was started under are the ones that decide whether a
-        // follow-up run is allowed. A hot reload mid-training must not turn
-        // a finished run into one that starts another after the user has
-        // just switched personalisation off (decision 0025).
-        settings: EngineSettings
+        milliseconds: Double
     ) {
         isTraining = false
-        // Recorded whether or not it succeeded: a run that failed still spent
-        // the time and the memory.
-        nextRunNotBefore = Date().addingTimeInterval(
-            PersonalizationLayout.cooldownSeconds(afterRunOf: milliseconds / 1000)
-        )
         guard succeeded else {
             log("personalisation: training generation \(generation) failed")
             return
@@ -529,23 +420,6 @@ final class PersonalLanguageModel {
         // holding the old path is never left pointing at a deleted file.
         if let previous {
             try? fileManager.removeItem(at: PersonalizationLayout.generationDirectory(previous))
-        }
-
-        // ── Commits that arrived while this run was going ──────────────────
-        //
-        // `record` refuses to start a run while one is in flight, and the
-        // one in flight had already zeroed the counter. Without this, a
-        // burst of commits trains once — on whatever had accumulated when
-        // the first run began — and then never again until the *next*
-        // commit arrives.
-        //
-        // Found while measuring: forty confirmations in a row produced one
-        // generation containing three lines, because training takes seconds
-        // and the other thirty-seven landed inside that window. Someone
-        // pasting a paragraph, or correcting the same word repeatedly, hits
-        // exactly this.
-        if unlearnedCommits >= PersonalizationLayout.commitsPerTrainingRun(corpusLines: corpusLines) {
-            startTraining(settings: settings)
         }
     }
 
