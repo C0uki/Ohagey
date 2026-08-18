@@ -286,18 +286,45 @@ jobs:
       - name: Fetch llama.cpp backends
         run: ./tools/fetch-backends.ps1 -Backends cpu
 
-      # winget はランナーで使えないことがあるので、リリース資産を直接取る。
-      # バージョンを固定するのは、手元で通したのと同じコンパイラで通すため
-      # (6.7.3 — 決定 0033)。
+      # Chocolatey 経由。**jrsoftware.org から直接取るのはやめた** — 最初の版が
+      # `files.jrsoftware.org/is/6/innosetup-<version>.exe` を叩いていたが、
+      # あの URL は組み立てたもので実在せず、CI で 404 になった。あそこは
+      # 過去版の安定した置き場ではない。
+      #
+      # バージョンは固定する。留めないと Inno の新版が出た日に、こちらが何も
+      # 変えていないのに CI の結果が変わりうる。
+      #
+      # ⚠️ **手元(6.7.3、winget)と CI(6.7.1、Chocolatey)は同じ版ではない。**
+      # Chocolatey に 6.7.3 がまだ無いだけで、揃える意味も薄い: このジョブが
+      # 見ているのは **`[Files]` のパスが実物に解決するか**であって、コンパイラ
+      # そのものの挙動ではない。揃っているふりをするより書いておく。
+      #
+      # 入っていれば入れ直さない。ランナーのイメージに同梱される日が来ても、
+      # そのとき黙って二重に入れる必要はない。
       - name: Install Inno Setup
         run: |
-          $url = "https://files.jrsoftware.org/is/6/innosetup-6.7.3.exe"
-          Invoke-WebRequest -Uri $url -OutFile "$env:RUNNER_TEMP\innosetup.exe"
-          Start-Process -FilePath "$env:RUNNER_TEMP\innosetup.exe" `
-            -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART" -Wait
-          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found at $iscc" }
-          "ISCC=$iscc" >> $env:GITHUB_ENV
+          function Find-Iscc {
+            Get-ChildItem -Path @(
+              "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup*\ISCC.exe"
+            ) -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+
+          if (-not (Find-Iscc)) {
+            choco install innosetup --version=6.7.1 -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
+          }
+
+          # 入れた後にもう一度探す。パッケージが置き場所を変えたときに
+          # 「ISCC.exe not found at <決め打ち>」で終わらせず、何があったかを出す。
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            $seen = (Get-ChildItem "${env:ProgramFiles(x86)}" -Filter "Inno*" -ErrorAction SilentlyContinue).Name -join ", "
+            throw "ISCC.exe not found. Under Program Files (x86): $seen"
+          }
+
+          Write-Host "iscc: $($iscc.FullName)"
+          "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
 
       - name: Compile the installer
         run: |
