@@ -78,16 +78,18 @@ clone した fork を指すと `.package(path:)` に切り替わる。
 エンジンのリクエストログが実セッションの証拠を残している:
 
 ```
-#5 convert (reading 13, preceding 0, n_best 9) -> 9 candidates (zenzai true) in 507ms
-#6 commit (reading 13, text 11, learn true) -> ok in 15ms
+#3 convert (reading 5, preceding 4, n_best 50) -> 50 candidates (zenzai true) in 180ms
+#4 commit  (reading 5, text 5, learn true) -> ok in 9ms
 ```
 
-13文字の読みが Zenzai で11文字に変換され、確定が学習まで届いている。
+読みが Zenzai で変換され、**左文脈が乗り**、確定が学習まで届いている。
 `%LOCALAPPDATA%\Ohagey\personal\corpus.txt` が実際に育っている。
 
 利用者に確認してもらった動作: **A のとき英語が半角** / **かな入力中は `!` `@` `^` が
 `！ ＠ ＾`** / **英数(CapsLock) で あ ↔ A** / **半角/全角 が効く** /
-**`ko-hi-` で コーヒー** / **スペース連打で候補送り** / **ダークモードでアイコンが見える**。
+**`ko-hi-` で コーヒー** / **スペース連打で候補送り(50件)** /
+**変換せず Enter で確定できる** / **バックスペースがかな1文字を消す** /
+**ダークモードでアイコンが見える** / **Microsoft Store(UWP)でも打てる**。
 
 ここに至るまでに **vendoring 元が中国語 IME であることに起因する不具合を12件**
 潰している。決定 0033 の追記7〜16 に全部書いた。**LANGID は入口でしかなかった** —
@@ -206,6 +208,49 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   フォールバック後もそのまま Zenzai が変換できる。状態は
   `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
 
+- **合成バッファはかなを持つ**(decision 0033 の追記)。不変条件は
+  **「解決済みのかな + 未解決のローマ字(末尾)」**で、未解決部分は常に末尾の ASCII 連
+  (かなは ASCII ではない)。**バッファの1文字が画面の1文字**になるので、バックスペースは
+  「最後の1つを落とす」で済む。⚠️ 末尾の孤立 `n` はバッファでは `n` のまま —
+  ん を焼き込むと `hona` が ほな にならない。判定は `RomajiKana` の純粋な関数にあり、
+  `build-and-run-kana.ps1` で試験できる
+
+- **確定はすべての経路で学習に届く**(decision 0024 / 0025 / 0033)。候補確定・
+  候補リスト・**無変換確定**の3つ。⚠️ 無変換確定は**コーパスには入るが変換器の
+  学習ストアには入らない** — 渡せる `Candidate` が存在しないため。エンジンのログが
+  `no remembered candidate for this reading` と言う
+
+- **候補は既定50件**(decision 0007)。9件は「候補窓の1ページ分」という表示の慣習で、
+  変換の判断ではなかった。Zenzai はどの数でもラティスを作るので**代償は測定に出ない**
+  (n_best 9→100 でレイテンシは横ばい)。変換器のほうが先に尽きる
+
+- **エンジンは常駐**(decision 0015 の追記)。`idleTimeoutSeconds` の既定は **0**。
+  AppContainer は `CreateProcess` を禁じられているので、アイドル終了は
+  「サンドボックスされたアプリが動くかどうか」を**黙って断続的に**決めてしまう
+
+- **ワイヤ互換を試験してある**(decision 0032 の追記)。**更新のたびに必ず
+  「新しいエンジン × 古い DLL」になる**(エンジンは即座、DLL は再起動待ち)。
+  手書きの reader が未知フィールドを飛ばし、切り詰めと過大な長さ接頭辞を弾くことを
+  `build-and-run-wire.ps1` で9件確認
+
+- **診断できる**(decision 0033 の追記10 / 21)。`engine.log` は起動・設定・
+  **リクエスト1件ごと**、`tsf.log` は TSF 側。**どちらも打った内容は書かない**
+  (長さと件数だけ)。`tsf.log` の毎変換の行は `HKCU\Software\Ohagey\DiagnosticLog`
+  で切ってあるが、**DLL が自分のビルドを書く1行はスイッチの外**にある —
+  「どの窓が古いビルドか」を起動時刻で人間に見分けさせないため
+
+- **利用者が置いたテキストからコーパスを育てられる**(decision 0034 の追記)。
+  `%LOCALAPPDATA%\Ohagey\personal\import\*.txt` を学習の直前に取り込み、
+  読んだファイルは `import\done\` に**移す**(消さない)。各行は確定と同じ
+  `corpusLine(for:)` を通る。⚠️ **重複除去は入れていない** — azooKey の Tuner が
+  MinHash で落とすのは画面収集の副産物であって頻度ではなく、こちらでは
+  **繰り返し確定したこと自体が個人化の読む信号**だからである(昇格に3〜40回)。
+  Tuner の**画面収集は採らない**: 利用者が打っていないテキストが平文で残る
+
+- **CI がインストーラをコンパイルする**(decision 0033 の追記22)。自己検査
+  (`kana-selftest` / `wire-selftest`)も走る。設定アプリだけ
+  `#ifndef CiWithoutSettingsApp` で外す — **出荷構成を define の無い側に置いてある**
+
 ### 未検証
 - 🔴 **AppContainer からはエンジンを起動できない**(決定 0031 の追記)。
   `CreateProcess` が禁じられているので、エンジンが落ちていると UWP アプリでは
@@ -219,7 +264,10 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   🔴 **出荷するなら vulkan** — 22.6MB で cuda(977MB)と同じ速さ、しかも GPU を選ばない
 
 ### 未着手
-- CI での `iscc` パッケージング
+- ロードマップに残るのは**測定が要る問い**(alpha 0.5 が「壊さないが効かない」理由、
+  1文字目に個人化がかからない件の周辺)と**設定アプリの UI**、それに将来の判断
+  (fork を upstream に PR するか、x86 の TSF DLL、`trainNGram` の400万字上限)。
+  `docs/roadmap.md` を見ること
 
 ## ビルドとテスト
 
