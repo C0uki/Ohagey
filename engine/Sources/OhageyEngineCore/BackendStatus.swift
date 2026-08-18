@@ -98,19 +98,31 @@ public enum BackendStatusFile {
 
     /// ISO 8601 in UTC. Read by C# on the other side, so the format is fixed
     /// here rather than left to whatever locale either process happens to be in.
-    static let timestampFormatter: ISO8601DateFormatter = {
+    ///
+    /// Built per call rather than kept in a static.
+    ///
+    /// `ISO8601DateFormatter` is a class and is **not** thread-safe: it holds
+    /// mutable internal state across `string(from:)`. Sharing one from a static
+    /// is a real data race here, not a theoretical one — the backend status is
+    /// written during startup while the pipe server is already accepting on
+    /// other threads. The Swift 6 language mode is what turned it up
+    /// (`#MutableGlobalVariable`).
+    ///
+    /// Constructing one costs microseconds and this runs once per engine start,
+    /// so there is nothing to trade away by not caching it.
+    static func makeTimestampFormatter() -> ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         formatter.timeZone = TimeZone(identifier: "UTC")
         return formatter
-    }()
+    }
 
     public static func serialize(_ status: BackendStatus) -> String {
         var lines = [
             "\(Key.version)\t\(currentVersion)",
             "\(Key.requested)\t\(status.requested.rawValue)",
             "\(Key.reason)\t\(status.reason.rawValue)",
-            "\(Key.recordedAt)\t\(timestampFormatter.string(from: status.recordedAt))",
+            "\(Key.recordedAt)\t\(makeTimestampFormatter().string(from: status.recordedAt))",
         ]
         // Omitted rather than written empty: an absent effective backend means
         // "nothing loaded", and a blank value would have to be special-cased to
@@ -151,7 +163,7 @@ public enum BackendStatusFile {
             detail: (detail?.isEmpty ?? true) ? nil : detail,
             // A missing or unreadable timestamp is not worth rejecting the file
             // for; it only decides how the age is phrased.
-            recordedAt: values[Key.recordedAt].flatMap(timestampFormatter.date(from:)) ?? Date(timeIntervalSince1970: 0)
+            recordedAt: values[Key.recordedAt].flatMap(makeTimestampFormatter().date(from:)) ?? Date(timeIntervalSince1970: 0)
         )
     }
 

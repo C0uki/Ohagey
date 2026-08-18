@@ -5,8 +5,9 @@ on:
     branches: [ main ]
   pull_request:
 
-# docs/roadmap.md 参照。engine/ はフェーズ1でビルド・テストが通るようになったので
-# 有効化済み。tsf/・settings-app/ はまだ雛形のため、定義だけ用意してある。
+# docs/roadmap.md 参照。engine/・tsf/・settings-app/ のロジック・installer/ の
+# 4つが実際に回っている。CI で検証できない部分は各ジョブのコメントに書いてある
+# (TSF の登録には管理者権限、設定アプリの WinUI 本体には Visual Studio が要る)。
 
 permissions:
   contents: read
@@ -92,6 +93,30 @@ jobs:
           $env:PATH = "$backends\cpu;$env:PATH"
           swift build
           swift test
+
+      # Release as well as debug, because the installer packages the release
+      # binary and the installer job below needs it to exist. Also the only
+      # place the release configuration is compiled at all: debug and release
+      # differ in more than optimisation here — EnginePaths honours
+      # OHAGEY_MODEL_PATH and OHAGEY_BASE_LM_PATH in debug only, so a
+      # release-only compile error would otherwise reach a machine first.
+      - name: Build the release engine
+        working-directory: engine
+        run: |
+          $backends = "${{ github.workspace }}\backends"
+          $env:LIB = "$backends;$env:LIB"
+          $env:PATH = "$backends\cpu;$env:PATH"
+          swift build -c release
+
+      # The architecture triple, not .build\release: SwiftPM makes the latter a
+      # symbolic link, and creating one needs Developer Mode or elevation. It
+      # fails on an ordinary machine with I/O error 512 and leaves nothing
+      # behind, which is why ohagey.iss names the triple too (decision 0033).
+      - uses: actions/upload-artifact@v4
+        with:
+          name: engine-release
+          path: engine/.build/x86_64-unknown-windows-msvc/release/OhageyEngine.exe
+          if-no-files-found: error
 
   # TSF テキストサービス (C++ / MSBuild, 決定 0002 / 0003 / 0018 / 0020)。
   #
@@ -188,6 +213,12 @@ jobs:
           }
           Write-Host "all four COM exports present"
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tsf-release
+          path: tsf/SampleIME/x64/Release/OhageyTSF.dll
+          if-no-files-found: error
+
   # 設定アプリのロジック部分（決定 0013 / 0035 / 0036）。
   #
   # UI ではなくロジックだけを見るジョブ。設定スキーマと辞書フォーマットは
@@ -213,8 +244,106 @@ jobs:
             -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw "settings-app tests failed" }
 
-  # ── 今後有効化する実ビルドジョブ（コンポーネント実装後にコメント解除）──
+  # インストーラ (Inno Setup, 決定 0019 / 0033)。
   #
-  # installer (Inno Setup, 決定 0019):
-  #   runs-on: windows-latest。`iscc installer/ohagey.iss`。
-  #   tsf/engine/settings-app が実ビルド成果物を出すようになったら有効化。
+  # ここで守っているのは **[Files] のソースパスが実物と一致すること** である。
+  # 決定 0033 で、誰も iscc を通していなかった間に **3件中2件が間違っていた**
+  # (エンジンは作成に失敗するシンボリックリンクを指し、設定アプリは exe 1つだけを
+  # 入れていて起動できない構成だった)。パスの間違いはビルドを壊さないので、
+  # 実際にパッケージするまで誰も気づかない。
+  #
+  # engine と tsf の成果物は各ジョブから artifact で受け取る。ここで組み直すと
+  # llama.cpp の取得と MSBuild をもう一度やることになり、しかも
+  # **CI がパッケージするものと CI がテストしたものが別物になる**。
+  #
+  # ── 設定アプリだけは検証できない ──
+  #
+  # WinUI 3 の PRI 生成タスクは Visual Studio 側にしかなく、`dotnet build` では
+  # 建たない (docs/local-setup.md)。その1行だけを `/DSkipSettingsApp` で外す。
+  # **残り4つのソースパスは本物の成果物に対して検証される。**
+  # 設定アプリの TFM / RID / プロジェクト配置を変えたときは手で確認すること。
+  installer:
+    name: installer — iscc (パスの実物突き合わせ)
+    runs-on: windows-latest
+    needs: [engine, tsf]
+    steps:
+      - uses: actions/checkout@v4
+
+      # ohagey.iss は成果物を相対パスで参照する (`..\engine\.build\...`)。
+      # artifact をそのパスへ展開すれば、スクリプト側に CI 用の分岐が要らない。
+      - uses: actions/download-artifact@v4
+        with:
+          name: engine-release
+          path: engine/.build/x86_64-unknown-windows-msvc/release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tsf-release
+          path: tsf/SampleIME/x64/Release
+
+      # backends\cpu\*.dll も [Files] に入っている。GPU バックエンドは
+      # /DGpuBackends を渡さない限り参照されないので取らない。
+      - name: Fetch llama.cpp backends
+        run: ./tools/fetch-backends.ps1 -Backends cpu
+
+      # Chocolatey 経由。**jrsoftware.org から直接取るのはやめた** — 最初の版が
+      # `files.jrsoftware.org/is/6/innosetup-<version>.exe` を叩いていたが、
+      # あの URL は組み立てたもので実在せず、CI で 404 になった。あそこは
+      # 過去版の安定した置き場ではない。
+      #
+      # バージョンは固定する。留めないと Inno の新版が出た日に、こちらが何も
+      # 変えていないのに CI の結果が変わりうる。
+      #
+      # ⚠️ **手元(6.7.3、winget)と CI(6.7.1、Chocolatey)は同じ版ではない。**
+      # Chocolatey に 6.7.3 がまだ無いだけで、揃える意味も薄い: このジョブが
+      # 見ているのは **`[Files]` のパスが実物に解決するか**であって、コンパイラ
+      # そのものの挙動ではない。揃っているふりをするより書いておく。
+      #
+      # 入っていれば入れ直さない。ランナーのイメージに同梱される日が来ても、
+      # そのとき黙って二重に入れる必要はない。
+      - name: Install Inno Setup
+        run: |
+          function Find-Iscc {
+            Get-ChildItem -Path @(
+              "${env:ProgramFiles(x86)}\Inno Setup*\ISCC.exe",
+              "$env:ProgramFiles\Inno Setup*\ISCC.exe"
+            ) -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+
+          if (-not (Find-Iscc)) {
+            choco install innosetup --version=6.7.1 -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
+          }
+
+          # 入れた後にもう一度探す。パッケージが置き場所を変えたときに
+          # 「ISCC.exe not found at <決め打ち>」で終わらせず、何があったかを出す。
+          $iscc = Find-Iscc
+          if (-not $iscc) {
+            $seen = (Get-ChildItem "${env:ProgramFiles(x86)}" -Filter "Inno*" -ErrorAction SilentlyContinue).Name -join ", "
+            throw "ISCC.exe not found. Under Program Files (x86): $seen"
+          }
+
+          Write-Host "iscc: $($iscc.FullName)"
+          "ISCC=$($iscc.FullName)" >> $env:GITHUB_ENV
+
+      - name: Compile the installer
+        run: |
+          # 展開した成果物が本当にそこにあるかを先に言う。iscc の
+          # "Source file not found" だけでは、パスが間違っているのか
+          # artifact が来ていないのかが分からない。
+          foreach ($path in @(
+            "engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe",
+            "tsf\SampleIME\x64\Release\OhageyTSF.dll")) {
+            if (-not (Test-Path $path)) { throw "artifact missing: $path" }
+            Write-Host "have $path"
+          }
+          & $env:ISCC /DSkipSettingsApp installer\ohagey.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+      # 設定アプリを抜いてあるので配布物ではない。**インストールしてはいけない。**
+      # 中身を見たいとき (どのファイルが入ったか) のために残す。
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-without-settings-app
+          path: installer/Output/ohagey-setup.exe
+          if-no-files-found: error

@@ -1,11 +1,16 @@
 ; Ohagey installer (Inno Setup) — decision 0019
 ;
-; This is a scaffold, not a working script yet. Fill in [Files] once tsf/, engine/,
-; and settings-app/ produce real build outputs.
+; Real and exercised end to end: compiled with Inno Setup 6.7.3, installed on a
+; real machine, and the resulting IME used to type Japanese in Notepad
+; (decision 0033). `download-model.ps1` beside this file fetches the models and
+; has been run against the published assets, hashes and all.
 ;
-; `download-model.ps1` beside this file IS real and has been exercised standalone
-; (already-present, hash match, hash mismatch, offline, and no leftovers after a
-; failed fetch). Only its wiring below waits on the rest of the scaffold.
+; ── Defines this script understands ─────────────────────────────────────────
+;
+;   /DGpuBackends      also package backends\cuda and backends\vulkan. Off by
+;                      default because CUDA alone is 977 MB.
+;   /DSkipSettingsApp  leave the settings app out. For CI, which cannot build
+;                      it — see the comment above its Source line.
 
 #define MyAppName "Ohagey"
 #define MyAppVersion "0.0.1"
@@ -91,7 +96,22 @@ Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe";
 ; a runtime after installation (decision 0016).
 ;
 ; The TFM and RID are part of the path and change with them.
+;
+; -- Why this one is behind a define ----------------------------------------
+;
+; CI compiles this script with /DSkipSettingsApp, and only this entry is
+; excluded. The settings app cannot be built there: `dotnet build` does not
+; produce it, because the PRI generation task WinUI 3 needs ships with Visual
+; Studio rather than with the SDK (docs/local-setup.md). Every other Source
+; here is checked against a real build artefact in CI, which is the point --
+; two of the three paths in this section were wrong the first time anyone ran
+; iscc over them (decision 0033).
+;
+; So this line is the one gap, and it is the one to check by hand after
+; changing the TFM, the RID, or the project layout.
+#ifndef SkipSettingsApp
 Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+#endif
 ;
 ; Backend DLLs (decision 0028). The engine picks one at startup via the DLL
 ; search path, so each backend needs its own subdirectory.

@@ -225,11 +225,12 @@ public enum EnginePaths {
             .appendingPathComponent("lm").path
     }
 
-    /// Files the base model consists of.
+    /// Files inference reads.
     ///
-    /// Four, not five: the published model has no `_c_bc`, which only a
-    /// resumed *training* run needs. Requiring it would reject a perfectly
-    /// good model.
+    /// Four, not five: `_c_bc` is needed only to resume *training*, and a base
+    /// without it is still perfectly usable for converting. The split is kept
+    /// because the two questions have different answers — see
+    /// `isBaseLanguageModelResumable`, which is the one personalisation asks.
     public static let baseLanguageModelSuffixes = ["_c_abc", "_r_xbx", "_u_abx", "_u_xbc"]
 
     /// Whether the base model is installed.
@@ -260,8 +261,15 @@ public enum EnginePaths {
     ///   own probability, the difference is ~0, and there is nothing to
     ///   subtract.
     ///
-    /// False for `Miwa-Keita/base_n5_lm`, which publishes only four files —
-    /// which is why decision 0034 records this route as blocked for that model.
+    /// Ohagey's own base publishes all five, so this is true after a complete
+    /// install. It is false for `Miwa-Keita/base_n5_lm`, which publishes four —
+    /// one of the two reasons that model was dropped from the installer.
+    ///
+    /// It is also false after a partial install: the five are five independent
+    /// downloads and `download-model.ps1` never fails the installation, so
+    /// losing exactly one is an ordinary outcome. The settings app asks *this*
+    /// question rather than `isBaseLanguageModelAvailable`, so that a machine
+    /// missing only `_c_bc` is not reported as ready.
     public static var isBaseLanguageModelResumable: Bool {
         hasBaseLanguageModel(suffixes: baseLanguageModelResumeSuffixes)
     }
@@ -325,9 +333,3 @@ extension EngineSettings {
         return names
     }
 }
-
-// TODO (implementation phase):
-//  - Confirm whether the settings app writes JSON here or registry values, and
-//    align this type with the schema it produces (the registry schema is still
-//    an open item in docs/decisions/README.md). The watcher in
-//    SettingsWatcher.swift covers the file case only.
