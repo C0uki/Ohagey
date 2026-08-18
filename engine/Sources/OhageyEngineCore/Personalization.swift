@@ -75,6 +75,104 @@ public enum PersonalizationLayout {
     /// someone typed.
     public static let corpusLimit = 10_000
 
+    /// Text the user handed over deliberately, one entry per line
+    /// (decision 0037).
+    ///
+    /// ── Why this is not the corpus ──────────────────────────────────────────
+    ///
+    /// The corpus is a record of what someone typed, kept only with the consent
+    /// that learning stands for (decision 0025), and trimmed oldest-first. Text
+    /// imported from the settings app is neither of those things: it is an
+    /// instruction, like a word registered in the user dictionary. So it gets
+    /// the user dictionary's treatment — never trimmed, and not deleted by the
+    /// button that erases what has been learned.
+    ///
+    /// It exists because the personal model is trained on a few thousand
+    /// characters where the base it is subtracted from is trained on a million.
+    /// azooKey's own Tuner closes that gap by collecting text across
+    /// applications, which decisions 0016 and 0025 rule out here. Being handed
+    /// a file is the version of that which asks first.
+    public static var importedTextURL: URL {
+        directory.appendingPathComponent("imported.txt")
+    }
+
+    /// Most characters of imported text to accept.
+    ///
+    /// ── Why characters rather than lines ───────────────────────────────────
+    ///
+    /// Training cost is per character, not per line: 41µs and 780 bytes of peak
+    /// memory per character, measured across three orders of magnitude
+    /// (decision 0034). A line limit says nothing about either — one line of a
+    /// pasted book would pass it.
+    ///
+    /// ── Why 100,000 ────────────────────────────────────────────────────────
+    ///
+    /// Every training run reads all of this, so an import is not paid once, it
+    /// is paid on every retrain for as long as the file is there. At 41µs per
+    /// character 100,000 adds about 4 seconds to a run that costs 7.9s with the
+    /// shipped 9.4 MB base — noticeable, bounded, and absorbed by the duty
+    /// cycle (`trainingDutyCycle`) rather than by the user waiting.
+    ///
+    /// It is also two orders of magnitude below the point where `trainNGram`
+    /// stops working at all: it holds its counts in memory, and four million
+    /// characters needs about 3.1 GB.
+    ///
+    /// A quarter of the characters the shipped base was trained on, which is
+    /// enough to matter to a personal model.
+    public static let importedTextCharacterLimit = 100_000
+
+    /// Why a file could not be imported, in the user's terms.
+    ///
+    /// `Error` so it can be the failure half of a `Result` — it is never
+    /// thrown. The engine reads a file the settings app already validated, so
+    /// reaching a rejection here means the file was edited by hand, which is a
+    /// value to log rather than an exceptional condition.
+    public enum ImportRejection: Error, Equatable, Sendable {
+        /// Nothing in it survived `corpusLine(for:)`.
+        case empty
+        /// Too long. Carries what was offered, so the message can be specific.
+        case tooLong(characters: Int, limit: Int)
+    }
+
+    /// Turns a file's contents into lines to train on, or says why not.
+    ///
+    /// ── Rejected rather than truncated ─────────────────────────────────────
+    ///
+    /// Silently keeping the first 100,000 characters would train on the front
+    /// of a document and tell the user their file was imported. They would have
+    /// no way to see which half took effect. Refusing puts the choice of what
+    /// to cut back where it belongs.
+    ///
+    /// The limit is counted after the per-line filtering, because that is what
+    /// training actually reads — a file padded with blank lines is not charged
+    /// for them.
+    public static func importedLines(
+        from contents: String,
+        limit: Int = importedTextCharacterLimit
+    ) -> Result<[String], ImportRejection> {
+        // The same normalisation committed text goes through: `corpusLines`
+        // handles CRLF being a single Character in Swift, and `corpusLine`
+        // drops blanks and over-long lines.
+        let lines = corpusLines(from: contents).compactMap(corpusLine(for:))
+        guard !lines.isEmpty else { return .failure(.empty) }
+
+        let characters = lines.reduce(0) { $0 + $1.count }
+        guard characters <= limit else {
+            return .failure(.tooLong(characters: characters, limit: limit))
+        }
+        return .success(lines)
+    }
+
+    /// Seconds a training run is lengthened by this many characters of text.
+    ///
+    /// 41µs per character, measured on a release build over 90k, 419k and 1.17M
+    /// characters (decision 0034). Here so the settings app can tell someone
+    /// what an import will cost before they commit to it, rather than leaving
+    /// them to notice the machine got busier.
+    public static func trainingSecondsAdded(forCharacters characters: Int) -> Double {
+        max(0, Double(characters)) * 0.000_041
+    }
+
     /// Longest line kept. A commit is a phrase, so anything much longer is a
     /// paste or a client bug, and would skew the model out of proportion.
     public static let maximumLineLength = 200

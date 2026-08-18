@@ -51,6 +51,23 @@ final class PersonalLanguageModel {
     /// file format.
     private var registeredWords: [String] = []
 
+    /// Text the user imported from the settings app (decision 0037).
+    ///
+    /// Cached rather than read at training time for the same reason as
+    /// `corpusLines`: the file can be 100,000 characters and a training run is
+    /// not the only thing that asks.
+    private var importedLines: [String] = []
+
+    /// Modification date of `imported.txt` as of the last read.
+    ///
+    /// The settings app writes this file directly and the engine has to notice
+    /// (decision 0013). Checked by `stat` before a conversion rather than
+    /// watched on a thread — exactly what `UserDictionaryStore` does with
+    /// `userdict.tsv`, for exactly the same relationship. One `stat` is nothing
+    /// beside a conversion, it cannot miss a notification, and it needs no
+    /// second mechanism alongside the settings watcher.
+    private var importedModificationDate: Date?
+
     /// Corpus lines as of the last time they were counted.
     ///
     /// Kept rather than read back on every commit: the threshold depends on it,
@@ -87,6 +104,7 @@ final class PersonalLanguageModel {
             baseIsReady = try ensureBaseModel()
             // Counted once here rather than on each commit; see `corpusLines`.
             corpusLines = readCorpus().count
+            reloadImportedTextIfChanged()
             publishedGeneration = newestCompleteGeneration()
             if let publishedGeneration {
                 log("personalisation: generation \(publishedGeneration) loaded")
@@ -343,6 +361,91 @@ final class PersonalLanguageModel {
         return trimmed
     }
 
+    // MARK: - Imported text
+
+    /// Rereads `imported.txt` if it has changed, and retrains when it has.
+    ///
+    /// Called before conversions rather than on a watcher, matching
+    /// `UserDictionaryStore.reloadIfChanged`. Returns whether the contents
+    /// moved, so the caller can see it happen in a log.
+    @discardableResult
+    func reloadImportedTextIfChanged() -> Bool {
+        let url = PersonalizationLayout.importedTextURL
+        let modified = (try? fileManager.attributesOfItem(atPath: url.path)[.modificationDate]) as? Date
+
+        // An absent file with no lines is the ordinary case. An absent file
+        // *after* having had lines means the user deleted the import, and that
+        // has to reach the model — otherwise "delete" leaves the text training
+        // the IME until the next engine restart.
+        guard modified != importedModificationDate else { return false }
+        importedModificationDate = modified
+
+        guard let contents = try? String(contentsOf: url, encoding: .utf8) else {
+            let had = !importedLines.isEmpty
+            importedLines = []
+            if had { log("personalisation: imported text removed") }
+            return had
+        }
+
+        switch PersonalizationLayout.importedLines(from: contents) {
+        case .success(let lines):
+            importedLines = lines
+            log("personalisation: imported text loaded (\(lines.count) lines,"
+                + " \(lines.reduce(0) { $0 + $1.count }) characters)")
+            return true
+        case .failure(let rejection):
+            // The settings app validates before writing, so reaching here means
+            // the file was edited by hand or written by something else. Dropped
+            // rather than trimmed, and said out loud: training on the front of
+            // a file someone thought was fully imported is worse than not
+            // training on it.
+            let had = !importedLines.isEmpty
+            importedLines = []
+            log("personalisation: imported text ignored (\(rejection))")
+            return had
+        }
+    }
+
+    /// Rereads the imported text and retrains if it changed.
+    ///
+    /// The counterpart of `updateRegisteredWords` for a file the settings app
+    /// owns. Separate from `reloadImportedTextIfChanged` so that startup can
+    /// load it without also starting a training run before the base is ready.
+    func refreshImportedText(settings: EngineSettings) {
+        guard reloadImportedTextIfChanged() else { return }
+        guard settings.personalizationActive, baseIsReady, !isTraining else { return }
+        startTraining(settings: settings)
+    }
+
+    /// Trains once at startup when there is material but no model built from it.
+    ///
+    /// ── The gap this closes ────────────────────────────────────────────────
+    ///
+    /// The engine runs on demand and exits when idle (decision 0015), so the
+    /// ordinary way to import text is with no engine running at all: the
+    /// settings app writes the file, and the next keystroke starts an engine
+    /// that has never seen it.
+    ///
+    /// That engine reads `imported.txt` in `prepare` and records its
+    /// modification date, so `refreshImportedText` then correctly reports
+    /// nothing changed — and without this, the import would sit on disk
+    /// training nothing until the user happened to confirm a phrase.
+    ///
+    /// Deliberately conditional on there being no published generation rather
+    /// than running on every start: resuming from the base costs about a
+    /// second and 48 MB per megabyte of base, and an engine that retrained
+    /// every time it woke up would spend that on every first keystroke of the
+    /// day.
+    func trainIfNothingPublished(settings: EngineSettings) {
+        guard publishedGeneration == nil else { return }
+        guard settings.personalizationActive, baseIsReady, !isTraining else { return }
+        // Only for material the user handed over deliberately. The corpus is
+        // handled by `record`, which counts commits and decides for itself.
+        guard !importedLines.isEmpty || !registeredWords.isEmpty else { return }
+        log("personalisation: material is present but no model is built from it — training")
+        startTraining(settings: settings)
+    }
+
     /// Takes the current registered words and retrains if they changed.
     ///
     /// Called whenever the dictionary is loaded or edited. Retraining on every
@@ -396,7 +499,15 @@ final class PersonalLanguageModel {
         // just did — the running tally cannot know about that.
         corpusLines = corpus.count
 
-        let lines = PersonalizationLayout.trainingLines(forRegisteredWords: registeredWords) + corpus
+        // Imported text sits with the registered words rather than with the
+        // corpus: both are things the user handed over on purpose, so neither
+        // is switched off by switching learning off (decisions 0025 / 0037).
+        // Unweighted, unlike registered words — this is prose, and repeating it
+        // forty times would make the model believe the document rather than
+        // learn the vocabulary in it.
+        let lines = PersonalizationLayout.trainingLines(forRegisteredWords: registeredWords)
+            + importedLines
+            + corpus
         guard !lines.isEmpty else {
             unlearnedCommits = 0
             return
@@ -577,12 +688,14 @@ final class PersonalLanguageModel {
         corpusLines = 0
         log("personalisation: learning data erased")
 
-        // The words the user registered are not learning data and did not go
-        // anywhere, but the model that carried them into Zenzai's ranking has
-        // just been deleted along with everything else. Rebuild it from the
-        // dictionary alone, or erasing the typing history would silently take
-        // the user dictionary down with it (decision 0036).
-        if settings.personalizationActive, baseIsReady, !registeredWords.isEmpty, !isTraining {
+        // The words the user registered and the text they imported are not
+        // learning data and did not go anywhere — `imported.txt` is not in the
+        // loop above, deliberately (decisions 0036 / 0037). But the model that
+        // carried them into Zenzai's ranking has just been deleted along with
+        // everything else. Rebuild it from those alone, or erasing the typing
+        // history would silently take them down with it.
+        let explicit = !registeredWords.isEmpty || !importedLines.isEmpty
+        if settings.personalizationActive, baseIsReady, explicit, !isTraining {
             startTraining(settings: settings)
         }
     }
