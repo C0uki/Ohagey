@@ -41,16 +41,38 @@ namespace
                ok ? "" : ("  expected " + Utf8(expected)).c_str());
     }
 
-    // Backspace deletes one character of what is on screen, not one keystroke.
-    void ExpectBackspace(const wchar_t* romaji, const wchar_t* expectedDisplay)
+    // The composition buffer: kana, plus whatever romaji has not resolved.
+    std::wstring Typed(const wchar_t* keystrokes)
     {
-        const size_t keep = RomajiLengthAfterBackspace(romaji);
-        const std::wstring left(std::wstring(romaji).substr(0, keep));
-        const std::wstring got = RomajiToDisplay(left);
+        std::wstring buffer;
+        for (const wchar_t* p = keystrokes; *p; ++p)
+        {
+            buffer = BufferAfterKeystroke(buffer, *p);
+        }
+        return buffer;
+    }
+
+    void ExpectBuffer(const wchar_t* keystrokes, const wchar_t* expected)
+    {
+        const std::wstring got = Typed(keystrokes);
+        const bool ok = (got == expected);
+        if (!ok) ++g_failures;
+        printf("  [%s] %-12s -> %-14s%s\n", ok ? "PASS" : "FAIL",
+               Utf8(keystrokes).c_str(), Utf8(got).c_str(),
+               ok ? "" : ("  expected " + Utf8(expected)).c_str());
+    }
+
+    // Backspace drops the last character of the buffer, because one character
+    // of the buffer is one character on screen.
+    void ExpectBackspace(const wchar_t* keystrokes, const wchar_t* expectedDisplay)
+    {
+        std::wstring buffer = Typed(keystrokes);
+        if (!buffer.empty()) buffer.pop_back();
+        const std::wstring got = BufferDisplay(buffer);
         const bool ok = (got == expectedDisplay);
         if (!ok) ++g_failures;
         printf("  [%s] %-12s -> %-14s%s\n", ok ? "PASS" : "FAIL",
-               Utf8(romaji).c_str(), Utf8(got).c_str(),
+               Utf8(keystrokes).c_str(), Utf8(got).c_str(),
                ok ? "" : ("  expected " + Utf8(expectedDisplay)).c_str());
     }
 
@@ -203,22 +225,29 @@ int main()
         Expect(c.IsEmpty(), "and consume nothing");
     }
 
-    printf("\nbackspace deletes a kana, not a keystroke\n");
-    // The reported bug: ohagi lost one keystroke and showed おはg.
+    printf("\nthe buffer holds kana, not keystrokes\n");
+    ExpectBuffer(L"ohagi", L"おはぎ");
+    ExpectBuffer(L"ohag",  L"おはg");     // the unresolved consonant stays
+    ExpectBuffer(L"kyo",   L"きょ");
+    ExpectBuffer(L"tte",   L"って");
+    // A trailing lone n stays `n` in the buffer: `hona` has to be able to
+    // turn it back into な.
+    ExpectBuffer(L"hon",   L"ほn");
+    ExpectBuffer(L"hona",  L"ほな");
+    ExpectBuffer(L"honn",  L"ほん");
+    ExpectBuffer(L"ko-hi-", L"こーひー");   // the long vowel key
+
+    printf("\nbackspace deletes one character of what is shown\n");
+    // The reported bug: this used to give おはg.
     ExpectBackspace(L"ohagi", L"おは");
+    // Now that the buffer holds kana, きょ loses ょ rather than collapsing to k.
+    ExpectBackspace(L"kyo",   L"き");
+    ExpectBackspace(L"tte",   L"っ");
     ExpectBackspace(L"aiueo", L"あいうえ");
-    ExpectBackspace(L"a", L"");
-    ExpectBackspace(L"", L"");
-    // A lone consonant is the whole of what is shown, so it goes on its own.
-    ExpectBackspace(L"ohag", L"おは");
-    // Sokuon: って is two shown characters.
-    ExpectBackspace(L"tte", L"t");
-    // A trailing lone n shows as ん, so it is one character like any other.
-    ExpectBackspace(L"hon", L"ほ");
-    // No prefix of `kyo` shows き, so this collapses to `k`. Documented on
-    // RomajiLengthAfterBackspace: keeping き would mean storing kana instead
-    // of what was typed.
-    ExpectBackspace(L"kyo", L"k");
+    ExpectBackspace(L"ohag",  L"おは");
+    ExpectBackspace(L"hon",   L"ほ");
+    ExpectBackspace(L"a",     L"");
+    ExpectBackspace(L"",      L"");
 
     printf("\n%s (%d failure%s)\n", g_failures == 0 ? "ALL PASSED" : "FAILED",
            g_failures, g_failures == 1 ? "" : "s");

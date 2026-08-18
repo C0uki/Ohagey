@@ -664,8 +664,12 @@ HRESULT CSampleIME::_HandleCompositionBackspace(TfEditCookie ec, _In_ ITfContext
 
     if (vKeyLen)
     {
-        // [Ohagey] One kana, not one keystroke — see RemoveLastKana.
-        pCompositionProcessorEngine->RemoveLastKana();
+        // [Ohagey] One character of the buffer is one character on screen,
+        // because the buffer holds kana (see BufferAfterKeystroke). Removing
+        // the last one is all backspace has to do — which is what the sample
+        // did, and what stopped being right the moment the buffer held romaji
+        // for a language that is not displayed in romaji.
+        pCompositionProcessorEngine->RemoveVirtualKey(vKeyLen - 1);
 
         if (pCompositionProcessorEngine->GetVirtualKeyLength())
         {

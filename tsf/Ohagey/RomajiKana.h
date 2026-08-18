@@ -94,25 +94,35 @@ namespace Ohagey
     // has typed `ky` needs to see that they typed it.
     std::wstring RomajiToDisplay(const std::wstring& romaji);
 
-    // How much romaji to keep when backspace deletes one **kana**.
+    // ── The composition buffer ──────────────────────────────────────────────
     //
-    // Backspace removes one character of what the user is looking at, which is
-    // `RomajiToDisplay` — not one keystroke. Those are the same thing in a
-    // pinyin IME and different in a Japanese one:
+    // The buffer the TSF layer keeps is **kana, followed by whatever romaji has
+    // not resolved yet** — not the keystrokes as typed.
     //
-    //     おはぎ  (ohagi)  -> one keystroke -> おはg   the reported bug
-    //                      -> one kana     -> おは
+    // It held raw romaji at first, which is what the vendored pinyin IME did:
+    // there, one keystroke is one character on screen, so the buffer and the
+    // display are the same thing. In Japanese they are not, and every operation
+    // that means "one character" had to guess which one was meant. Backspace
+    // guessed wrong:
     //
-    // Computed by shortening the romaji until the display shortens, rather
-    // than by a reverse table: `ohagi` -> `ohag` still displays three
-    // characters, because an unresolved consonant shows as itself. Counting
-    // keystrokes cannot see that; counting the result can.
+    //     おはぎ  (ohagi)  -> backspace -> おはg
     //
-    // ⚠️ A syllable with no shorter spelling collapses further than one kana:
-    // `kyo` displays きょ, and no prefix of `kyo` displays き, so backspace
-    // lands on `k`. Keeping き would mean rewriting the buffer to `ki`, i.e.
-    // storing kana rather than what was typed — a larger change than this bug
-    // asks for, and one that would make the composition disagree with the
-    // keystrokes behind it.
-    size_t RomajiLengthAfterBackspace(const std::wstring& romaji);
+    // With kana in the buffer, one character of the buffer *is* one character
+    // on screen, and backspace is again just "drop the last one".
+    //
+    // The unresolved tail is what makes this work while a syllable is still
+    // being typed. It is always the trailing run of ASCII, because kana are
+    // not ASCII — so no separate bookkeeping is needed to know where it starts.
+    //
+    // ⚠️ A trailing lone `n` stays `n` in the buffer and shows as ん. Baking ん
+    // in would break `hona`: the `a` has to be able to turn ん back into な.
+
+    // The buffer after one more keystroke.
+    std::wstring BufferAfterKeystroke(const std::wstring& buffer, wchar_t ch);
+
+    // What to show: the buffer, with a trailing lone `n` closed to ん.
+    std::wstring BufferDisplay(const std::wstring& buffer);
+
+    // What to send the engine: the same, minus any other unresolved romaji.
+    std::wstring BufferReading(const std::wstring& buffer);
 }
