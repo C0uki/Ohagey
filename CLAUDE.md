@@ -204,8 +204,29 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   フォールバック後もそのまま Zenzai が変換できる。状態は
   `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
 
+- **学習材料のテキスト取り込み**(decision 0037)。個人モデルの材料が「確定した語句」
+  だけだと数千字で、引き算する相手の base は約42万字。設定アプリから**利用者が
+  テキストファイルを1つ渡せる**ようにした(収集はしない — decision 0016 / 0025)。
+  `%LOCALAPPDATA%\Ohagey\personal\imported.txt`。**扱いはユーザー辞書と同じ**で
+  「学習データを消去」では消えない。上限は**行数ではなく文字数で10万字**
+  (学習は 41µs/字、かつ**毎回の再学習で読み直される**)。超過は切り捨てず拒否。
+  ✅ **壊さないことは出荷構成で実測した** — 1,074字 と **81,234字(上限の81%)**の
+  どちらでも評価セットは **30/32 のまま、巻き添え0件**。
+  `tsf/Ohagey/tools/build-and-run-imported.ps1`。
+  ⚠️ **昇格(効果)のほうは未実測** — それは `build-and-run-learning.ps1` の仕事
+
 ### 未検証
 - UWP / AppContainer アプリからの実接続(decision 0031 の `AC` 許可)
+- **取り込んだテキストによる昇格**(decision 0037)。**壊さないことは測った**が、
+  効くことは測っていない。示すには「学習ストアだけでは上がらない、かつ1位と
+  1文字目を共有する」読みが要る(decision 0034)。
+  ⚠️ decision 0034 は「学習ストアの昇格を個人化の手柄と読む」取り違えを3回している
+
+> 🔴 **ハーネスを走らせる前に `backends\cpu\` をエンジンの隣に置くこと。**
+> エンジンは**自分の実行ファイルからの相対**でバックエンドを探すので、
+> `swift build` の出力を直接指すと Zenzai が黙って無効になり、変換が失敗する。
+> `build-and-run-imported.ps1` はベースラインが半数を切ったら測定を拒否する —
+> 正解が0件なら「壊れた0件」は真だが無意味だからである(実際に一度そう報告した)。
 
 
 ### 未着手
@@ -245,5 +266,12 @@ swift test
   `GENERIC_READ | GENERIC_WRITE` で呼ぶと AppContainer から接続できない。
   `FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE`
   を明示すること
-- **Swift 6 言語モードへの移行が保留中。** 現在 `.v5` を明示している(`Package.swift` の TODO)
+- ~~**Swift 6 言語モードへの移行が保留中。**~~ → **完了。7ターゲット全部が `.v6`。**
+  厳格な並行性チェックで**エラーは1件だけ出て、それは実バグだった** —
+  `BackendStatus.swift` の静的な `ISO8601DateFormatter`(スレッドセーフでないクラスを
+  共有していた。パイプサーバーが別スレッドで accept を始めた後に書かれる)。
+  他は無改造で通る。**変換器が `@MainActor` 固定である**ことに合わせて
+  `ConversionService` / `PersonalLanguageModel` も `@MainActor` にし、
+  唯一 main actor を離れる n-gram 学習を `nonisolated static` にしてあったので、
+  厳格化が要求する形に既になっていた。`main.swift` の `assumeIsolated` も外した
 - ユーザー辞書のファイルフォーマット(decision 0026)は **decision 0036**、設定のレジストリスキーマ(decision 0014)は **decision 0035** で確定済み
