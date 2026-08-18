@@ -58,6 +58,27 @@ public static class SettingsSchema
     public const string Backend = "Backend";
     public const string ZenzaiInferenceLimit = "ZenzaiInferenceLimit";
 
+    /// <summary>
+    /// Non-zero turns on the TSF side's diagnostic log (decision 0033).
+    /// </summary>
+    /// <remarks>
+    /// Read by OhageyTSF.dll, not by the engine — this is the one value in the
+    /// schema whose reader is the C++ half. It is here because the settings app
+    /// is the only way a user can set it, and because this class is the
+    /// registry contract: a name that exists only in the DLL is a name the next
+    /// person adding a value cannot see is taken.
+    ///
+    /// Off by default. The DLL lives inside the user's own applications and
+    /// writes on the typing path, so it opens a file twice per conversion while
+    /// this is on. The engine's own log is not gated the same way: it runs in a
+    /// process of its own and it is what made real-machine diagnosis possible.
+    ///
+    /// The DLL reads this once and remembers it, so a change reaches only
+    /// applications started afterwards. The UI has to say so — the alternative
+    /// is a user turning it on and watching an empty file.
+    /// </remarks>
+    public const string DiagnosticLog = "DiagnosticLog";
+
     /// <summary>Idle seconds before the engine exits. Zero disables it.</summary>
     public const string IdleTimeoutSeconds = "IdleTimeoutSeconds";
 
@@ -138,6 +159,15 @@ public sealed record EngineSettings
     public int ZenzaiInferenceLimit { get; init; } = 10;
     public int IdleTimeoutSeconds { get; init; } = 300;
 
+    /// <summary>Whether the text service writes its diagnostic log.</summary>
+    /// <remarks>
+    /// Off by default, and deliberately not in <see
+    /// cref="SettingsSchema.RequiringRestart"/>: nothing about the engine
+    /// changes. What has to restart is each of the user's own applications,
+    /// which is a different sentence and is said on the page instead.
+    /// </remarks>
+    public bool DiagnosticLog { get; init; } = false;
+
     public static EngineSettings Default { get; } = new();
 
     /// <summary>
@@ -212,6 +242,7 @@ public sealed class RegistrySettingsStore : ISettingsStore
             Backend = ReadBackend(key, defaults.Backend),
             ZenzaiInferenceLimit = ReadInt(key, SettingsSchema.ZenzaiInferenceLimit, defaults.ZenzaiInferenceLimit),
             IdleTimeoutSeconds = ReadInt(key, SettingsSchema.IdleTimeoutSeconds, defaults.IdleTimeoutSeconds),
+            DiagnosticLog = ReadBool(key, SettingsSchema.DiagnosticLog, defaults.DiagnosticLog),
         }.Clamped();
     }
 
@@ -237,6 +268,11 @@ public sealed class RegistrySettingsStore : ISettingsStore
         key.SetValue(SettingsSchema.Backend, value.Backend.ToString().ToLowerInvariant(), RegistryValueKind.String);
         key.SetValue(SettingsSchema.ZenzaiInferenceLimit, value.ZenzaiInferenceLimit, RegistryValueKind.DWord);
         key.SetValue(SettingsSchema.IdleTimeoutSeconds, value.IdleTimeoutSeconds, RegistryValueKind.DWord);
+        // A DWORD like every other boolean here, because that is what
+        // RegGetValueW(RRF_RT_REG_DWORD) on the C++ side will accept. Written
+        // even when false so the value is visible to anyone with regedit open
+        // looking for why their log is empty.
+        key.SetValue(SettingsSchema.DiagnosticLog, value.DiagnosticLog ? 1 : 0, RegistryValueKind.DWord);
     }
 
     private static bool ReadBool(RegistryKey key, string name, bool fallback) =>

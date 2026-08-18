@@ -63,6 +63,46 @@
                 <TextBlock TextWrapping="Wrap"
                            Text="入力した内容が外部に送信されることはありません。通信を行うのはインストール時のモデル取得だけです。" />
             </StackPanel>
+
+            <!-- Decision 0033, addendum 19. The TSF half writes tsf.log when
+                 this is on, and it is the only way to see what happened inside
+                 someone else's application — but it lives on the typing path
+                 and opens a file twice per conversion, so it is off by default
+                 and belongs here rather than among the conversion settings.
+
+                 The second sentence is not decoration. The DLL reads the value
+                 once and remembers it, so turning this on reaches only
+                 applications started afterwards. Without saying so, the first
+                 thing a user does is switch it on, look at an empty file, and
+                 conclude the logging is broken. This project walked into the
+                 same trap while diagnosing it (the "old window" mistake, made
+                 three times). -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="診断ログ" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <ToggleSwitch
+                    x:Name="DiagnosticLogSwitch"
+                    Header="入力時の動作をログに記録する"
+                    OnContent="オン" OffContent="オフ"
+                    Toggled="OnDiagnosticLogToggled" />
+                <TextBlock
+                    x:Name="DiagnosticLogPath"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <!-- The log records what was being typed. Someone who turned it
+                     on to chase a problem should be able to throw it away
+                     again without going to look for the file. -->
+                <Button
+                    x:Name="DeleteLogButton"
+                    Content="ログを削除"
+                    Click="OnDeleteLogClicked" />
+                <InfoBar
+                    x:Name="DiagnosticLogNotice"
+                    IsOpen="False"
+                    IsClosable="False"
+                    Severity="Informational"
+                    Title="アプリを起動し直してください"
+                    Message="この設定は、切り替えたあとに起動したアプリにだけ反映されます。すでに開いているメモ帳やブラウザーでは、閉じて開き直すまで変わりません。" />
+            </StackPanel>
         </StackPanel>
     </ScrollView>
 </Page>

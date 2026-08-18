@@ -49,37 +49,69 @@ public static class ModelState
     // whatsoever has no way to tell that from "this feature does nothing".
 
     /// <summary>
-    /// The four files the base model consists of, without their extension.
+    /// The four files inference reads, without their extension.
     /// </summary>
     /// <remarks>
-    /// Four, not five. The published model has no <c>_c_bc</c>, which only a
-    /// resumed training run would need — requiring it would reject a perfectly
-    /// good model. Pinned against the engine in SchemaAgreementTests: this list
-    /// is written twice, and a disagreement would show up as personalisation
-    /// silently doing nothing rather than as any kind of error.
+    /// Four here and five in <see cref="BaseLanguageModelResumePaths"/>, which
+    /// mirrors the engine's own split (<c>baseLanguageModelSuffixes</c> against
+    /// <c>baseLanguageModelResumeSuffixes</c>). Pinned against it in
+    /// SchemaAgreementTests: this list is written twice, and a disagreement
+    /// would show up as personalisation silently doing nothing rather than as
+    /// any kind of error.
     /// </remarks>
     public static readonly IReadOnlyList<string> BaseLanguageModelSuffixes =
         new[] { "_c_abc", "_r_xbx", "_u_abx", "_u_xbc" };
 
-    /// <summary>Prefix the engine builds the four filenames from.</summary>
+    /// <summary>
+    /// The fifth file, needed to continue training from the base.
+    /// </summary>
+    /// <remarks>
+    /// <c>SwiftTrainer(baseFilePattern:)</c> loads all five; inference reads
+    /// four. The engine refuses to personalise at all without this one, because
+    /// the only personal model it could otherwise build is the one measured to
+    /// break 8 to 18 of 30 unrelated conversions (decision 0034).
+    ///
+    /// Ohagey trains and ships its own base and publishes all five. This was
+    /// the file <c>Miwa-Keita/base_n5_lm</c> omitted, which is why that model
+    /// was dropped from the installer.
+    /// </remarks>
+    public const string BaseLanguageModelResumeSuffix = "_c_bc";
+
+    /// <summary>Prefix the engine builds the filenames from.</summary>
     public static string BaseLanguageModelPrefix => Path.Combine(ModelDirectory, "lm");
 
     public static IEnumerable<string> BaseLanguageModelPaths =>
         BaseLanguageModelSuffixes.Select(suffix => $"{BaseLanguageModelPrefix}{suffix}.marisa");
 
+    /// <summary>Every file a resumed training run opens — the four plus the fifth.</summary>
+    public static IEnumerable<string> BaseLanguageModelResumePaths =>
+        BaseLanguageModelPaths.Append(
+            $"{BaseLanguageModelPrefix}{BaseLanguageModelResumeSuffix}.marisa");
+
     /// <summary>
-    /// True only when every file is there — which is what the engine requires.
+    /// True only when personalisation can actually do something.
     /// </summary>
     /// <remarks>
+    /// All five files, not four. This is the question the page is really
+    /// asking — "does turning the switch on change anything?" — and the engine
+    /// answers it with <c>isBaseLanguageModelResumable</c>, which wants the
+    /// fifth.
+    ///
+    /// It said four until the installer started shipping our own base. The
+    /// installer fetches the five files as five independent downloads and
+    /// download-model.ps1 always exits 0, so losing exactly one of them is an
+    /// ordinary outcome of a flaky connection — and with four this reported
+    /// "インストール済み" over an engine that was doing nothing at all. That is
+    /// precisely the failure this whole section exists to make visible.
+    ///
     /// A partial set is treated as missing rather than as "mostly installed",
-    /// because that is exactly how the engine treats it: it falls back to the
-    /// empty base model, and personalisation goes inert.
+    /// for the same reason: to the engine there is no such state.
     /// </remarks>
     public static bool IsBaseLanguageModelInstalled =>
-        BaseLanguageModelPaths.All(File.Exists);
+        BaseLanguageModelResumePaths.All(File.Exists);
 
     public static long BaseLanguageModelSizeBytes =>
-        BaseLanguageModelPaths.Sum(LengthOf);
+        BaseLanguageModelResumePaths.Sum(LengthOf);
 
     /// <summary>What to show about the base model, given the current setting.</summary>
     /// <remarks>
@@ -99,12 +131,15 @@ public static class ModelState
                   + "上のスイッチを入れると使われます。";
         }
 
-        // A partial set is worth naming. "2 of 4 missing" points at an
+        // A partial set is worth naming. "2 of 5 missing" points at an
         // interrupted download; "none of them" points at an install that never
-        // fetched them at all.
-        var missing = BaseLanguageModelPaths.Count(path => !File.Exists(path));
-        var head = missing < BaseLanguageModelSuffixes.Count
-            ? $"個人化用の言語モデルが揃っていません({BaseLanguageModelSuffixes.Count} 個中 {missing} 個が見つかりません)。"
+        // fetched them at all. The installer downloads the five one at a time
+        // and never fails the installation over one, so a partial set is a
+        // perfectly ordinary thing to be looking at.
+        var total = BaseLanguageModelResumePaths.Count();
+        var missing = BaseLanguageModelResumePaths.Count(path => !File.Exists(path));
+        var head = missing < total
+            ? $"個人化用の言語モデルが揃っていません({total} 個中 {missing} 個が見つかりません)。"
             : "個人化用の言語モデルがインストールされていません。";
 
         return personalizationEnabled
