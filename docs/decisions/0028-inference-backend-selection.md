@@ -242,3 +242,56 @@ CPU は展開後 2.4MB(実測)。Vulkan は zip が 21.8MB で、展開後は未
 - [ ] **CPU / Vulkan のレイテンシを実測してから決める。** Vulkan で足りるなら
       CUDA は落とせる。実機に NVIDIA GPU がある前提の測定が要る
 - [ ] 落とさないなら、**インストーラでバックエンドを選択式にする**(全部入れない)
+
+## 追記(2026-08-04)— GPU バックエンドを実機で動かした。**Vulkan が答えである**
+
+RTX 3050 Ti Laptop + Intel UHD の機械で、cpu / cuda / vulkan の3つを実際に走らせた。
+
+### 3つとも読み込まれ、変換する
+
+```
+backend: cpu    from ...ackends\cpu
+backend: cuda   from ...ackends\cuda
+backend: vulkan from ...ackendsulkan
+```
+
+`backend-status.tsv` も `requested vulkan / effective vulkan / reason requested` を記録する。
+
+### CUDA は本当に GPU に載っている
+
+**「読み込めた」と「GPU で動いている」は別の主張である。** llama.cpp は
+オフロードを頼まれなければ CUDA ビルドのまま CPU で回る — 黙って。確かめた:
+
+```
+GPU memory before: 0 MiB
+GPU memory after : 93 MiB       ← Q5_K_M の重み約70MB + コンテキスト
+nvidia-smi: OhageyEngine.exe が compute app として並ぶ
+```
+
+### 速さ(`きょうはいいてんきですね`、n_best 50、各3回)
+
+| バックエンド | 平均 | 最小 | 最大 |
+|---|---|---|---|
+| cpu | **195ms** | 182 | 204 |
+| cuda | **147ms** | 138 | 154 |
+| vulkan | **150ms** | 145 | 153 |
+
+**約25%速い。** 範囲は重なっていない(cpu の最小 182 > cuda の最大 154)。
+劇的ではないのは、1リクエストの費用が行列積だけでないからである —
+ラティスの構築は CPU 側にあり、決定 0034 で毎回 `stopComposition()` してから
+組み直すようにしてあり、推論の歩数は既定10である。
+
+### 🔴 出荷の判断: **CUDA を同梱する理由が無い**
+
+| | 大きさ | 平均 |
+|---|---|---|
+| cuda | **977 MB** | 147ms |
+| vulkan | **22.6 MB** | 150ms |
+
+**43分の1の大きさで、測定できる差は無い。** そして Vulkan は NVIDIA だけでなく
+Intel でも AMD でも動く。この決定は GPU バックエンドを `#ifdef GpuBackends` の
+後ろに置いたが、**同梱するなら vulkan であり、cuda ではない。**
+
+⚠️ 測定は1機種・各3回である。**別の GPU、別の読みの長さ、別の `inferenceLimit` で
+比が変わる可能性は残る。** 特に `inferenceLimit` を上げれば行列積の割合が増えるので、
+CUDA の分が良くなる方向に動くはずである — 上げる判断をするときに測り直すこと。

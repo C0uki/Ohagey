@@ -29,6 +29,14 @@
 
 namespace Ohagey
 {
+    // Records which build of this DLL the calling process actually loaded.
+    //
+    // Called once per process, and deliberately *not* behind the diagnostic
+    // switch: a running application keeps whatever build it started with, so
+    // without this there is no way to tell a fix that does not work from a
+    // process that never loaded it. See the comment on the definition.
+    void LogModuleIdentity();
+
     // Appends one line. Printf-style, ASCII only, no user text.
     void Log(const char* format, ...);
 }

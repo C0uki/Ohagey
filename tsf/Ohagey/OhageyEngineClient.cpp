@@ -1,6 +1,7 @@
 // Named-pipe client for the conversion engine (decisions 0006 / 0007 / 0031).
 
 #include "OhageyProtocol.h"
+#include "OhageyLog.h"
 #include "OhageyWire.h"
 
 #include <sddl.h>
@@ -231,6 +232,21 @@ namespace Ohagey
                 continue;
             }
 
+            // [Ohagey] Say why, once, with the code.
+            //
+            // This is the one place an AppContainer client fails differently
+            // from everyone else, and it fails silently: `GetCandidateList`
+            // treats a refused connection as "no candidates", which looks
+            // exactly like an engine that is still starting. Decision 0031
+            // grants AC on the pipe and the access mask here is chosen to match
+            // it, but neither has ever been exercised from a real sandboxed
+            // app -- and ERROR_ACCESS_DENIED here is what would say so.
+            //
+            // ⚠️ Note for reading the log from a UWP app at all: this writes
+            // under %LOCALAPPDATA%, which an AppContainer process cannot reach.
+            // The line may land in that package's redirected store instead of
+            // the real one, so its *absence* proves nothing.
+            Ohagey::Log("connect: CreateFileW failed (%lu)", error);
             break;
         }
 

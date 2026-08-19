@@ -9,6 +9,7 @@
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
 #include "../Ohagey/RomajiKana.h"
+#include "../Ohagey/OhageyLog.h"
 #include "TableDictionaryEngine.h"
 #include "DictionarySearch.h"
 #include "TfInputProcessorProfile.h"
@@ -237,6 +238,10 @@ BOOL CCompositionProcessorEngine::SetupLanguageProfile(LANGID langid, REFGUID gu
     SetupKeystroke();
     SetupConfiguration();
 
+    // [Ohagey] Which build this process is running, before anything else it
+    // might report. See OhageyLog.h.
+    Ohagey::LogModuleIdentity();
+
     // Start the engine now rather than at the first conversion (decision 0033).
     // It returns immediately and holds no connection; by the time the user has
     // typed a reading the engine is listening, so the first conversion works
@@ -264,25 +269,29 @@ BOOL CCompositionProcessorEngine::AddVirtualKey(WCHAR wch)
         return FALSE;
     }
 
+    // [Ohagey] The buffer holds kana, not keystrokes.
     //
-    // append one keystroke in buffer.
-    //
-    DWORD_PTR srgKeystrokeBufLen = _keystrokeBuffer.GetLength();
-    PWCHAR pwch = new (std::nothrow) WCHAR[ srgKeystrokeBufLen + 1 ];
+    // The sample appended the raw character, because for pinyin the keystrokes
+    // *are* what the user sees. Converting here instead means one character of
+    // this buffer is one character on screen, which is what every operation on
+    // it wants — backspace most of all. See BufferAfterKeystroke.
+    const DWORD_PTR existing = _keystrokeBuffer.GetLength();
+    const std::wstring before(existing ? _keystrokeBuffer.Get() : L"", static_cast<size_t>(existing));
+    const std::wstring after = Ohagey::BufferAfterKeystroke(before, wch);
+
+    PWCHAR pwch = new (std::nothrow) WCHAR[ after.length() ];
     if (!pwch)
     {
         return FALSE;
     }
-
-    memcpy(pwch, _keystrokeBuffer.Get(), srgKeystrokeBufLen * sizeof(WCHAR));
-    pwch[ srgKeystrokeBufLen ] = wch;
+    memcpy(pwch, after.c_str(), after.length() * sizeof(WCHAR));
 
     if (_keystrokeBuffer.Get())
     {
         delete [] _keystrokeBuffer.Get();
     }
 
-    _keystrokeBuffer.Set(pwch, srgKeystrokeBufLen + 1);
+    _keystrokeBuffer.Set(pwch, after.length());
 
     return TRUE;
 }
@@ -352,7 +361,7 @@ void CCompositionProcessorEngine::GetCandidateListFromEngine(const CStringRange&
     // keeping a separate converter in step with that is a synchronisation bug
     // waiting to happen; recomputing from the one buffer that is authoritative
     // costs nothing at these lengths.
-    const std::wstring readingText = Ohagey::RomajiToKana(romaji);
+    const std::wstring readingText = Ohagey::BufferReading(romaji);
     if (readingText.empty())
     {
         // Everything typed so far is still mid-syllable — `k`, `ky`. There is
@@ -409,7 +418,7 @@ void CCompositionProcessorEngine::NotifyCommitted(const CStringRange& committedT
     }
 
     const std::wstring romaji(_keystrokeBuffer.Get(), static_cast<size_t>(_keystrokeBuffer.GetLength()));
-    const std::wstring reading = Ohagey::RomajiToKana(romaji);
+    const std::wstring reading = Ohagey::BufferReading(romaji);
     if (reading.empty())
     {
         // Nothing resolved into kana, so there is no reading to associate the
@@ -486,7 +495,7 @@ void CCompositionProcessorEngine::GetReadingStrings(_Inout_ CSampleImeArray<CStr
     }
 
     const std::wstring romaji(_keystrokeBuffer.Get(), static_cast<size_t>(_keystrokeBuffer.GetLength()));
-    _displayReading = Ohagey::RomajiToDisplay(romaji);
+    _displayReading = Ohagey::BufferDisplay(romaji);
     if (_displayReading.empty())
     {
         return;
