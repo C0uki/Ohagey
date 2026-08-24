@@ -12,6 +12,14 @@
 //                           Deleting these under a button labelled "erase what
 //                           has been learned" would take away work the user
 //                           did on purpose, which is not what they asked for.
+//   personal/imported.txt   text the user handed over deliberately (0037).
+//                           Same reasoning as the dictionary, and the same
+//                           trap avoided: it is in the personal/ directory
+//                           with the corpus and the generations, so the
+//                           obvious implementation of "erase personal/" would
+//                           take it. IsPersonalArtefact names what goes rather
+//                           than what stays, which is why adding a file here
+//                           does not silently make it deletable.
 //   personal/base_*.marisa  an empty model derived from nothing. It contains
 //                           nothing about anyone, and keeping it saves
 //                           rebuilding it on the next start (0034).

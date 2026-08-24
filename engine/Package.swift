@@ -70,7 +70,7 @@ let package = Package(
             name: "OhageyEngineCore",
             path: "Sources/OhageyEngineCore",
             swiftSettings: [
-                .swiftLanguageMode(.v5)
+                .swiftLanguageMode(.v6)
             ]
         ),
         .testTarget(
@@ -78,7 +78,7 @@ let package = Package(
             dependencies: ["OhageyEngineCore"],
             path: "Tests/OhageyEngineCoreTests",
             swiftSettings: [
-                .swiftLanguageMode(.v5)
+                .swiftLanguageMode(.v6)
             ]
         ),
         // A diagnostic that loads the two n-gram models and prints what they
@@ -102,7 +102,7 @@ let package = Package(
             ],
             path: "Sources/OhageyLMTrain",
             swiftSettings: [
-                .swiftLanguageMode(.v5),
+                .swiftLanguageMode(.v6),
                 // EfficientNGram reaches llama.cpp through a package built
                 // with C++ interop, and Swift will not import such a module
                 // without it.
@@ -116,7 +116,7 @@ let package = Package(
             ],
             path: "Sources/OhageyLMProbe",
             swiftSettings: [
-                .swiftLanguageMode(.v5),
+                .swiftLanguageMode(.v6),
                 // EfficientNGram comes from a package built with C++ interop
                 // (it reaches llama.cpp through the same tree), and Swift will
                 // not import such a module without it.
@@ -136,14 +136,26 @@ let package = Package(
             ],
             path: "Sources/OhageyEngine",
             swiftSettings: [
-                // Tools version 6.x would otherwise default to the Swift 6
-                // language mode, whose strict concurrency checking turns a pile
-                // of Sendable diagnostics into hard errors before any of this
-                // code has run once. Staying on v5 keeps the tools-version bump
-                // (needed purely for `traits:`) from dragging a concurrency
-                // migration along with it.
-                // TODO: migrate to .v6 once the engine actually builds and runs.
-                .swiftLanguageMode(.v5),
+                // ── Swift 6 language mode ────────────────────────────────────
+                //
+                // Every target is on `.v6`. It was pinned to `.v5` while the
+                // engine was being brought up, on the assumption that strict
+                // concurrency would turn a pile of Sendable diagnostics into
+                // hard errors; when the migration was finally attempted it
+                // produced exactly one, and that one was a real bug — a shared
+                // `ISO8601DateFormatter` in BackendStatus.swift, which is a
+                // non-thread-safe class being used from a process that writes
+                // the backend status while the pipe server is already
+                // accepting.
+                //
+                // Nothing else needed changing, because the design was already
+                // what strict checking asks for: the converter is `@MainActor`
+                // (upstream requires it), so `ConversionService` and
+                // `PersonalLanguageModel` are too, and the one piece of work
+                // that leaves the main actor — n-gram training — was already
+                // `nonisolated static` taking everything it needs as
+                // parameters.
+                .swiftLanguageMode(.v6),
                 // The Zenzai trait builds KanaKanjiConverterModule and friends
                 // with C++ interop (they wrap llama.cpp), and Swift refuses to
                 // import such a module from a compilation that does not enable
@@ -191,7 +203,7 @@ let package = Package(
             // Scripts/generate-proto.sh. The generated file is committed, so a
             // plain `swift build` does not need protoc.
             swiftSettings: [
-                .swiftLanguageMode(.v5)
+                .swiftLanguageMode(.v6)
             ]
         ),
         // The mapping in OhageyEngineProto is where wire-shaped values become
@@ -203,7 +215,7 @@ let package = Package(
             dependencies: ["OhageyEngineProto"],
             path: "Tests/OhageyEngineProtoTests",
             swiftSettings: [
-                .swiftLanguageMode(.v5)
+                .swiftLanguageMode(.v6)
             ]
         ),
     ]

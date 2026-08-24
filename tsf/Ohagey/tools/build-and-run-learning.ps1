@@ -77,8 +77,14 @@ try {
     Remove-Item -Path $key -Recurse -Force -ErrorAction SilentlyContinue
     if ($saved) {
         New-Item -Path $key -Force | Out-Null
+        # Every name in the schema, because this list is how the user gets
+        # their settings back. A value added to SettingsSchema and forgotten
+        # here is silently dropped from the real HKCU key by running a harness
+        # — DiagnosticLog was added in decision 0033's addendum 19 and is the
+        # reason this comment exists.
         foreach ($name in @("SchemaVersion","LearningEnabled","PersonalizationEnabled",
-                            "PersonalizationAlphaPercent","Backend","ZenzaiInferenceLimit","IdleTimeoutSeconds")) {
+                            "PersonalizationAlphaPercent","Backend","ZenzaiInferenceLimit",
+                            "IdleTimeoutSeconds","DiagnosticLog")) {
             if ($null -ne $saved.$name) {
                 $kind = if ($name -eq "Backend") { "String" } else { "DWord" }
                 New-ItemProperty -Path $key -Name $name -Value $saved.$name -PropertyType $kind -Force | Out-Null

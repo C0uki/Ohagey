@@ -185,13 +185,9 @@ enum OhageyEngineMain {
     }
 }
 
-// Top-level code runs on the main thread but is not main-actor *isolated* in
-// the Swift 5 language mode, so the compiler will not let it call a
-// `@MainActor` method directly. `assumeIsolated` states what is already true
-// here rather than hopping. (Once Package.swift moves to `.v6`, top-level code
-// becomes main-actor isolated and this can go back to a plain call.)
-MainActor.assumeIsolated { OhageyEngineMain.main() }
-
-// TODO (implementation phase, tracked in docs/roadmap.md):
-//  1. Report the effective backend in the settings app's UI, not just `ping`,
-//     so a fallback to CPU is visible where the choice was made (decision 0028).
+// Top-level code is main-actor isolated in the Swift 6 language mode, which
+// the package now uses throughout, so this is a plain call. It was
+// `MainActor.assumeIsolated { ... }` under `.v5`, where top-level code runs on
+// the main thread without being *isolated* to it and the compiler therefore
+// refused a direct call to a `@MainActor` method.
+OhageyEngineMain.main()

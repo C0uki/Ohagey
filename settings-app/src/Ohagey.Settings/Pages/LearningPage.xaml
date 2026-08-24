@@ -73,6 +73,50 @@
                     Text="弱くすると関係のない語への影響は減りますが、100 未満では学習した語も上がらなくなります。"
                     TextWrapping="Wrap"
                     Style="{StaticResource CaptionTextBlockStyle}" />
+                <!-- Zero looks like "off" and is not (decision 0035's open
+                     item). The mixing term becomes zero, so the ranking is
+                     untouched — but personalisation is still switched on, so
+                     committed phrases keep being written to
+                     personal/corpus.txt in plain text. Someone who dragged the
+                     slider to the left to stop that has not stopped it.
+
+                     The schema still allows 0. Raising the minimum instead
+                     would silently clamp an existing user's deliberate 0 up
+                     into the effective range on their next update, which is
+                     the failure decision 0035 exists to prevent. So the value
+                     stays legal and the page says what it does. -->
+                <InfoBar
+                    x:Name="AlphaZeroNotice"
+                    IsOpen="False"
+                    IsClosable="False"
+                    Severity="Informational"
+                    Title="0 では候補順に効きません"
+                    Message="ただし個人化はオンのままなので、確定した語句の控えは作られ続けます。完全に止めるには上のスイッチをオフにしてください。" />
+            </StackPanel>
+
+            <!-- Decision 0037. The personal model is trained on a few thousand
+                 characters of committed phrases while the base it is
+                 subtracted from is trained on over a million, and that gap is
+                 what limits how much personalisation can do. azooKey's own
+                 Tuner closes it by collecting text across applications, which
+                 decisions 0016 and 0025 rule out here — so the user hands over
+                 a file instead.
+
+                 Placed above the erase section on purpose: the two are
+                 adjacent in a user's mind ("what does Ohagey have of mine?")
+                 and the erase button deliberately does not take this. -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="文章を取り込む" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Text="よく書く文章のテキストファイルを読み込ませると、その言い回しが候補の上位に出やすくなります。取り込んだ内容が外部に送信されることはありません。"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <TextBlock x:Name="ImportSummary" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ImportButton" Content="テキストファイルを選ぶ" Click="OnImportClicked" />
+                    <Button x:Name="ClearImportButton" Content="取り込んだ文章を削除" Click="OnClearImportClicked" />
+                </StackPanel>
+                <InfoBar x:Name="ImportResultBar" IsOpen="False" IsClosable="True" />
             </StackPanel>
 
             <StackPanel Spacing="8">

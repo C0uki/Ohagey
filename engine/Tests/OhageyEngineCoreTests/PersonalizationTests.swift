@@ -447,53 +447,84 @@ final class RegisteredWordTrainingTests: XCTestCase {
         XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: 0), 0)
         XCTAssertEqual(PersonalizationLayout.cooldownSeconds(afterRunOf: -1), 0)
     }
+
+    // MARK: - Imported text (decision 0037)
+
+    func testImportedTextIsKeptOutsideTheCorpus() {
+        // Different file, on purpose. The corpus is a record of what was typed
+        // and is trimmed oldest-first; imported text is an instruction, and a
+        // word the user handed over must not fall out of the model with age.
+        XCTAssertNotEqual(
+            PersonalizationLayout.importedTextURL,
+            PersonalizationLayout.corpusURL)
+        XCTAssertEqual(PersonalizationLayout.importedTextURL.lastPathComponent, "imported.txt")
+        // Beside the corpus and the generations, so erasing understands one
+        // directory rather than two.
+        XCTAssertEqual(
+            PersonalizationLayout.importedTextURL.deletingLastPathComponent().path,
+            PersonalizationLayout.directory.path)
+    }
+
+    func testImportedTextIsNormalisedLikeCommittedText() throws {
+        // Reuses corpusLines/corpusLine, which is the point: a CRLF file must
+        // not come back as one enormous line (Swift sees "\r\n" as a single
+        // Character), and blank lines must not become training input.
+        let lines = try PersonalizationLayout.importedLines(
+            from: "今日はいい天気です\r\n\r\n  \r\n飛行機の時間に間に合った\r\n"
+        ).get()
+        XCTAssertEqual(lines, ["今日はいい天気です", "飛行機の時間に間に合った"])
+    }
+
+    func testAnImportWithNothingUsableInItIsRejected() {
+        // Not "imported zero lines". A user who picks the wrong file gets told
+        // rather than being shown a success over an empty import.
+        XCTAssertEqual(
+            PersonalizationLayout.importedLines(from: "\n  \n\r\n"),
+            .failure(.empty))
+    }
+
+    func testAnOverLongImportIsRejectedRatherThanTruncated() {
+        // Truncating would train on the front of a document and report the
+        // whole file imported, with no way for the user to see which part took
+        // effect. The number offered comes back so the message can be specific.
+        let limit = 20
+        let line = String(repeating: "あ", count: 11)
+        XCTAssertEqual(
+            PersonalizationLayout.importedLines(from: "\(line)\n\(line)\n", limit: limit),
+            .failure(.tooLong(characters: 22, limit: limit)))
+    }
+
+    func testTheLimitCountsWhatTrainingWillActuallyRead() {
+        // Blank lines are dropped before counting, so padding is not charged
+        // for -- the limit exists to bound training cost, and training never
+        // sees them.
+        let line = String(repeating: "あ", count: 10)
+        let padded = "\n\n\(line)\n   \n\(line)\n\n"
+        XCTAssertEqual(try? PersonalizationLayout.importedLines(from: padded, limit: 20).get(),
+                       [line, line])
+    }
+
+    func testTheImportLimitStaysFarBelowWhatTrainingCanHold() {
+        // trainNGram keeps its counts in memory: about 780 bytes per
+        // character, so four million characters needs ~3.1 GB (decision 0034).
+        // The limit is what keeps an import from walking into that.
+        XCTAssertLessThan(PersonalizationLayout.importedTextCharacterLimit, 4_000_000 / 10)
+    }
+
+    func testTheAddedTrainingTimeIsTheMeasuredRate() {
+        // 41µs per character, measured on a release build over 90k, 419k and
+        // 1.17M characters. The settings app shows this before an import, so a
+        // wrong constant here becomes a wrong promise there.
+        XCTAssertEqual(
+            PersonalizationLayout.trainingSecondsAdded(forCharacters: 1_000_000),
+            41.0,
+            accuracy: 0.001)
+        XCTAssertEqual(
+            PersonalizationLayout.trainingSecondsAdded(
+                forCharacters: PersonalizationLayout.importedTextCharacterLimit),
+            4.1,
+            accuracy: 0.001)
+        XCTAssertEqual(PersonalizationLayout.trainingSecondsAdded(forCharacters: -5), 0)
+    }
 }
 
-/// Text the user drops into `personal/import` (decision 0034).
-extension PersonalizationLayoutTests {
-    func testImportedTextBecomesOneCorpusLinePerLine() {
-        let lines = PersonalizationLayout.corpusLines(
-            fromImportedText: "きょうはいい天気\nあしたは雨\n"
-        )
-        XCTAssertEqual(lines, ["きょうはいい天気", "あしたは雨"])
-    }
-
-    func testImportedTextGetsTheSameFilterAsACommit() {
-        // Blank lines, surrounding space, and a line past the length limit are
-        // all handled by corpusLine(for:) — the point is that arriving from a
-        // file does not bypass it.
-        let tooLong = String(repeating: "あ", count: PersonalizationLayout.maximumLineLength + 1)
-        let lines = PersonalizationLayout.corpusLines(
-            fromImportedText: "  余白あり  \n\n\(tooLong)\n本文\n"
-        )
-        XCTAssertEqual(lines, ["余白あり", "本文"])
-    }
-
-    func testImportHandlesCarriageReturns() {
-        // A file written on Windows is the normal case here.
-        let lines = PersonalizationLayout.corpusLines(fromImportedText: "一行目\r\n二行目\r\n")
-        XCTAssertEqual(lines, ["一行目", "二行目"])
-    }
-
-    func testImportStopsAtTheCorpusLimit() {
-        let many = (0 ..< (PersonalizationLayout.corpusLimit + 500))
-            .map { "行\($0)" }
-            .joined(separator: "\n")
-        XCTAssertEqual(
-            PersonalizationLayout.corpusLines(fromImportedText: many).count,
-            PersonalizationLayout.corpusLimit,
-            "anything past the limit is trimmed on the next read anyway"
-        )
-    }
-
-    func testImportedFilesAreMovedAsideRatherThanDeleted() {
-        // The directories are a contract with the user: they put files in one
-        // and can find them again in the other.
-        XCTAssertEqual(PersonalizationLayout.importDirectory.lastPathComponent, "import")
-        XCTAssertEqual(PersonalizationLayout.importedDirectory.lastPathComponent, "done")
-        XCTAssertEqual(
-            PersonalizationLayout.importedDirectory.deletingLastPathComponent().lastPathComponent,
-            "import"
-        )
-    }
-}

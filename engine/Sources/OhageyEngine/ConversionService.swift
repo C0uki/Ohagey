@@ -69,6 +69,11 @@ final class ConversionService {
     private func applyUserDictionary() {
         userDictionary.apply(to: converter)
         personalModel.updateRegisteredWords(userDictionary.words, settings: settings)
+        // After the dictionary, so a first run covers both at once rather than
+        // training twice. Catches the ordinary way text gets imported: with no
+        // engine running, by a settings app that cannot tell one to retrain
+        // (decisions 0015 / 0037).
+        personalModel.trainIfNothingPublished(settings: settings)
     }
 
     func updateSettings(_ newSettings: EngineSettings) {
@@ -128,6 +133,12 @@ final class ConversionService {
         if userDictionary.reloadIfChanged() {
             applyUserDictionary()
         }
+
+        // Text imported from the settings app, on the same terms and for the
+        // same reason (decision 0037). Unlike the dictionary it does not need
+        // to reach the converter directly — it only feeds the next training
+        // run — so this starts one rather than re-applying anything.
+        personalModel.refreshImportedText(settings: settings)
 
         // ── Why every conversion starts from nothing ───────────────────────
         //

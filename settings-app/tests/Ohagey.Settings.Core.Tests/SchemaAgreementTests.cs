@@ -38,6 +38,12 @@ public class SchemaAgreementTests
         Assert.Equal("Backend", SettingsSchema.Backend);
         Assert.Equal("ZenzaiInferenceLimit", SettingsSchema.ZenzaiInferenceLimit);
         Assert.Equal("IdleTimeoutSeconds", SettingsSchema.IdleTimeoutSeconds);
+        // Read by OhageyTSF.dll rather than by the engine, which makes this the
+        // one name here whose other implementation is a C++ string literal in
+        // OhageyLog.cpp. It is also listed in SettingsSchema.swift, which
+        // nothing in Swift reads: that enum is the registry contract, and a
+        // name only the DLL knows is a name someone reuses (decision 0033).
+        Assert.Equal("DiagnosticLog", SettingsSchema.DiagnosticLog);
     }
 
     [Fact]
@@ -79,6 +85,29 @@ public class SchemaAgreementTests
         Assert.Equal(Backend.Cpu, defaults.Backend);
         Assert.Equal(10, defaults.ZenzaiInferenceLimit);
         Assert.Equal(300, defaults.IdleTimeoutSeconds);
+        // Off, and this one is not a preference so much as a promise: the DLL
+        // is loaded into every application with a text input surface and opens
+        // a file twice per conversion while this is on. Defaulting it to true
+        // would put a shipped IME on the disk at every space bar.
+        Assert.False(defaults.DiagnosticLog);
+    }
+
+    [Fact]
+    public void TheDiagnosticLogDoesNotAskForAnEngineRestart()
+    {
+        // The engine never reads it. What has to restart is each of the user's
+        // own applications, which is a different sentence and is said on the
+        // About page — listing it here would show the wrong one.
+        Assert.DoesNotContain(SettingsSchema.DiagnosticLog, SettingsSchema.RequiringRestart);
+    }
+
+    [Fact]
+    public void TheDiagnosticLogPathIsWhereTheTextServiceWrites()
+    {
+        // OhageyLog.cpp builds "%LOCALAPPDATA%\Ohagey\tsf.log" from
+        // FOLDERID_LocalAppData. Same directory as the learning data, which is
+        // where the engine's own log goes too.
+        Assert.Equal(Path.Combine(LearningData.DataDirectory, "tsf.log"), Diagnostics.LogPath);
     }
 
     [Fact]
@@ -157,10 +186,14 @@ public class SchemaAgreementTests
     [Fact]
     public void TheBaseLanguageModelSuffixesAreWhatTheEngineLooksFor()
     {
-        // Four, not five. The published model has no _c_bc.
+        // Four for inference, matching EnginePaths.baseLanguageModelSuffixes.
         Assert.Equal(
             new[] { "_c_abc", "_r_xbx", "_u_abx", "_u_xbc" },
             ModelState.BaseLanguageModelSuffixes);
+        // The fifth is what a resumed training run needs, and the engine wants
+        // it before it will personalise at all
+        // (EnginePaths.baseLanguageModelResumeSuffixes).
+        Assert.Equal("_c_bc", ModelState.BaseLanguageModelResumeSuffix);
     }
 
     [Fact]
@@ -170,6 +203,37 @@ public class SchemaAgreementTests
         Assert.Equal(
             new[] { "lm_c_abc.marisa", "lm_r_xbx.marisa", "lm_u_abx.marisa", "lm_u_xbc.marisa" },
             names);
+
+        // All five, in the order ohagey.iss downloads them under base-lm-v1.
+        var resume = ModelState.BaseLanguageModelResumePaths.Select(Path.GetFileName).ToArray();
+        Assert.Equal(
+            new[]
+            {
+                "lm_c_abc.marisa", "lm_r_xbx.marisa", "lm_u_abx.marisa", "lm_u_xbc.marisa",
+                "lm_c_bc.marisa",
+            },
+            resume);
+    }
+
+    [Fact]
+    public void InstalledMeansPersonalisationCanActuallyRun()
+    {
+        // The fifth file is the whole point of this assertion.
+        //
+        // The engine applies personalisation only when it can train by
+        // *resuming* from the base (isBaseLanguageModelResumable, five files).
+        // This class reported "installed" on four until our own base started
+        // shipping, so a machine that lost exactly lm_c_bc.marisa — one of five
+        // independent downloads, none of which fail the installation — was told
+        // the model was there while the engine did nothing at all.
+        //
+        // Asserting the rule rather than the machine: whatever the real
+        // Program Files holds, "installed" has to mean the same thing the
+        // engine means by it.
+        Assert.Equal(
+            ModelState.BaseLanguageModelResumePaths.All(File.Exists),
+            ModelState.IsBaseLanguageModelInstalled);
+        Assert.Equal(5, ModelState.BaseLanguageModelResumePaths.Count());
     }
 
     [Fact]
@@ -177,23 +241,11 @@ public class SchemaAgreementTests
     {
         // Same directory as the gguf, because that is the one the engine
         // derives both from (EnginePaths.modelDirectory).
-        foreach (var path in ModelState.BaseLanguageModelPaths)
+        foreach (var path in ModelState.BaseLanguageModelResumePaths)
         {
             Assert.Equal(ModelState.ModelDirectory, Path.GetDirectoryName(path));
         }
         Assert.Equal(ModelState.ModelDirectory, Path.GetDirectoryName(ModelState.ModelPath));
-    }
-
-    [Fact]
-    public void APartialBaseModelIsNotInstalled()
-    {
-        // Not asserted against the real Program Files — this pins the rule, not
-        // the machine: every file has to be there, because a partial set makes
-        // the engine fall back exactly as if none were.
-        Assert.Equal(4, ModelState.BaseLanguageModelSuffixes.Count);
-        Assert.Equal(
-            ModelState.BaseLanguageModelPaths.All(File.Exists),
-            ModelState.IsBaseLanguageModelInstalled);
     }
 
     [Fact]

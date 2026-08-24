@@ -2,6 +2,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Ohagey.Settings.Core;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace Ohagey.Settings.Pages;
 
@@ -27,6 +29,7 @@ public sealed partial class LearningPage : Page
 
         ApplyDependency(settings);
         RefreshEraseSummary();
+        RefreshImportSummary();
     }
 
     /// <summary>
@@ -42,6 +45,11 @@ public sealed partial class LearningPage : Page
         PersonalizationNote.Text = settings.LearningEnabled
             ? "確定した語句を控えて学習し直します。切ると、その控えも消えます。"
             : "学習がオフのあいだは使えません。";
+        // Only while personalisation is actually on. With the switch off the
+        // slider is disabled and its value means nothing, so the notice would
+        // be answering a question nobody asked.
+        AlphaZeroNotice.IsOpen =
+            settings.PersonalizationActive && settings.PersonalizationAlphaPercent == 0;
         ShowBaseModelStatus(settings);
     }
 
@@ -91,6 +99,79 @@ public sealed partial class LearningPage : Page
         ApplyDependency(updated);
     }
 
+    // ── Importing text for personalisation to train on (decision 0037) ──────
+
+    private void RefreshImportSummary()
+    {
+        ImportSummary.Text = ImportedText.Describe();
+        ClearImportButton.IsEnabled = ImportedText.Exists;
+    }
+
+    private async void OnImportClicked(object sender, RoutedEventArgs e)
+    {
+        // A page cannot be shown without a window, so this is belt and braces
+        // — but GetWindowHandle(null) throws, and the alternative to checking
+        // is a crash on a button press.
+        if (App.MainWindow is not { } window) return;
+
+        // FileOpenPicker in an unpackaged WinUI 3 app has no window of its own
+        // to parent to, and throws at runtime without this. There is no
+        // compile-time hint that it is needed.
+        var picker = new FileOpenPicker();
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
+        picker.FileTypeFilter.Add(".txt");
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is null) return;
+
+        // Examined before anything is written, so a file that will be refused
+        // does not first replace what the user already had.
+        var result = ImportedText.Import(file.Path);
+        ImportResultBar.IsOpen = true;
+
+        if (!result.Accepted)
+        {
+            ImportResultBar.Severity = InfoBarSeverity.Warning;
+            ImportResultBar.Title = "取り込めませんでした";
+            ImportResultBar.Message = ImportedText.Explain(result);
+            RefreshImportSummary();
+            return;
+        }
+
+        ImportResultBar.Severity = InfoBarSeverity.Success;
+        ImportResultBar.Title = "取り込みました";
+        // The cost is stated at the moment of the decision, not buried in a
+        // help page: every training run reads all of this, so an import is
+        // paid repeatedly rather than once.
+        ImportResultBar.Message =
+            $"{result.Lines:N0} 行 / {result.Characters:N0} 文字を取り込みました。"
+            + $"次の学習から反映されます(学習は毎回 約 {ImportedText.TrainingSecondsAdded(result.Characters):0.#} 秒ぶん長くなります)。";
+        RefreshImportSummary();
+    }
+
+    private void OnClearImportClicked(object sender, RoutedEventArgs e)
+    {
+        ImportResultBar.IsOpen = true;
+        if (ImportedText.Delete())
+        {
+            ImportResultBar.Severity = InfoBarSeverity.Success;
+            ImportResultBar.Title = "削除しました";
+            // Genuinely out of the model, not only out of the file: the engine
+            // notices by modification date on the next conversion and retrains
+            // without it.
+            ImportResultBar.Message = "取り込んだ文章を削除しました。次の学習から反映されます。";
+        }
+        else
+        {
+            ImportResultBar.Severity = InfoBarSeverity.Warning;
+            ImportResultBar.Title = "削除できませんでした";
+            ImportResultBar.Message =
+                "変換エンジンが使用中の可能性があります。しばらく待ってからもう一度お試しください。";
+        }
+
+        RefreshImportSummary();
+    }
+
     private void RefreshEraseSummary()
     {
         var bytes = LearningData.EstimateBytes();
@@ -108,7 +189,11 @@ public sealed partial class LearningPage : Page
             ? "消去できる学習データはありません。"
             : $"現在の学習データ: 約 {size}。"
               + "大半は個人化のモデルで、確定した文章そのものはごく一部です。"
-              + "登録したユーザー辞書は消えません。";
+              // Both of the deliberate things survive, and both have to be
+              // named. A user who imported a document and then erased their
+              // typing history should not have to discover which of the two
+              // happened to it (decisions 0036 / 0037).
+              + "登録したユーザー辞書と、取り込んだ文章は消えません。";
         EraseButton.IsEnabled = bytes > 0;
     }
 
@@ -119,7 +204,7 @@ public sealed partial class LearningPage : Page
             XamlRoot = XamlRoot,
             Title = "学習データを消去しますか?",
             Content = "これまでに覚えた変換の傾向がすべて消えます。元に戻せません。\n"
-                      + "ユーザー辞書に登録した単語は消えません。",
+                      + "ユーザー辞書に登録した単語と、取り込んだ文章は消えません。",
             PrimaryButtonText = "消去する",
             CloseButtonText = "やめる",
             DefaultButton = ContentDialogButton.Close,
