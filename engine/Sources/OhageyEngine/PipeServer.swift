@@ -219,6 +219,25 @@ enum PipeServer {
                 continue
             }
 
+            // Said out loud because a connection is the one thing the engine
+            // knows about a client and cannot infer later. A sandboxed caller
+            // that cannot reach the pipe at all (decision 0031's AppContainer
+            // grant) is indistinguishable, from the engine's side, from a user
+            // who simply has not typed — unless the connections themselves are
+            // on the record.
+            // With the client's process id, because "a client connected" does
+            // not say *which*, and that is the whole question when asking
+            // whether a sandboxed application can reach the pipe at all
+            // (decision 0031). Without it, a successful conversion from some
+            // other window and a refused connection from the one under test
+            // look identical in this file.
+            var clientProcessId: DWORD = 0
+            if GetNamedPipeClientProcessId(handle, &clientProcessId) {
+                log("client connected (pid \(clientProcessId))")
+            } else {
+                log("client connected (pid unknown, \(GetLastError()))")
+            }
+
             // Counted before the thread starts: if it were counted inside, a
             // watchdog firing in between would see zero connections and exit
             // out from under a client that has already connected.

@@ -309,3 +309,80 @@ final class WireResponseEncodingTests: XCTestCase {
         return try Ohagey_Ipc_V1_Response(serializedBytes: payload)
     }
 }
+
+/// The other half of an update (decisions 0007 / 0033).
+///
+/// Replacing Ohagey always produces a mixed pair: the engine is swapped when
+/// the installer runs, while the TSF DLL waits for a restart because it is
+/// loaded into every application with a text field. Until then, this engine is
+/// serving the previous client — and, once the DLL catches up, a newer client
+/// may reach an engine that has not been restarted yet.
+///
+/// The C++ side of this is covered by `tsf/Ohagey/tools/build-and-run-wire.ps1`.
+/// These are the same questions asked of the generated decoder, so that a
+/// future decision to hand-roll it does not quietly drop the property.
+final class WireForwardCompatibilityTests: XCTestCase {
+    /// Appends a field this schema does not define, as a newer client would.
+    private func withUnknownField(_ payload: [UInt8], number: UInt32) -> [UInt8] {
+        var bytes = payload
+        // tag = field << 3 | wire type 0 (varint), then the value.
+        var tag = number << 3
+        while tag >= 0x80 {
+            bytes.append(UInt8(tag & 0x7F) | 0x80)
+            tag >>= 7
+        }
+        bytes.append(UInt8(tag))
+        bytes.append(0x2A)
+        return bytes
+    }
+
+    func testAnUnknownTopLevelFieldIsIgnored() throws {
+        var convert = Ohagey_Ipc_V1_ConvertRequest()
+        convert.reading = "へんかん"
+        var request = Ohagey_Ipc_V1_Request()
+        request.requestID = 7
+        request.convert = convert
+
+        let payload = withUnknownField(try request.serializedBytes(), number: 99)
+        let decoded = try WireCodec.decodeRequest(payload)
+
+        XCTAssertEqual(decoded.requestID, 7)
+        XCTAssertEqual(decoded.body, .convert(reading: "へんかん",
+                                              nBest: EngineLimits.defaultCandidateCount,
+                                              precedingText: ""))
+    }
+
+    func testAnUnknownFieldInsideConvertIsIgnored() throws {
+        var convert = Ohagey_Ipc_V1_ConvertRequest()
+        convert.reading = "へんかん"
+        convert.nBest = 12
+
+        var request = Ohagey_Ipc_V1_Request()
+        request.requestID = 8
+        // The nested message carries the unknown field, so the outer decoder
+        // has to hand an unrecognised tag to the inner one and survive it.
+        request.convert = try Ohagey_Ipc_V1_ConvertRequest(
+            serializedBytes: withUnknownField(try convert.serializedBytes(), number: 40)
+        )
+
+        let decoded = try WireCodec.decodeRequest(try request.serializedBytes())
+        XCTAssertEqual(decoded.body, .convert(reading: "へんかん", nBest: 12, precedingText: ""))
+    }
+
+    func testAResponseKeepsItsShapeForAClientThatOnlyKnowsTheOldFields() throws {
+        // Encoding is the side an older client reads. Nothing here asserts the
+        // bytes; it asserts that a response still round-trips through the
+        // schema, which is what a client walking known field numbers relies on.
+        let response = Envelope<EngineResponse>(
+            requestID: 3,
+            body: .convert(candidates: [EngineCandidate(text: "変換", reading: "へんかん")],
+                           zenzaiUsed: true)
+        )
+        let payload = try WireCodec.encodeResponse(response)
+        let wire = try Ohagey_Ipc_V1_Response(serializedBytes: payload)
+
+        XCTAssertEqual(wire.requestID, 3)
+        XCTAssertEqual(wire.convert.candidates.count, 1)
+        XCTAssertEqual(wire.convert.candidates[0].text, "変換")
+    }
+}

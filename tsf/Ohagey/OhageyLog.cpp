@@ -62,6 +62,119 @@ namespace Ohagey
             CoTaskMemFree(local);
             return SUCCEEDED(hr);
         }
+        // The body every line goes through. Split out of Log() so the module
+        // identity can be written without consulting the switch.
+        void AppendLine(const char* line)
+        {
+            wchar_t path[MAX_PATH] = {L'\0'};
+            if (!LogPath(path, ARRAYSIZE(path)))
+            {
+                return;
+            }
+
+            // Shared read/write: every application with the IME loaded writes
+            // here, and the user may have the file open in an editor.
+            HANDLE file = CreateFileW(path, FILE_APPEND_DATA,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+            if (file == INVALID_HANDLE_VALUE)
+            {
+                return;
+            }
+
+            LARGE_INTEGER size = {};
+            if (GetFileSizeEx(file, &size) && size.QuadPart > kMaximumBytes)
+            {
+                CloseHandle(file);
+                file = CreateFileW(path, GENERIC_WRITE,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                   nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+                if (file == INVALID_HANDLE_VALUE)
+                {
+                    return;
+                }
+            }
+
+            SYSTEMTIME now = {};
+            GetLocalTime(&now);
+
+            char stamped[1200] = {'\0'};
+            const int used = _snprintf_s(stamped, _TRUNCATE, "%02d:%02d:%02d.%03d [%lu] %s\r\n",
+                                         now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
+                                         GetCurrentProcessId(), line);
+            if (used > 0)
+            {
+                DWORD ignored = 0;
+                WriteFile(file, stamped, static_cast<DWORD>(used), &ignored, nullptr);
+            }
+            CloseHandle(file);
+        }
+    }
+
+    void LogModuleIdentity()
+    {
+        // Once per process, and **not** behind the diagnostic switch.
+        //
+        // ── Why this one line is always written ────────────────────────────
+        //
+        // A DLL cannot be replaced while it is loaded, so a running application
+        // keeps whatever build it started with. Every application on the
+        // machine therefore runs a possibly different Ohagey, and nothing on
+        // screen says which. Six times in one day a fix was declared not to
+        // work when the process under test simply had not loaded it -- each
+        // time costing a round trip, and each time "resolved" by asking a human
+        // to compare process start times against a swap time.
+        //
+        // The file's own size and write time settle it: they come from the
+        // module actually mapped into this process, and they compare directly
+        // against the build on disk. One line per process, no user text, and it
+        // is the line that makes every other line in this file trustworthy --
+        // which is why it is not something to have to switch on first.
+        static volatile LONG written = 0;
+        if (InterlockedExchange(&written, 1) != 0)
+        {
+            return;
+        }
+
+        HMODULE self = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS
+                                    | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                reinterpret_cast<LPCWSTR>(&LogModuleIdentity),
+                                &self))
+        {
+            return;
+        }
+
+        wchar_t modulePath[MAX_PATH] = {L'\0'};
+        if (GetModuleFileNameW(self, modulePath, ARRAYSIZE(modulePath)) == 0)
+        {
+            return;
+        }
+
+        WIN32_FILE_ATTRIBUTE_DATA info = {};
+        SYSTEMTIME built = {};
+        unsigned long long bytes = 0;
+        if (GetFileAttributesExW(modulePath, GetFileExInfoStandard, &info))
+        {
+            FILETIME local = {};
+            FileTimeToLocalFileTime(&info.ftLastWriteTime, &local);
+            FileTimeToSystemTime(&local, &built);
+            bytes = (static_cast<unsigned long long>(info.nFileSizeHigh) << 32) | info.nFileSizeLow;
+        }
+
+        char narrowPath[MAX_PATH * 3] = {'\0'};
+        WideCharToMultiByte(CP_UTF8, 0, modulePath, -1, narrowPath,
+                            static_cast<int>(sizeof(narrowPath)), nullptr, nullptr);
+
+        char line[1024] = {'\0'};
+        if (_snprintf_s(line, _TRUNCATE,
+                        "module: %s  %llu bytes  built %04d-%02d-%02d %02d:%02d:%02d",
+                        narrowPath, bytes,
+                        built.wYear, built.wMonth, built.wDay,
+                        built.wHour, built.wMinute, built.wSecond) > 0)
+        {
+            AppendLine(line);
+        }
     }
 
     void Log(const char* format, ...)
@@ -71,65 +184,16 @@ namespace Ohagey
             return;
         }
 
-        wchar_t path[MAX_PATH] = {L'\0'};
-        if (!LogPath(path, ARRAYSIZE(path)))
-        {
-            return;
-        }
-
-        // Shared read/write: every application with the IME loaded writes here,
-        // and the user may have the file open in an editor while doing so.
-        HANDLE file = CreateFileW(path, FILE_APPEND_DATA,
-                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                  nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (file == INVALID_HANDLE_VALUE)
-        {
-            return;
-        }
-
-        LARGE_INTEGER size = {};
-        if (GetFileSizeEx(file, &size) && size.QuadPart > kMaximumBytes)
-        {
-            CloseHandle(file);
-            file = CreateFileW(path, GENERIC_WRITE,
-                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                               nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (file == INVALID_HANDLE_VALUE)
-            {
-                return;
-            }
-        }
-
-        SYSTEMTIME now = {};
-        GetLocalTime(&now);
-
         char line[1024] = {'\0'};
-        int used = _snprintf_s(line, _TRUNCATE, "%02d:%02d:%02d.%03d [%lu] ",
-                               now.wHour, now.wMinute, now.wSecond, now.wMilliseconds,
-                               GetCurrentProcessId());
-        if (used < 0)
-        {
-            CloseHandle(file);
-            return;
-        }
-
         va_list args;
         va_start(args, format);
-        const int written = _vsnprintf_s(line + used, sizeof(line) - used, _TRUNCATE, format, args);
+        const int written = _vsnprintf_s(line, sizeof(line), _TRUNCATE, format, args);
         va_end(args);
         if (written < 0)
         {
-            CloseHandle(file);
             return;
         }
 
-        size_t length = 0;
-        if (SUCCEEDED(StringCchLengthA(line, ARRAYSIZE(line), &length)))
-        {
-            DWORD ignored = 0;
-            WriteFile(file, line, static_cast<DWORD>(length), &ignored, nullptr);
-            WriteFile(file, "\r\n", 2, &ignored, nullptr);
-        }
-        CloseHandle(file);
+        AppendLine(line);
     }
 }

@@ -527,3 +527,4 @@ final class RegisteredWordTrainingTests: XCTestCase {
         XCTAssertEqual(PersonalizationLayout.trainingSecondsAdded(forCharacters: -5), 0)
     }
 }
+

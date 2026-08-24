@@ -93,4 +93,36 @@ namespace Ohagey
     // asked to convert; this is what the user is looking at, and someone who
     // has typed `ky` needs to see that they typed it.
     std::wstring RomajiToDisplay(const std::wstring& romaji);
+
+    // ── The composition buffer ──────────────────────────────────────────────
+    //
+    // The buffer the TSF layer keeps is **kana, followed by whatever romaji has
+    // not resolved yet** — not the keystrokes as typed.
+    //
+    // It held raw romaji at first, which is what the vendored pinyin IME did:
+    // there, one keystroke is one character on screen, so the buffer and the
+    // display are the same thing. In Japanese they are not, and every operation
+    // that means "one character" had to guess which one was meant. Backspace
+    // guessed wrong:
+    //
+    //     おはぎ  (ohagi)  -> backspace -> おはg
+    //
+    // With kana in the buffer, one character of the buffer *is* one character
+    // on screen, and backspace is again just "drop the last one".
+    //
+    // The unresolved tail is what makes this work while a syllable is still
+    // being typed. It is always the trailing run of ASCII, because kana are
+    // not ASCII — so no separate bookkeeping is needed to know where it starts.
+    //
+    // ⚠️ A trailing lone `n` stays `n` in the buffer and shows as ん. Baking ん
+    // in would break `hona`: the `a` has to be able to turn ん back into な.
+
+    // The buffer after one more keystroke.
+    std::wstring BufferAfterKeystroke(const std::wstring& buffer, wchar_t ch);
+
+    // What to show: the buffer, with a trailing lone `n` closed to ん.
+    std::wstring BufferDisplay(const std::wstring& buffer);
+
+    // What to send the engine: the same, minus any other unresolved romaji.
+    std::wstring BufferReading(const std::wstring& buffer);
 }

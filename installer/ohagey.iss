@@ -96,7 +96,7 @@ Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe";
 ; a runtime after installation (decision 0016).
 ;
 ; The TFM and RID are part of the path and change with them.
-;
+
 ; -- Why this one is behind a define ----------------------------------------
 ;
 ; CI compiles this script with /DSkipSettingsApp, and only this entry is
@@ -109,6 +109,11 @@ Source: "..\engine\.build\x86_64-unknown-windows-msvc\release\OhageyEngine.exe";
 ;
 ; So this line is the one gap, and it is the one to check by hand after
 ; changing the TFM, the RID, or the project layout.
+;
+; Phrased as #ifndef rather than #ifdef on purpose: **the shipping
+; configuration is the one with no defines**. Opting the component *out* takes
+; a deliberate flag, so a release cannot quietly go out without the settings
+; app the way it could if inclusion were the thing to remember to ask for.
 #ifndef SkipSettingsApp
 Source: "..\settings-app\src\Ohagey.Settings\bin\x64\Release\net8.0-windows10.0.19041.0\win-x64\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 #endif

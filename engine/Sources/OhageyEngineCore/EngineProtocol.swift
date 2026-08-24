@@ -18,9 +18,32 @@ import Foundation
 /// `EngineRequest`.
 public enum EngineLimits {
     /// Used when a client asks for `n_best == 0`, which ohagey.proto defines as
-    /// "engine default". Nine is one page of a conventional Japanese candidate
-    /// window.
-    public static let defaultCandidateCount = 9
+    /// "engine default".
+    ///
+    /// ── Why not nine ───────────────────────────────────────────────────────
+    ///
+    /// Nine is one page of a conventional Japanese candidate window, and that
+    /// is what this was — a display convention standing in for a conversion
+    /// decision. The candidate window pages and scrolls; the user just never
+    /// had a second page to reach, and reported it as the list stopping at
+    /// nine.
+    ///
+    /// Fifty, because more candidates turn out to be nearly free. Zenzai builds
+    /// the lattice whichever number is asked for, so taking more out of the
+    /// result it already has does not show up in the latency (measured against
+    /// a live engine, milliseconds per request):
+    ///
+    ///     reading                    n_best 9    20    30    50   100
+    ///     へんかん                        203   110   125   109    78
+    ///     きょうはいいてんきですね        438   156   187   188   172
+    ///     はし                            125   109   109   109   110
+    ///
+    /// The converter also runs out before the ceiling — 56 for へんかん and 91
+    /// for はし at 100 — so a large number asks for what exists rather than
+    /// manufacturing filler. Fifty is several pages, past what anyone scrolls,
+    /// and short of the point where the reply is carrying candidates nobody
+    /// will ever see.
+    public static let defaultCandidateCount = 50
 
     /// Upper bound on candidates one request may ask for. The count sizes work
     /// inside the converter and an array on the reply path, so a buggy or

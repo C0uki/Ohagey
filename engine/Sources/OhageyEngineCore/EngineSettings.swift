@@ -88,8 +88,24 @@ public struct EngineSettings: Sendable, Equatable {
     /// latency/quality tradeoff is tunable without a rebuild.
     public var zenzaiInferenceLimit: Int = 10
     /// Idle seconds before the server exits when no client is connected
-    /// (decision 0015).
-    public var idleTimeoutSeconds: Int = 300
+    /// (decision 0015). Zero keeps it resident.
+    ///
+    /// ── Why the default is zero ────────────────────────────────────────────
+    ///
+    /// Decision 0015 chose on-demand launch with an idle exit so an IME nobody
+    /// is using costs nothing. That works only for clients that can start the
+    /// engine, and **an AppContainer application cannot**: `CreateProcess` is
+    /// denied to it. Measured — the engine exited on this timeout, and typing
+    /// in the Microsoft Store's search box then produced kana and no
+    /// candidates, with nothing reported anywhere, because a refused connection
+    /// is indistinguishable from "no candidates" (decision 0031).
+    ///
+    /// So the timeout does not save memory in the common case; it decides
+    /// whether sandboxed applications work at all, and it decides it silently
+    /// and intermittently. Staying resident is the honest trade: the process is
+    /// small until the first conversion loads the model, and a user who would
+    /// rather have that memory back sets a timeout here.
+    public var idleTimeoutSeconds: Int = 0
 
     public init() {}
 

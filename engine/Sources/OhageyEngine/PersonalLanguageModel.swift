@@ -100,6 +100,7 @@ final class PersonalLanguageModel {
                 at: PersonalizationLayout.directory,
                 withIntermediateDirectories: true
             )
+
             discardPartialGenerations()
             baseIsReady = try ensureBaseModel()
             // Counted once here rather than on each commit; see `corpusLines`.
@@ -469,6 +470,7 @@ final class PersonalLanguageModel {
     /// user who corrects a word ten times in a row gets one of those
     /// corrections learned and nine dropped.
     private func startTraining(settings: EngineSettings) {
+
         let wait = nextRunNotBefore.timeIntervalSinceNow
         if wait > 0 {
             guard !deferredRunQueued else { return }

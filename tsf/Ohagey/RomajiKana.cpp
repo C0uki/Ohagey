@@ -273,3 +273,55 @@ namespace Ohagey
         return Feed(romaji).Display();
     }
 }
+
+namespace
+{
+    // Where the unresolved romaji starts: the trailing run of ASCII. Kana are
+    // not ASCII, so the split needs no extra state to be kept in step.
+    size_t PendingStart(const std::wstring& buffer)
+    {
+        size_t i = buffer.size();
+        while (i > 0 && buffer[i - 1] < 0x80)
+        {
+            --i;
+        }
+        return i;
+    }
+}
+
+std::wstring Ohagey::BufferAfterKeystroke(const std::wstring& buffer, wchar_t ch)
+{
+    const size_t split = PendingStart(buffer);
+    const std::wstring settled = buffer.substr(0, split);
+    const std::wstring pending = buffer.substr(split);
+
+    // Replayed rather than appended to: `t` + `t` becomes っt, and only the
+    // converter knows that. Feeding it the whole unresolved tail each time
+    // keeps that knowledge in one place.
+    RomajiKana converter;
+    bool accepted = true;
+    for (wchar_t c : pending + std::wstring(1, ch))
+    {
+        if (!converter.Append(c)) { accepted = false; }
+    }
+    if (!accepted)
+    {
+        // Something the converter will not take. Left as it came so the caller
+        // sees the keystroke rather than losing it silently.
+        return buffer + std::wstring(1, ch);
+    }
+
+    return settled + converter.Kana() + converter.Pending();
+}
+
+std::wstring Ohagey::BufferDisplay(const std::wstring& buffer)
+{
+    const size_t split = PendingStart(buffer);
+    return buffer.substr(0, split) + RomajiToDisplay(buffer.substr(split));
+}
+
+std::wstring Ohagey::BufferReading(const std::wstring& buffer)
+{
+    const size_t split = PendingStart(buffer);
+    return buffer.substr(0, split) + RomajiToKana(buffer.substr(split));
+}

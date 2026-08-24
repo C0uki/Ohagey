@@ -1,11 +1,9 @@
-# CLAUDE.md — Ohagey (おはぎー)
+# AGENTS.md — Ohagey (おはぎー)
 
 Windows向け日本語IME。azooKeyの変換エンジン(AzooKeyKanaKanjiConverter + Zenzai)を
 流用し、TSF層・UI・配布まわりは新規実装。
 
 **作業を始める前に必ず読むこと:**
-- `docs/handover.md` — **引き継ぎ書。ここから読む** — いまどこにいるか、作業の型、
-  既知の限界、次にやること
 - `docs/decisions/README.md` — 設計判断の全一覧(なぜそう決めたか)
 - `docs/roadmap.md` — フェーズ別の進捗と残タスク、未解決の設計課題
 - `docs/local-setup.md` — ビルド手順、**動作確認済みのバージョン組み合わせ**、
@@ -80,18 +78,16 @@ clone した fork を指すと `.package(path:)` に切り替わる。
 エンジンのリクエストログが実セッションの証拠を残している:
 
 ```
-#3 convert (reading 5, preceding 4, n_best 50) -> 50 candidates (zenzai true) in 180ms
-#4 commit  (reading 5, text 5, learn true) -> ok in 9ms
+#5 convert (reading 13, preceding 0, n_best 9) -> 9 candidates (zenzai true) in 507ms
+#6 commit (reading 13, text 11, learn true) -> ok in 15ms
 ```
 
-読みが Zenzai で変換され、**左文脈が乗り**、確定が学習まで届いている。
+13文字の読みが Zenzai で11文字に変換され、確定が学習まで届いている。
 `%LOCALAPPDATA%\Ohagey\personal\corpus.txt` が実際に育っている。
 
 利用者に確認してもらった動作: **A のとき英語が半角** / **かな入力中は `!` `@` `^` が
 `！ ＠ ＾`** / **英数(CapsLock) で あ ↔ A** / **半角/全角 が効く** /
-**`ko-hi-` で コーヒー** / **スペース連打で候補送り(50件)** /
-**変換せず Enter で確定できる** / **バックスペースがかな1文字を消す** /
-**ダークモードでアイコンが見える** / **Microsoft Store(UWP)でも打てる**。
+**`ko-hi-` で コーヒー** / **スペース連打で候補送り** / **ダークモードでアイコンが見える**。
 
 ここに至るまでに **vendoring 元が中国語 IME であることに起因する不具合を12件**
 潰している。決定 0033 の追記7〜16 に全部書いた。**LANGID は入口でしかなかった** —
@@ -210,73 +206,7 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   フォールバック後もそのまま Zenzai が変換できる。状態は
   `%LOCALAPPDATA%\Ohagey\backend-status.tsv` に記録し、設定アプリが表示する
 
-- **合成バッファはかなを持つ**(decision 0033 の追記)。不変条件は
-  **「解決済みのかな + 未解決のローマ字(末尾)」**で、未解決部分は常に末尾の ASCII 連
-  (かなは ASCII ではない)。**バッファの1文字が画面の1文字**になるので、バックスペースは
-  「最後の1つを落とす」で済む。⚠️ 末尾の孤立 `n` はバッファでは `n` のまま —
-  ん を焼き込むと `hona` が ほな にならない。判定は `RomajiKana` の純粋な関数にあり、
-  `build-and-run-kana.ps1` で試験できる
-
-- **学習材料のテキスト取り込み**(decision 0037)。個人モデルの材料が「確定した語句」
-  だけだと数千字で、引き算する相手の base は約42万字。設定アプリから**利用者が
-  テキストファイルを1つ渡せる**ようにした(収集はしない — decision 0016 / 0025)。
-  `%LOCALAPPDATA%\Ohagey\personal\imported.txt`。**扱いはユーザー辞書と同じ**で
-  「学習データを消去」では消えない。上限は**行数ではなく文字数で10万字**
-  (学習は 41µs/字、かつ**毎回の再学習で読み直される**)。超過は切り捨てず拒否。
-  ✅ **壊さないことは出荷構成で実測した** — 1,074字 と **81,234字(上限の81%)**の
-  どちらでも評価セットは **30/32 のまま、巻き添え0件**。
-  `tsf/Ohagey/tools/build-and-run-imported.ps1`。
-  ⚠️ **昇格(効果)のほうは未実測** — それは `build-and-run-learning.ps1` の仕事
-
-
-- **確定はすべての経路で学習に届く**(decision 0024 / 0025 / 0033)。候補確定・
-  候補リスト・**無変換確定**の3つ。⚠️ 無変換確定は**コーパスには入るが変換器の
-  学習ストアには入らない** — 渡せる `Candidate` が存在しないため。エンジンのログが
-  `no remembered candidate for this reading` と言う
-
-- **候補は既定50件**(decision 0007)。9件は「候補窓の1ページ分」という表示の慣習で、
-  変換の判断ではなかった。Zenzai はどの数でもラティスを作るので**代償は測定に出ない**
-  (n_best 9→100 でレイテンシは横ばい)。変換器のほうが先に尽きる
-
-- **エンジンは常駐**(decision 0015 の追記)。`idleTimeoutSeconds` の既定は **0**。
-  AppContainer は `CreateProcess` を禁じられているので、アイドル終了は
-  「サンドボックスされたアプリが動くかどうか」を**黙って断続的に**決めてしまう
-
-- **ワイヤ互換を試験してある**(decision 0032 の追記)。**更新のたびに必ず
-  「新しいエンジン × 古い DLL」になる**(エンジンは即座、DLL は再起動待ち)。
-  手書きの reader が未知フィールドを飛ばし、切り詰めと過大な長さ接頭辞を弾くことを
-  `build-and-run-wire.ps1` で9件確認
-
-- **診断できる**(decision 0033 の追記10 / 21)。`engine.log` は起動・設定・
-  **リクエスト1件ごと**、`tsf.log` は TSF 側。**どちらも打った内容は書かない**
-  (長さと件数だけ)。`tsf.log` の毎変換の行は `HKCU\Software\Ohagey\DiagnosticLog`
-  で切ってあるが、**DLL が自分のビルドを書く1行はスイッチの外**にある —
-  「どの窓が古いビルドか」を起動時刻で人間に見分けさせないため
-
-- **利用者が置いたテキストからコーパスを育てられる**(decision 0034 の追記)。
-  `%LOCALAPPDATA%\Ohagey\personal\import\*.txt` を学習の直前に取り込み、
-  読んだファイルは `import\done\` に**移す**(消さない)。各行は確定と同じ
-  `corpusLine(for:)` を通る。⚠️ **重複除去は入れていない** — azooKey の Tuner が
-  MinHash で落とすのは画面収集の副産物であって頻度ではなく、こちらでは
-  **繰り返し確定したこと自体が個人化の読む信号**だからである(昇格に3〜40回)。
-  Tuner の**画面収集は採らない**: 利用者が打っていないテキストが平文で残る
-
-- **CI がインストーラをコンパイルする**(decision 0033 の追記22)。自己検査
-  (`kana-selftest` / `wire-selftest`)も走る。設定アプリだけ
-  `#ifndef CiWithoutSettingsApp` で外す — **出荷構成を define の無い側に置いてある**
-
 ### 未検証
-- **取り込んだテキストによる昇格**(decision 0037)。**壊さないことは測った**が、
-  効くことは測っていない。示すには「学習ストアだけでは上がらない、かつ1位と
-  1文字目を共有する」読みが要る(decision 0034)。
-  ⚠️ decision 0034 は「学習ストアの昇格を個人化の手柄と読む」取り違えを3回している
-
-> 🔴 **ハーネスを走らせる前に `backends\cpu\` をエンジンの隣に置くこと。**
-> エンジンは**自分の実行ファイルからの相対**でバックエンドを探すので、
-> `swift build` の出力を直接指すと Zenzai が黙って無効になり、変換が失敗する。
-> `build-and-run-imported.ps1` はベースラインが半数を切ったら測定を拒否する —
-> 正解が0件なら「壊れた0件」は真だが無意味だからである(実際に一度そう報告した)。
-
 - 🔴 **AppContainer からはエンジンを起動できない**(決定 0031 の追記)。
   `CreateProcess` が禁じられているので、エンジンが落ちていると UWP アプリでは
   **打てるのに変換だけ効かない**(エラーにはならない)。決定 0015 の
@@ -289,10 +219,7 @@ clone した fork を指すと `.package(path:)` に切り替わる。
   🔴 **出荷するなら vulkan** — 22.6MB で cuda(977MB)と同じ速さ、しかも GPU を選ばない
 
 ### 未着手
-- ロードマップに残るのは**測定が要る問い**(alpha 0.5 が「壊さないが効かない」理由、
-  1文字目に個人化がかからない件の周辺)と**設定アプリの UI**、それに将来の判断
-  (fork を upstream に PR するか、x86 の TSF DLL、`trainNGram` の400万字上限)。
-  `docs/roadmap.md` を見ること
+- CI での `iscc` パッケージング
 
 ## ビルドとテスト
 
@@ -328,12 +255,5 @@ swift test
   `GENERIC_READ | GENERIC_WRITE` で呼ぶと AppContainer から接続できない。
   `FILE_READ_DATA | FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE`
   を明示すること
-- ~~**Swift 6 言語モードへの移行が保留中。**~~ → **完了。7ターゲット全部が `.v6`。**
-  厳格な並行性チェックで**エラーは1件だけ出て、それは実バグだった** —
-  `BackendStatus.swift` の静的な `ISO8601DateFormatter`(スレッドセーフでないクラスを
-  共有していた。パイプサーバーが別スレッドで accept を始めた後に書かれる)。
-  他は無改造で通る。**変換器が `@MainActor` 固定である**ことに合わせて
-  `ConversionService` / `PersonalLanguageModel` も `@MainActor` にし、
-  唯一 main actor を離れる n-gram 学習を `nonisolated static` にしてあったので、
-  厳格化が要求する形に既になっていた。`main.swift` の `assumeIsolated` も外した
+- **Swift 6 言語モードへの移行が保留中。** 現在 `.v5` を明示している(`Package.swift` の TODO)
 - ユーザー辞書のファイルフォーマット(decision 0026)は **decision 0036**、設定のレジストリスキーマ(decision 0014)は **decision 0035** で確定済み

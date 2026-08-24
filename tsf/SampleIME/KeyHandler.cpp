@@ -311,7 +311,18 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 {
     HRESULT hr = S_OK;
 
-    if (isCandidateList && _pCandidateListUIPresenter)
+    // [Ohagey] `_candidateMode`, again, for the same reason as in
+    // `_HandleCompositionInput`: the presenter outlives the window it drew.
+    //
+    // Without it, Enter on plain kana — 無変換で確定 — took the candidate
+    // branch, asked a list that had already ended for its selection, got
+    // nothing, and fell through to `_HandleCancel`, which **threw the kana
+    // away**. It worked exactly until the user's first conversion, because
+    // that is when the pointer stops being null and never becomes null again.
+    //
+    // Reported as not being able to commit without converting, which is what
+    // it was: the composition was discarded rather than committed.
+    if (isCandidateList && _pCandidateListUIPresenter && (_candidateMode != CANDIDATE_NONE))
     {
         // Finalize selected candidate string from CCandidateListUIPresenter
         DWORD_PTR candidateLen = 0;
@@ -355,6 +366,9 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
     else
     {
         // Finalize current text store strings
+        Ohagey::Log("finalize: unconverted path, composing %d, mode %d, presenter %d",
+                    _IsComposing() ? 1 : 0, (int)_candidateMode,
+                    _pCandidateListUIPresenter ? 1 : 0);
         if (_IsComposing())
         {
             ULONG fetched = 0;
@@ -362,14 +376,49 @@ HRESULT CSampleIME::_HandleCompositionFinalize(TfEditCookie ec, _In_ ITfContext 
 
             if (FAILED(pContext->GetSelection(ec, TF_DEFAULT_SELECTION, 1, &tfSelection, &fetched)) || fetched != 1)
             {
+                Ohagey::Log("finalize: no selection");
                 return S_FALSE;
             }
 
             ITfRange* pRangeComposition = nullptr;
             if (SUCCEEDED(_pComposition->GetRange(&pRangeComposition)))
             {
-                if (_IsRangeCovered(ec, tfSelection.range, pRangeComposition))
+                const BOOL covered = _IsRangeCovered(ec, tfSelection.range, pRangeComposition);
+                Ohagey::Log("finalize: range covered %d", covered ? 1 : 0);
+                if (covered)
                 {
+                    // [Ohagey] Read before the composition is ended: after
+                    // `_EndComposition` there is no range to ask.
+                    //
+                    // 無変換確定 is text the user wrote, so it belongs in the
+                    // corpus the personal model trains on (decisions 0024 /
+                    // 0025). The pair it teaches the learning store is reading
+                    // = surface, which cannot change a conversion's ranking —
+                    // but it does make the kana form itself rise as a
+                    // candidate for that reading, which is what Microsoft IME
+                    // does after the same keystroke.
+                    //
+                    // Before `_HandleCancel` below, which purges the keystroke
+                    // buffer `NotifyCommitted` derives the reading from — the
+                    // same ordering constraint as the other two call sites.
+                    WCHAR committed[PRECEDING_TEXT_MAX + 1] = {'\0'};
+                    ULONG length = 0;
+                    if (SUCCEEDED(pRangeComposition->GetText(ec, 0, committed,
+                                                             PRECEDING_TEXT_MAX, &length))
+                        && length > 0)
+                    {
+                        Ohagey::Log("finalize: committing %lu chars unconverted", length);
+                        CStringRange committedRange;
+                        committedRange.Set(committed, length);
+
+                        CCompositionProcessorEngine* pEngine = _pCompositionProcessorEngine;
+                        if (pEngine)
+                        {
+                            pEngine->NotifyCommitted(committedRange,
+                                                     _IsSecureMode() ? FALSE : TRUE);
+                        }
+                    }
+
                     _EndComposition(pContext);
                 }
 
@@ -615,6 +664,11 @@ HRESULT CSampleIME::_HandleCompositionBackspace(TfEditCookie ec, _In_ ITfContext
 
     if (vKeyLen)
     {
+        // [Ohagey] One character of the buffer is one character on screen,
+        // because the buffer holds kana (see BufferAfterKeystroke). Removing
+        // the last one is all backspace has to do — which is what the sample
+        // did, and what stopped being right the moment the buffer held romaji
+        // for a language that is not displayed in romaji.
         pCompositionProcessorEngine->RemoveVirtualKey(vKeyLen - 1);
 
         if (pCompositionProcessorEngine->GetVirtualKeyLength())

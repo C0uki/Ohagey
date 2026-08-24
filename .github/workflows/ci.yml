@@ -213,6 +213,20 @@ jobs:
           }
           Write-Host "all four COM exports present"
 
+      # 走らせるもの: エンジンもパイプもプロファイルも要らない自己検査。
+      #
+      # ワイヤの試験がここにあるのは、**更新のたびに必ず混在が起きる**からである
+      # (決定 0032 の追記)。インストーラが走った瞬間にエンジンは入れ替わるが、
+      # TSF DLL は全アプリに読み込まれていて置き換えられず、再起動を待つ。
+      # その間、この機械上のすべての変換が「新しいエンジン × 古いクライアント」
+      # である。手書きの reader がそれに耐えるかは、実機を待たずに確かめられる。
+      - name: Selftests (kana, wire format)
+        run: |
+          ./tsf/Ohagey/tools/build-and-run-kana.ps1
+          if ($LASTEXITCODE -ne 0) { throw "kana selftest failed" }
+          ./tsf/Ohagey/tools/build-and-run-wire.ps1
+          if ($LASTEXITCODE -ne 0) { throw "wire selftest failed" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: tsf-release
