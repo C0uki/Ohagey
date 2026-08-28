@@ -84,7 +84,17 @@ public class SchemaAgreementTests
         Assert.Equal(100, defaults.PersonalizationAlphaPercent);
         Assert.Equal(Backend.Cpu, defaults.Backend);
         Assert.Equal(10, defaults.ZenzaiInferenceLimit);
-        Assert.Equal(300, defaults.IdleTimeoutSeconds);
+        // Zero: the engine stays resident because an AppContainer application
+        // cannot start it again (decisions 0015 / 0031).
+        //
+        // This assertion said 300 while EngineSettings.swift said 0. Every
+        // default in this test is a constant copied by hand from the Swift
+        // side — nothing here reads it — so the pair can drift, and this pair
+        // had. The cost was not theoretical: RegistrySettingsStore.Write
+        // writes every value, so opening the settings app and changing any
+        // setting on any page wrote 300 and switched idle exit on, which takes
+        // conversion away from sandboxed applications silently.
+        Assert.Equal(0, defaults.IdleTimeoutSeconds);
         // Off, and this one is not a preference so much as a promise: the DLL
         // is loaded into every application with a text input surface and opens
         // a file twice per conversion while this is on. Defaulting it to true

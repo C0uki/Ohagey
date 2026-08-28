@@ -58,21 +58,21 @@
 
             <StackPanel Spacing="8">
                 <TextBlock Text="反映の強さ" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                <!-- Maximum is 150, matching SettingsSchema.MaximumAlphaPercent
-                     and azooKey-Desktop's "hard". It said 100, which silently
-                     capped the setting below what the schema allows and what
-                     the engine would accept. -->
-                <Slider
-                    x:Name="AlphaSlider"
-                    Minimum="0" Maximum="150"
-                    StepFrequency="1"
-                    Width="320"
-                    HorizontalAlignment="Left"
-                    ValueChanged="OnSliderChanged" />
-                <TextBlock
-                    Text="弱くすると関係のない語への影響は減りますが、100 未満では学習した語も上がらなくなります。"
-                    TextWrapping="Wrap"
-                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <!-- Three choices, not a slider over 0-150.
+                     azooKey-Desktop, which ships the same converter and the
+                     same base model, offers exactly 0.5 / 1.0 / 1.5 — and
+                     those three are also the only values anyone has measured
+                     here (decision 0034). A continuous slider says there are
+                     151 settings and that the ones between mean something in
+                     between, which is the claim the measurements do not
+                     support: 0.5 does not break the evaluation set and does
+                     not promote either, so "half as strong" is not what it is.
+
+                     The items are built in code so a value outside the three
+                     can be shown without being changed — see FillAlpha. -->
+                <RadioButtons
+                    x:Name="AlphaChoice"
+                    SelectionChanged="OnAlphaChanged" />
                 <!-- Zero looks like "off" and is not (decision 0035's open
                      item). The mixing term becomes zero, so the ranking is
                      untouched — but personalisation is still switched on, so

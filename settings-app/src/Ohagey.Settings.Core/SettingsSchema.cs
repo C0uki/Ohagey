@@ -157,7 +157,33 @@ public sealed record EngineSettings
 
     public Backend Backend { get; init; } = Backend.Cpu;
     public int ZenzaiInferenceLimit { get; init; } = 10;
-    public int IdleTimeoutSeconds { get; init; } = 300;
+
+    /// <summary>Idle seconds before the engine exits. Zero keeps it resident.</summary>
+    /// <remarks>
+    /// Zero, matching the engine's own default rather than decision 0015's
+    /// original five minutes.
+    ///
+    /// Decision 0015 chose on-demand launch with an idle exit so an IME nobody
+    /// is using costs nothing. That works only for clients that can start the
+    /// engine, and an AppContainer application cannot: CreateProcess is denied
+    /// to it. Measured — the engine exited on this timeout, and typing in the
+    /// Microsoft Store's search box then produced kana and no candidates, with
+    /// nothing reported anywhere, because a refused connection is
+    /// indistinguishable from "no candidates" (decision 0031).
+    ///
+    /// So the timeout does not save memory in the common case; it decides
+    /// whether sandboxed applications work at all, and it decides it silently
+    /// and intermittently.
+    ///
+    /// This default matters more here than most: <see
+    /// cref="RegistrySettingsStore.Write"/> writes every value, so whatever
+    /// stands here is written to the registry the first time the user changes
+    /// anything at all — on any page. It said 300 while the engine said 0,
+    /// which meant opening this app and touching one unrelated setting was
+    /// enough to switch idle exit on and take conversion away from sandboxed
+    /// applications, five minutes later, with no visible cause.
+    /// </remarks>
+    public int IdleTimeoutSeconds { get; init; } = 0;
 
     /// <summary>Whether the text service writes its diagnostic log.</summary>
     /// <remarks>
