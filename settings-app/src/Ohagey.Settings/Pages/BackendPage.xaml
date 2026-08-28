@@ -9,11 +9,15 @@
 
             <StackPanel Spacing="8">
                 <TextBlock Text="推論バックエンド" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                <ComboBox x:Name="BackendChoice" MinWidth="220" SelectionChanged="OnChanged">
-                    <ComboBoxItem Content="CPU" Tag="Cpu" />
-                    <ComboBoxItem Content="CUDA (NVIDIA)" Tag="Cuda" />
-                    <ComboBoxItem Content="Vulkan" Tag="Vulkan" />
-                </ComboBox>
+                <!-- Items are built in code, not here: which backends exist is a
+                     property of this machine. `iscc /DGpuBackends` decides
+                     whether CUDA and Vulkan were packaged at all, and the
+                     ordinary installer ships CPU alone (decision 0028). Listing
+                     all three unconditionally offers a choice that cannot be
+                     taken — the engine falls back to CPU and records why, but
+                     from the user's side they picked a backend and nothing
+                     happened. -->
+                <ComboBox x:Name="BackendChoice" MinWidth="220" SelectionChanged="OnChanged" />
                 <!-- Decision 0028 asks for this to be said in the UI: the engine
                      picks its backend from the DLL search path at startup, so a
                      change here does nothing until it restarts. A user who is
@@ -61,6 +65,50 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="モデル" Style="{StaticResource BodyStrongTextBlockStyle}" />
                 <TextBlock x:Name="ModelStatus" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Decision 0015 chose on-demand launch with an idle exit, and
+                 decision 0031 found the case it does not cover: an
+                 AppContainer application cannot start the engine, because
+                 CreateProcess is denied to it. So a timeout here does not
+                 trade memory against startup latency — it decides whether
+                 typing in Store applications converts at all, silently and
+                 intermittently.
+
+                 It is a setting rather than a removed feature because someone
+                 who does not use Store applications is entitled to the memory
+                 back. But it is off by default and it says what it costs. -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="エンジンの常駐" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                <TextBlock
+                    Text="変換エンジンは、変換していないあいだも待機しています。終了させるとそのぶんのメモリーは戻りますが、次の変換までに読み込み直しが要ります。"
+                    TextWrapping="Wrap"
+                    Style="{StaticResource CaptionTextBlockStyle}" />
+                <ToggleSwitch
+                    x:Name="IdleExitSwitch"
+                    Header="使っていないあいだは変換エンジンを終了する"
+                    OnContent="オン" OffContent="オフ"
+                    Toggled="OnIdleExitToggled" />
+                <!-- Minimum/Maximum/Value are set in code for the same reason
+                     as the slider above: XAML does not promise an assignment
+                     order, and a range left inconsistent between two of them
+                     throws. -->
+                <NumberBox
+                    x:Name="IdleTimeout"
+                    Header="終了するまでの時間(秒)"
+                    SpinButtonPlacementMode="Compact"
+                    SmallChange="60"
+                    LargeChange="300"
+                    Width="220"
+                    HorizontalAlignment="Left"
+                    ValueChanged="OnIdleTimeoutChanged" />
+                <InfoBar
+                    x:Name="IdleExitNotice"
+                    IsOpen="False"
+                    IsClosable="False"
+                    Severity="Warning"
+                    Title="ストアアプリでは変換が効かなくなることがあります"
+                    Message="Microsoft Store から入れたアプリは、終了した変換エンジンを起動し直せません。文字は入力できるのに変換だけ効かない状態になり、エラーは表示されません。" />
             </StackPanel>
         </StackPanel>
     </ScrollView>

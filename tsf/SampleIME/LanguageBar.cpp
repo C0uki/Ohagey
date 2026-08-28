@@ -7,6 +7,7 @@
 
 #include "Private.h"
 #include "../Ohagey/OhageySeh.h"
+#include "../Ohagey/OhageySettingsApp.h"
 #include "SampleIME.h"
 #include "CompositionProcessorEngine.h"
 #include "LanguageBar.h"
@@ -381,9 +382,37 @@ HRESULT CLangBarItemButton::OnClickImpl(TfLBIClick click, POINT pt, _In_ const R
 //
 //----------------------------------------------------------------------------
 
+// Menu item ids. One so far; kept as an enum because OnMenuSelect is handed
+// only the id and has to be able to tell them apart.
+enum LangBarMenuItem
+{
+    LangBarMenuItem_Settings = 1,
+};
+
 HRESULT CLangBarItemButton::InitMenuImpl(_In_ ITfMenu *pMenu)
 {
-    pMenu;
+    if (!pMenu)
+    {
+        return E_INVALIDARG;
+    }
+
+    // Not on the secure desktop. There the IME is running behind the logon or
+    // UAC screen, where starting an ordinary application out of Program Files
+    // is not something a text service should offer -- and where nobody is
+    // going to be adjusting their conversion settings anyway.
+    if (_isSecureMode)
+    {
+        return S_OK;
+    }
+
+    // Windows does ask for this menu, and the style does not have to change to
+    // get it: the item is TF_LBI_STYLE_BTN_BUTTON, a left click still toggles
+    // the IME, and the menu appears on the tray item anyway. Confirmed on a
+    // real machine (decision 0038) -- it was written expecting the opposite,
+    // and TF_LBI_STYLE_BTN_MENU was deliberately not added because it would
+    // have taken the left click away from the toggle.
+    pMenu->AddMenuItem(LangBarMenuItem_Settings, 0, nullptr, nullptr,
+                       L"おはぎーの設定", 7, nullptr);
 
     return S_OK;
 }
@@ -396,7 +425,15 @@ HRESULT CLangBarItemButton::InitMenuImpl(_In_ ITfMenu *pMenu)
 
 HRESULT CLangBarItemButton::OnMenuSelectImpl(UINT wID)
 {
-    wID;
+    if (wID == LangBarMenuItem_Settings && !_isSecureMode)
+    {
+        // Ignoring the result. This runs inside whatever application the user
+        // is typing in, and an AppContainer one is denied CreateProcess
+        // outright (decision 0031) -- there is nothing useful to say from
+        // here, and saying it would mean a dialog appearing out of someone
+        // else's program.
+        Ohagey::LaunchSettingsApp();
+    }
 
     return S_OK;
 }

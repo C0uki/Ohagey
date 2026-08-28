@@ -26,12 +26,16 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $sources = @(
     (Join-Path $here "engine-context.cpp"),
     (Join-Path $here "..\OhageyEngineClient.cpp"),
+    # The client logs its connect failures (decision 0033), so it does not
+    # link without this. Added when every harness that uses the client
+    # stopped building -- the log went in and the source lists did not.
+    (Join-Path $here "..\OhageyLog.cpp"),
     (Join-Path $here "..\OhageyWire.cpp")
 )
 
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi /DOHAGEY_ALLOW_ENGINE_PATH_OVERRIDE `
     /Fo"$out\" /Fd"$out\context.pdb" /Fe"$out\engine-context.exe" `
-    $sources /link kernel32.lib user32.lib advapi32.lib
+    $sources /link kernel32.lib user32.lib advapi32.lib shell32.lib ole32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 # The engine holds the pipe until it exits, and it is left running by design

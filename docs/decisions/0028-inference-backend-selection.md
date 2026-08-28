@@ -295,3 +295,28 @@ Intel でも AMD でも動く。この決定は GPU バックエンドを `#ifde
 ⚠️ 測定は1機種・各3回である。**別の GPU、別の読みの長さ、別の `inferenceLimit` で
 比が変わる可能性は残る。** 特に `inferenceLimit` を上げれば行列積の割合が増えるので、
 CUDA の分が良くなる方向に動くはずである — 上げる判断をするときに測り直すこと。
+
+## 追記(2026-08-28)— 3つとも入った状態で測り直した
+
+開発機の `C:\Program Files\Ohagey\backends\` に **cpu / cuda / vulkan を3つとも**
+置いた。確かめたのは「選べること」ではなく**実際に変換すること**である —
+`llama.dll` は遅延ロードなので、起動時のバックエンド選択が通っても、
+**最初の変換まで本当のロードは起きない**。
+
+| | 起動時(`backend-status.tsv`) | 往復ハーネス |
+|---|---|---|
+| cpu | `effective cpu / reason requested` | ALL PASSED |
+| cuda | `effective cuda / reason requested` | ALL PASSED、`nvidia-smi` が `OhageyEngine.exe` を compute app として認識 |
+| vulkan | `effective vulkan / reason requested` | ALL PASSED |
+
+ハーネスは文レベル(`きょうはいいてんきですね` → 今日はいい天気ですね)まで通っている。
+
+🔴 **その前に、ハーネス自体が建たなかった。** `build-and-run*.ps1` の**9本すべて**が
+`Ohagey::Log` 未解決で失敗する。決定 0033 で `OhageyEngineClient.cpp` が接続失敗を
+ログに書くようになったとき、**ハーネスのソース一覧が追随しなかった**ためである。
+DLL 本体は vcxproj でビルドされるので、壊れたのは**測定の道具だけ**だった。
+`OhageyLog.cpp` と `shell32.lib ole32.lib` を足して直した。
+
+⚠️ **同梱の判断は変えていない。** 既定のインストーラは cpu だけで 28MB、
+`/DGpuBackends` を付けると **363MB**(展開後 1GB)になる。この機械に3つ入れたのは
+開発機の都合であって、出荷構成の変更ではない。
