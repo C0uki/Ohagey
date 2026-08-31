@@ -405,12 +405,19 @@ HRESULT CLangBarItemButton::InitMenuImpl(_In_ ITfMenu *pMenu)
         return S_OK;
     }
 
-    // Windows does ask for this menu, and the style does not have to change to
-    // get it: the item is TF_LBI_STYLE_BTN_BUTTON, a left click still toggles
-    // the IME, and the menu appears on the tray item anyway. Confirmed on a
-    // real machine (decision 0038) -- it was written expecting the opposite,
-    // and TF_LBI_STYLE_BTN_MENU was deliberately not added because it would
-    // have taken the left click away from the toggle.
+    // Nothing on Windows 11 asks for this menu, so nothing below is reached
+    // there. Measured (decision 0038): with a logging build in place, clicking
+    // the tray indicator -- left or right, by hand or synthetically -- produced
+    // no call to InitMenu, and none to OnClick either. Adding
+    // TF_LBI_STYLE_BTN_MENU changed nothing. The tray items are the shell's own
+    // input indicators; the classic language bar, where a
+    // TF_LBI_STYLE_SHOWNINTRAY item would appear, is off by default on 11.
+    //
+    // Kept rather than deleted: it costs one AddMenuItem call on a path that is
+    // never taken, and where a language bar does exist it is the right thing to
+    // offer. But the entry point that works is the Start menu shortcut the
+    // installer creates, and anything written about this one has to say so --
+    // an earlier version of this comment claimed the opposite and was wrong.
     pMenu->AddMenuItem(LangBarMenuItem_Settings, 0, nullptr, nullptr,
                        L"おはぎーの設定", 7, nullptr);
 
