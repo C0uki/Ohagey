@@ -37,9 +37,8 @@ New-Item -ItemType Directory -Force $out | Out-Null
     /Fo"$out\" /Fd"$out\stability.pdb" /Fe"$out\engine-stability.exe" `
     (Join-Path $here "engine-stability.cpp") `
     (Join-Path $here "..\OhageyEngineClient.cpp") `
-    (Join-Path $here "..\OhageyLog.cpp") `
     (Join-Path $here "..\OhageyWire.cpp") `
-    /link kernel32.lib user32.lib advapi32.lib shell32.lib ole32.lib
+    /link kernel32.lib user32.lib advapi32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 Write-Host ""

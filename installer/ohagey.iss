@@ -37,28 +37,6 @@ Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
 ; TSF registration (regsvr32-equivalent) requires admin.
-;
-; -- Do not close the user's applications -----------------------------------
-;
-; Inno's default is CloseApplications=yes, and its default filter is
-; *.exe,*.dll,*.chm -- so OhageyTSF.dll is in scope. Restart Manager finds the
-; applications holding it, which is every program with a text input surface:
-; measured on this machine, SearchHost, Discord, LINE, Claude and a game, none
-; of which have anything to do with Ohagey. Interactively Setup would offer to
-; close them; silently it closes them without asking -- "Setup will always
-; close and restart such applications, unless told not to via the command
-; line", in Inno's own documentation for this directive.
-;
-; Updating an IME must not close someone's chat client, so the answer is no.
-; The file that cannot be replaced while loaded is handled by `restartreplace`
-; on the DLL instead, which is why an update can ask for a sign-out.
-;
-; The engine is a separate matter and is stopped deliberately, by one targeted
-; CreateProcess in PrepareToInstall below -- ours, and only ours.
-;
-; The [Code] section below claimed this behaviour before the directive existed
-; to produce it. The default was looked up and the gap closed (2026-08-28).
-CloseApplications=no
 
 [Files]
 ; Layout is decision 0033. The TSF DLL and the engine must land in the SAME
@@ -165,22 +143,6 @@ Source: "..\backends\vulkan\*.dll"; DestDir: "{app}\backends\vulkan"; Flags: ski
 ; Installed rather than run from a temporary copy, so that a repair install and
 ; a later retry from the settings app both have it to hand.
 Source: "download-model.ps1"; DestDir: "{app}"; Flags: ignoreversion
-[Icons]
-; The only way a user reaches the settings app.
-;
-; It is installed into {app} beside the engine, which is a directory nobody
-; browses to: without this entry the backend choice, the learning switches, the
-; user dictionary and the diagnostic log switch all exist and none of them can
-; be found. The IME itself is reached through Windows' own input-method list,
-; so nothing else about Ohagey needs a shortcut -- and this one is easy to
-; forget for exactly that reason.
-;
-; Inside the same #ifndef as the executable: a CI build has no settings app to
-; point at, and a shortcut to a missing file is worse than no shortcut.
-#ifndef SkipSettingsApp
-Name: "{group}\おはぎー 設定"; Filename: "{app}\OhageySettings.exe"; Comment: "おはぎーの変換エンジン・学習・ユーザー辞書の設定"
-#endif
-
 [Dirs]
 ; The models are downloaded after install (decision 0008), so the directory has
 ; to exist first.
@@ -270,11 +232,10 @@ Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Fil
 // long as the IME is loaded, so the idle timeout never fires and the engine is
 // running essentially whenever anyone has typed since logging in.
 //
-// Deliberately not Inno's CloseApplications, which is switched off in [Setup]
-// above: RestartManager sees the TSF DLL loaded into Discord, LINE and the
-// shell, and closes *those* -- without asking at all when Setup runs silently.
-// Updating an IME must not close the user's chat client (decision 0033). This
-// closes exactly one process, and it is ours.
+// Deliberately not Inno's CloseApplications: RestartManager sees the TSF DLL
+// loaded into Discord, LINE, the shell, and offers to close *those*. Updating
+// an IME must not close the user's chat client (decision 0033). This closes
+// exactly one process, and it is ours.
 //
 // The DLL itself still cannot be replaced while it is loaded; that is what
 // `restartreplace` on it is for, and why an update can still ask for a sign-out.

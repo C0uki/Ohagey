@@ -27,13 +27,12 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $sources = @(
     (Join-Path $here "engine-userdict.cpp"),
     (Join-Path $here "..\OhageyEngineClient.cpp"),
-    (Join-Path $here "..\OhageyLog.cpp"),
     (Join-Path $here "..\OhageyWire.cpp")
 )
 
 & cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /Zi /DOHAGEY_ALLOW_ENGINE_PATH_OVERRIDE `
     /Fo"$out\" /Fd"$out\userdict.pdb" /Fe"$out\engine-userdict.exe" `
-    $sources /link kernel32.lib user32.lib advapi32.lib shell32.lib ole32.lib
+    $sources /link kernel32.lib user32.lib advapi32.lib
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 # The engine holds the pipe until it exits, and it is left running by design

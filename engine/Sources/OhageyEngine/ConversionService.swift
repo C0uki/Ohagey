@@ -160,26 +160,6 @@ final class ConversionService {
         // this for the same reason (see `commit` and `UserDictionaryStore`);
         // doing it here makes the rule general rather than a patch applied
         // wherever someone noticed.
-        //
-        // ── The obvious cheaper rule was tried, and it does not work ───────
-        //
-        // "Only drop the cache when something changed what the converter
-        // knows" sounds strictly better: a conversion changes nothing, so it
-        // could keep the lattice, and only commit / the user dictionary / a
-        // settings change / a newly published personal model would drop it.
-        // Built it that way and measured, release, same machine (2026-08-28):
-        //
-        //   build-and-run-stability.ps1  187 -> 148ms mean, still stable
-        //   build-and-run-learning.ps1   ranks 2,1,2,1,2 (control: 2,2,2,2,2)
-        //
-        // The second line is the answer. The cache is not merely stale after
-        // a change -- reusing it flips the ranking for an input that has not
-        // changed at all, which is the original bug. The stability harness
-        // misses that because it commits nothing, so nothing invalidates and
-        // every call reuses the same state consistently.
-        //
-        // So the 21% is not available here. If conversion latency has to come
-        // down, it has to come from somewhere other than the lattice cache.
         converter.stopComposition()
 
         var composing = ComposingText()

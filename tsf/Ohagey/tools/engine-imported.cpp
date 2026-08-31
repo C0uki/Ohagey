@@ -14,20 +14,14 @@
 // the same assertion the user dictionary harness makes — "you may register a
 // word, but not at the cost of everything else" — applied to a document.
 //
-// ── The other half: does the import actually help? ─────────────────────────
+// ── What it does NOT claim ─────────────────────────────────────────────────
 //
-// Added 2026-08-28 and switched on with `-Promotion`. Showing that an import
-// helps needs a reading whose answer the learning store cannot already
-// promote, and personalisation can only move candidates that share their first
-// character with the current first place (decision 0034).
-//
-// The control is built in, and it is why this lives here rather than in
-// build-and-run-learning.ps1: the rank is read before the import and again
-// after it, and **nothing is ever confirmed in between**. With no commit there
-// is no learning store update, so a candidate that moves can only have been
-// moved by the imported text. Decision 0034 mistook the learning store's work
-// for personalisation's three separate times; here that mistake is not
-// available.
+// It does not claim the import *helps*. Showing that needs a reading whose
+// answer the learning store cannot already promote, and personalisation can
+// only move candidates that share their first character with the current first
+// place (decision 0034). That measurement is build-and-run-learning.ps1's job
+// and it is deliberately not duplicated here — decision 0034 mistook the
+// learning store's work for personalisation's three separate times.
 //
 // Build and run: tsf/Ohagey/tools/build-and-run-imported.ps1
 
@@ -54,16 +48,6 @@ namespace
             printf("%s", utf8.c_str());
         }
         printf("\n");
-    }
-
-    /// Where a candidate sits in the list, or -1 when it is not offered.
-    int RankOf(const ConvertResult& result, const std::wstring& text)
-    {
-        for (size_t i = 0; i < result.candidates.size(); ++i)
-        {
-            if (result.candidates[i].text == text) return static_cast<int>(i);
-        }
-        return -1;
     }
 
     std::string ToUtf8(const std::wstring& value)
@@ -213,10 +197,6 @@ int wmain(int argc, wchar_t** argv)
     // stops when it likes the answer — decision 0034 was burned by exactly that,
     // and separately by measuring before a resumed run had landed at all.
     const int settleSeconds = (argc > 3) ? _wtoi(argv[3]) : 30;
-    // argv[4] a reading, argv[5] the candidate the import is meant to lift.
-    // Empty means "measure damage only", which is the ordinary run.
-    const std::wstring promotionReading = (argc > 4) ? argv[4] : L"";
-    const std::wstring promotionTarget = (argc > 5) ? argv[5] : L"";
 
     // Opened directly rather than through Connect, which would launch an engine
     // against the real profile before the redirect below.
@@ -300,29 +280,6 @@ int wmain(int argc, wchar_t** argv)
         return 2;
     }
 
-    // Read before the import, so the pair brackets exactly one change.
-    int promotionBefore = -1;
-    if (!promotionTarget.empty())
-    {
-        ConvertResult probe;
-        if (client.Convert(promotionReading, 20, L"", &probe) == CallResult::Ok)
-        {
-            promotionBefore = RankOf(probe, promotionTarget);
-        }
-        printf("\n  promotion target\n");
-        Say("    reading: ", promotionReading);
-        Say("    target:  ", promotionTarget);
-        if (promotionBefore < 0)
-        {
-            printf("    NOT OFFERED before the import -- nothing to measure.\n");
-            printf("    Pick a target this build actually returns for that reading.\n");
-        }
-        else
-        {
-            printf("    rank before: %d\n", promotionBefore + 1);
-        }
-    }
-
     // ── Import, exactly the way the settings app does ──────────────────────
     //
     // A file written into personal/, and nothing else. The engine is not told;
@@ -368,29 +325,6 @@ int wmain(int argc, wchar_t** argv)
         printf("    BROKE ");
         Say("", readings[i] + L" -> " + (now.candidates.empty() ? L"(nothing)" : now.candidates[0].text)
                  + L"   (expected " + expected[i] + L")");
-    }
-
-    int promotionAfter = -1;
-    if (promotionBefore >= 0)
-    {
-        ConvertResult probe;
-        if (client.Convert(promotionReading, 20, L"", &probe) == CallResult::Ok)
-        {
-            promotionAfter = RankOf(probe, promotionTarget);
-        }
-        printf("\n  promotion: rank %d -> %s\n",
-               promotionBefore + 1,
-               promotionAfter < 0 ? "gone" : std::to_string(promotionAfter + 1).c_str());
-        if (promotionAfter >= 0 && promotionAfter < promotionBefore)
-        {
-            printf("    PROMOTED by the imported text alone -- nothing was confirmed.\n");
-        }
-        else
-        {
-            printf("    NOT promoted. Either the import is not reaching the ranking, or the\n");
-            printf("    target does not share a first character with rank 1 -- upstream does\n");
-            printf("    not personalise the first character at all (decision 0034).\n");
-        }
     }
 
     RemoveTree(scratch);

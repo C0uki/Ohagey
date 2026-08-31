@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Ohagey.Settings.Core;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -23,7 +24,7 @@ public sealed partial class LearningPage : Page
         var settings = _store.Read();
         LearningSwitch.IsOn = settings.LearningEnabled;
         PersonalizationSwitch.IsOn = settings.PersonalizationEnabled;
-        FillAlpha(settings.PersonalizationAlphaPercent);
+        AlphaSlider.Value = settings.PersonalizationAlphaPercent;
         _loading = false;
 
         ApplyDependency(settings);
@@ -40,12 +41,12 @@ public sealed partial class LearningPage : Page
     private void ApplyDependency(EngineSettings settings)
     {
         PersonalizationSwitch.IsEnabled = settings.LearningEnabled;
-        AlphaChoice.IsEnabled = settings.PersonalizationActive;
+        AlphaSlider.IsEnabled = settings.PersonalizationActive;
         PersonalizationNote.Text = settings.LearningEnabled
             ? "確定した語句を控えて学習し直します。切ると、その控えも消えます。"
             : "学習がオフのあいだは使えません。";
         // Only while personalisation is actually on. With the switch off the
-        // choice is disabled and its value means nothing, so the notice would
+        // slider is disabled and its value means nothing, so the notice would
         // be answering a question nobody asked.
         AlphaZeroNotice.IsOpen =
             settings.PersonalizationActive && settings.PersonalizationAlphaPercent == 0;
@@ -79,71 +80,9 @@ public sealed partial class LearningPage : Page
             : InfoBarSeverity.Informational;
     }
 
-    /// <summary>The three settings anyone has measured (decision 0034).</summary>
-    /// <remarks>
-    /// The same three azooKey-Desktop offers. 100 is the default and the one
-    /// shown to promote a committed phrase without costing the evaluation set;
-    /// 50 was measured as breaking little and promoting nothing; 150 is the
-    /// upper end the schema allows.
-    /// </remarks>
-    private static readonly int[] AlphaChoices = { 50, 100, 150 };
-
-    /// <summary>Offers the three, plus whatever is actually stored.</summary>
-    /// <remarks>
-    /// A value outside the three — 0, or anything hand-edited — gets a row of
-    /// its own rather than being rounded to the nearest choice. Rounding would
-    /// write a different setting than the user chose, on a page they only
-    /// opened to look at, and it would do it silently at the next update. That
-    /// is the failure decision 0035 exists to prevent, and it is why the
-    /// schema still accepts the whole 0-150 range: the range is the contract,
-    /// and these three are only what the UI recommends.
-    ///
-    /// Zero in particular has to survive: it stops the ranking being touched
-    /// while personalisation stays on, which is a state someone can have
-    /// deliberately reached — and AlphaZeroNotice exists to say that it does
-    /// not stop the plain-text record.
-    /// </remarks>
-    private void FillAlpha(int percent)
-    {
-        AlphaChoice.Items.Clear();
-
-        var index = 0;
-        foreach (var choice in AlphaChoices)
-        {
-            AlphaChoice.Items.Add(new RadioButton { Content = AlphaLabel(choice), Tag = choice });
-            if (choice == percent) AlphaChoice.SelectedIndex = index;
-            index++;
-        }
-
-        if (!AlphaChoices.Contains(percent))
-        {
-            AlphaChoice.Items.Add(new RadioButton
-            {
-                Content = $"そのほか ({percent}%) — 手動で設定された値です",
-                Tag = percent,
-            });
-            AlphaChoice.SelectedIndex = index;
-        }
-    }
-
-    private static string AlphaLabel(int percent) => percent switch
-    {
-        // Measured on 2026-08-28, after this label first said "does not promote
-        // at all": that was true of the old measurement and is not true now.
-        // Sweeping alpha against imported text showed promotion is alpha times
-        // the strength of the signal -- 40 lines of a phrase are promoted at
-        // 50%, 10 lines of the same phrase are not (decision 0034). So "weak"
-        // means "needs more of the same writing", not "does nothing".
-        50 => "弱 (50%) — よく書く言い回しなら上がります。材料が少ないと上がりません",
-        100 => "標準 (100%) — 学習した語が候補の上位に来ます",
-        // Allowed by the schema and offered by azooKey-Desktop, but nobody has
-        // measured it here. Saying so is cheaper than implying it was.
-        _ => "強 (150%) — もっとも強く反映します(おはぎーでは未測定です)",
-    };
-
     private void OnToggled(object sender, RoutedEventArgs e) => Save();
 
-    private void OnAlphaChanged(object sender, SelectionChangedEventArgs e) => Save();
+    private void OnSliderChanged(object sender, RangeBaseValueChangedEventArgs e) => Save();
 
     private void Save()
     {
@@ -153,20 +92,12 @@ public sealed partial class LearningPage : Page
         {
             LearningEnabled = LearningSwitch.IsOn,
             PersonalizationEnabled = PersonalizationSwitch.IsOn,
-            // Falls back to what is stored rather than to a default: the
-            // RadioButtons briefly report no selection while their items are
-            // being replaced, and taking that as a value would overwrite a
-            // deliberate setting with 100 for nobody's reason.
-            PersonalizationAlphaPercent = SelectedAlpha() ?? _store.Read().PersonalizationAlphaPercent,
+            PersonalizationAlphaPercent = (int)AlphaSlider.Value,
         };
 
         _store.Write(updated);
         ApplyDependency(updated);
     }
-
-    /// <summary>The percentage the selected row stands for, if any.</summary>
-    private int? SelectedAlpha() =>
-        (AlphaChoice.SelectedItem as RadioButton)?.Tag as int?;
 
     // ── Importing text for personalisation to train on (decision 0037) ──────
 
