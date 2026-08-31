@@ -190,7 +190,11 @@ after:  機者の記者 / 記者の記者 / 汽車の記者 / き者の記者 / 
       **azooKey 側は PR にしない** — 中身が「SwiftyMarisa のフォークを指す」なので、
       向こうが直るまで PR にならない。代わりに issue(Windows 除外の理由と、
       `EfficientNGram` が product でないと利用側が個人化を有効にできないこと)。
-      ⏸️ **実行は保留** — 公開の場に出るものなので、利用者の合図待ち
+      ✅ **出した**(2026-08-28):
+      [SwiftyMarisa#3](https://github.com/ensan-hcl/SwiftyMarisa/pull/3)(`[Int8]` の長さ)/
+      [#4](https://github.com/ensan-hcl/SwiftyMarisa/pull/4)(`size_t`)/
+      [azooKey#355](https://github.com/azooKey/AzooKeyKanaKanjiConverter/issues/355)(issue)。
+      SwiftyMarisa は最終 push が 2025-04-26 の静かなリポジトリなので、返事は気長に待つ
 - [x] コールドスタート時に最初の変換が空で返る問題(決定 0033 の範囲)。
       **当初「数秒 IME が死ぬ」と書いたが、実測の結果それは誤りだった。**
       パイプが立つまでは release / debug とも **0.1〜0.4秒**で、失われるのは
