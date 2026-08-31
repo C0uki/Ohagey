@@ -2531,6 +2531,18 @@ product でないと利用側が個人化を有効にできないこと。**後�
 将来のリリースなので、**利益が出るのは 0.8.5 から動かすときである**。
 出す理由は保守コストの削減ではなく、**上流の利用者が壊れたままだから**。
 
+### 実際に出したもの(2026-08-28)
+
+| | |
+|---|---|
+| [ensan-hcl/SwiftyMarisa#3](https://github.com/ensan-hcl/SwiftyMarisa/pull/3) | `[Int8]` のキーと検索語に長さを渡す。**全プラットフォームの正しさの問題**として書いた |
+| [ensan-hcl/SwiftyMarisa#4](https://github.com/ensan-hcl/SwiftyMarisa/pull/4) | `size_t` の typedef を削除。Windows のビルドを止めている1行 |
+| [azooKey/AzooKeyKanaKanjiConverter#355](https://github.com/azooKey/AzooKeyKanaKanjiConverter/issues/355) | PR ではなく issue。Windows 除外の理由と、`EfficientNGram` が product でない件 |
+
+⚠️ **`[Int8]` の件は「macOS でも起きているはず」とは書いたが、測ったのは Windows だけ**
+である。機序(終端の無い配列に対する `strlen`)はプラットフォームに依存しないので、
+issue にもその区別をつけて書いた — **測っていないことを測ったように書かない。**
+
 ## 追記(2026-08-28)— 「alpha 0.5 は壊さないが効かない」は、もう成り立たない
 
 長らく未解明として残っていた問い。**測ったら、前提のほうが古かった。**
